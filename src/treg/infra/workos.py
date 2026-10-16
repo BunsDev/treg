@@ -56,7 +56,7 @@ async def portal_link(client: httpx.AsyncClient, *, key: str, organization: str,
     data = await _post(client, "/portal/generate_link", key, payload)
     value = data.get("link")
     parsed = urlsplit(value) if isinstance(value, str) else None
-    if parsed is None or parsed.scheme != "https" or parsed.netloc != "setup.workos.com" or parsed.path not in ("", "/"):
+    if parsed is None or parsed.scheme != "https" or parsed.netloc != "setup.workos.com" or parsed.path not in ("", "/", "/init"):
         raise WorkOSError("WorkOS portal link missing")
     return value
 

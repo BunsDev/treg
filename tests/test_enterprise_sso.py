@@ -144,6 +144,14 @@ async def test_workos_portal_accepts_documented_url():
     assert url == "https://setup.workos.com?token=example"
 
 
+async def test_workos_portal_accepts_live_staging_url():
+    def handle(request):
+        return httpx.Response(201, json={"link": "https://setup.workos.com/init?apiToken=example"})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        url = await workos.portal_link(client, key="sk_test", organization="org_1", intent="sso")
+    assert url == "https://setup.workos.com/init?apiToken=example"
+
+
 async def test_workos_code_exchange_uses_documented_profile_shape():
     def handle(request):
         assert request.url.path == "/sso/token"
