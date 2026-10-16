@@ -3,8 +3,9 @@
 This integration uses WorkOS for a customer's SAML or OIDC connection. treg remains responsible for
 accounts, team roles, browser sessions, and API keys. The team owner purchases a monthly Stripe
 subscription and opens WorkOS setup from **Team → SSO**. The link is generated when clicked and
-expires after five minutes. Employees use the team's **Sign in with company SSO** link; their first
-successful sign-in joins the existing team as a member. The owner can change roles in **Members**.
+expires after five minutes. Employees select **Sign in with company SSO** on treg's sign-in dialog
+and enter the team's link name. Their first successful sign-in joins the existing team as a member.
+The owner can change roles in **Members**.
 
 ## Configure the deployment
 

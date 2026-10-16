@@ -1311,6 +1311,15 @@ function openSignin(){
   document.getElementById('em-input').focus(); }
 function closeSignin(){ document.getElementById('signin-scrim').classList.remove('open'); }
 addEventListener('keydown',e=>{ if(e.key==='Escape') closeSignin(); });
+function ssoStart(){
+  const slug=document.getElementById('sso-team').value.trim().toLowerCase();
+  const err=document.getElementById('sso-err');
+  if(!/^[a-z0-9][a-z0-9-]*$/.test(slug)){
+    err.textContent='Enter your team link name.'; return;
+  }
+  err.textContent='';
+  location.href='/auth/sso/'+encodeURIComponent(slug)+'/start';
+}
 async function emailStart(){
   const em=document.getElementById('em-input').value.trim();
   const err=document.getElementById('em-err');
@@ -1363,6 +1372,13 @@ async function emailVerify(){
       <button class="candy" onclick="emailVerify()" id="em-btn2">Sign in</button>
     </div>
     <div class="err" id="em-err"></div>
+    <details style="margin-top:12px;text-align:left">
+      <summary style="cursor:pointer;text-align:center">Sign in with company SSO</summary>
+      <p>Enter the team name from your company's treg link.</p>
+      <input id="sso-team" placeholder="team-name" autocomplete="organization" onkeyup="if(event.key==='Enter')ssoStart()"/>
+      <button class="ghostbtn" onclick="ssoStart()">Continue with SSO</button>
+      <div class="err" id="sso-err"></div>
+    </details>
   </div>
 </div>
 
