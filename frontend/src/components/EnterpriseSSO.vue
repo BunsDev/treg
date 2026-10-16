@@ -8,6 +8,10 @@ export default {
   watch: { orgId() { this.loadSSO() } },
   mounted() { this.loadSSO() },
   methods: {
+    async copyEmployeeLink() {
+      const url = new URL(`/auth/sso/${encodeURIComponent(this.slug)}/start`, location.origin).href
+      this.message = await this.toClipboard(url) ? 'Employee sign-in link copied.' : 'Could not copy the link.'
+    },
     async loadSSO() {
       this.sso = null
       try { this.sso = await this.api(`/orgs/${this.orgId}/sso`) }
@@ -35,7 +39,6 @@ export default {
   <div class="card" style="padding:16px;margin-top:8px">
     <div class="lbl">Single sign-on</div>
     <p class="sub">Employees sign in through your company's identity provider. Their first successful sign-in joins this team as a member. The team owner can change roles in Members.</p>
-    <p><a class="btn sm" :href="`/auth/sso/${encodeURIComponent(slug)}/start`">Sign in with company SSO</a></p>
     <p v-if="error" class="banner">{{error}}</p>
     <p v-if="message" class="tut-notice">{{message}}</p>
     <template v-if="owner && sso">
@@ -52,7 +55,9 @@ export default {
         <p class="sub">Plan: {{sso.plan==='sso_directory'?'SSO + Directory Sync':'SSO'}} · Subscription: {{sso.subscription_status}}</p>
         <button class="btn sm" :disabled="!!busy" @click="action('open setup','setup/sso')">Set up or manage SSO</button>
         <button v-if="sso.plan==='sso_directory'" class="btn sm" style="margin-left:8px" :disabled="!!busy" @click="action('open setup','setup/dsync')">Set up Directory Sync</button>
-        <p class="sub" style="margin-top:12px">After setup, test one sign-in, then require SSO for this team. The owner can still sign in normally to recover access.</p>
+        <p class="sub" style="margin-top:12px">After setup, share this link with an employee to test sign-in. The owner can still sign in normally to recover access.</p>
+        <button class="btn sm" :disabled="!!busy" @click="copyEmployeeLink">Copy employee sign-in link</button>
+        <p class="sub">After a successful test sign-in, you can require SSO for this team.</p>
         <button class="btn sm" :disabled="!!busy || !sso.sso_ready" @click="action('enforce','enforce',{enabled:!sso.enforced})">
           {{sso.enforced?'Allow regular team sign-in':'Require SSO for team'}}
         </button>
