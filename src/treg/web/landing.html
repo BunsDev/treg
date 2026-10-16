@@ -1374,13 +1374,32 @@ async function emailVerify(){
     <div class="err" id="em-err"></div>
     <details style="margin-top:12px;text-align:left">
       <summary style="cursor:pointer;text-align:center">Sign in with company SSO</summary>
-      <p>Enter the team name from your company's treg link.</p>
-      <input id="sso-team" placeholder="team-name" autocomplete="organization" onkeyup="if(event.key==='Enter')ssoStart()"/>
+      <p>Use the sign-in link your company shared, or enter its unique team link name.</p>
+      <label for="sso-team">Team link name</label>
+      <input id="sso-team" placeholder="team-link-name" onkeyup="if(event.key==='Enter')ssoStart()"/>
       <button class="ghostbtn" onclick="ssoStart()">Continue with SSO</button>
       <div class="err" id="sso-err"></div>
     </details>
   </div>
 </div>
+
+<script>
+(function(){
+  const params=new URLSearchParams(location.search);
+  const reason=params.get('sso_error');
+  const messages={
+    domain:'Your company identity provider did not allow that email for this team. Try your company email or ask your IT admin.',
+    failed:'Company SSO sign-in did not finish. Try again or ask your IT admin.',
+    expired:'Company SSO sign-in expired. Please start again.'
+  };
+  if(!Object.prototype.hasOwnProperty.call(messages,reason)) return;
+  const slug=params.get('team')||'';
+  if(/^[a-z0-9][a-z0-9-]*$/.test(slug)) document.getElementById('sso-team').value=slug;
+  document.querySelector('#signin-scrim details').open=true;
+  document.getElementById('sso-err').textContent=messages[reason];
+  document.getElementById('signin-scrim').classList.add('open');
+})();
+</script>
 
 
 <script src="https://cdn.jsdelivr.net/npm/lenis@1.3.26/dist/lenis.min.js"></script><script src="/media/landing/catalog-drum.js"></script><script src="/media/landing/refinement.js"></script><script src="/media/landing/gateway.js"></script>

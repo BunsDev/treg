@@ -7,6 +7,9 @@ expires after five minutes. The owner can copy the employee sign-in link from **
 employees can also select **Sign in with company SSO** on treg's sign-in dialog and enter the
 team's link name. Their first successful sign-in joins the existing team as a member.
 The owner can change roles in **Members**.
+Team display names may repeat; the link name is the unique slug in the employee sign-in URL
+(for example, a second team named `Test` receives `test-2`). Employees should use the link
+shared by their owner rather than guess from the display name.
 
 ## Configure the deployment
 
@@ -28,6 +31,9 @@ The owner can change roles in **Members**.
 
 WorkOS staging and Stripe test mode can be used together. Keep staging keys and test keys in the
 same test deployment; production credentials need their own configured redirect and webhook.
+The built-in WorkOS Test Identity Provider accepts profiles only for the domain verified on its
+WorkOS organization. A profile with another email domain is rejected before treg receives a code;
+treg returns the employee to its sign-in dialog with an explanation.
 
 ## Owner and employee flow
 

@@ -3,6 +3,7 @@
 import json
 import secrets
 import time
+from urllib.parse import urlencode
 
 import httpx
 from cryptography.fernet import InvalidToken
@@ -25,6 +26,16 @@ from .billing import _return_base
 
 router = APIRouter()
 STATE_COOKIE = "treg_sso_state"
+
+
+def _signin_failure(reason: str, slug: str = "") -> RedirectResponse:
+    query = {"sso_error": reason}
+    if slug:
+        query["team"] = slug
+    response = RedirectResponse("/?" + urlencode(query), status_code=303)
+    response.delete_cookie(STATE_COOKIE)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 class CheckoutIn(BaseModel):
@@ -104,7 +115,7 @@ async def sso_start(org_slug: str, request: Request):
     if not config.workos_org_id:
         raise HTTPException(409, "SSO setup is incomplete")
     nonce = secrets.token_urlsafe(32)
-    cookie = crypto.encrypt(json.dumps({"org_id": org_id, "nonce": nonce,
+    cookie = crypto.encrypt(json.dumps({"org_id": org_id, "slug": org_slug, "nonce": nonce,
                                         "expires": int(time.time()) + 600}))
     callback = settings.public_url.rstrip("/") + "/auth/sso/callback"
     url = workos.authorization_url(client_id=settings.workos_client_id,
@@ -117,7 +128,7 @@ async def sso_start(org_slug: str, request: Request):
 
 
 @router.get("/auth/sso/callback")
-async def sso_callback(request: Request, code: str = "", state: str = ""):
+async def sso_callback(request: Request, code: str = "", state: str = "", error: str = ""):
     cookie = request.cookies.get(STATE_COOKIE, "")
     try:
         saved = json.loads(crypto.decrypt(cookie))
@@ -126,18 +137,21 @@ async def sso_callback(request: Request, code: str = "", state: str = ""):
         if int(saved["expires"]) < time.time():
             raise ValueError("expired")
         org_id = int(saved["org_id"])
-    except (InvalidToken, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
-        raise HTTPException(400, "SSO sign-in expired; try again") from exc
+    except (InvalidToken, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return _signin_failure("expired")
     if not code:
-        raise HTTPException(400, "SSO sign-in was not completed")
+        return _signin_failure(
+            "domain" if error == "profile_not_allowed_outside_organization" else "failed",
+            saved.get("slug", ""),
+        )
     settings = get_settings()
     try:
         async with httpx.AsyncClient() as client:
             profile = await workos.exchange_code(client, key=settings.workos_api_key,
                                                  client_id=settings.workos_client_id, code=code)
         result = await enterprise_sso.finish_signin(org_id, profile)
-    except (workos.WorkOSError, enterprise_sso.EnterpriseSSOError) as exc:
-        raise HTTPException(403, str(exc)) from exc
+    except (workos.WorkOSError, enterprise_sso.EnterpriseSSOError):
+        return _signin_failure("failed", saved.get("slug", ""))
     response = RedirectResponse("/app?sso=success", status_code=303)
     response.delete_cookie(STATE_COOKIE)
     response.set_cookie(identity_session.COOKIE,

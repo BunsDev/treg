@@ -40,8 +40,8 @@ export default {
       </div>
       <details v-if="!oauthSignin && !invitePrefill && !shareGate" style="margin-top:12px;text-align:left">
         <summary class="sub" style="cursor:pointer;text-align:center">Sign in with company SSO</summary>
-        <p class="sub" style="font-size:11px">Enter the team name from your company's treg link.</p>
-        <div class="field"><input v-model="ssoTeam" placeholder="team-name" @keyup.enter="ssoLogin"/></div>
+        <p class="sub" style="font-size:11px">Use the sign-in link your company shared, or enter its unique team link name.</p>
+        <div class="field"><input v-model="ssoTeam" aria-label="Team link name" placeholder="team-link-name" @keyup.enter="ssoLogin"/></div>
         <button class="btn" style="width:100%" @click="ssoLogin">Continue with SSO</button>
       </details>
       <details v-if="!oauthSignin" style="margin-top:12px;text-align:left">

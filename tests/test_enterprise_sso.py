@@ -212,6 +212,31 @@ async def test_browser_callback_requires_company_proof_for_enforced_team(clients
     assert bearer_key.status_code == 403
 
 
+async def test_workos_domain_rejection_returns_to_signin_without_raw_error(clients, monkeypatch):
+    from treg.config import get_settings
+    settings = get_settings()
+    monkeypatch.setattr(settings, "workos_api_key", "sk_test")
+    monkeypatch.setattr(settings, "workos_client_id", "client_test")
+    org_id = await team(clients)
+    async with session_maker() as db:
+        slug = (await db.get(Org, org_id)).slug
+    start = await clients.get(f"/auth/sso/{slug}/start")
+    state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
+    callback = await clients.get("/auth/sso/callback", params={
+        "state": state,
+        "error": "profile_not_allowed_outside_organization",
+        "error_description": "Do not show this raw message",
+    })
+    assert callback.status_code == 303
+    assert callback.headers["location"] == f"/?sso_error=domain&team={slug}"
+    assert "Do not show this raw message" not in callback.headers["location"]
+    assert "treg_sso_state=" in callback.headers["set-cookie"]
+    landing = await clients.get(callback.headers["location"])
+    assert landing.status_code == 200
+    assert 'id="sso-team"' in landing.text
+    assert "Company SSO sign-in did not finish" in landing.text
+
+
 async def test_subscription_webhooks_activate_then_cancel_without_balance_credit(clients):
     orgs = (await clients.get("/orgs")).json()
     org_id = orgs[0]["org_id"]
