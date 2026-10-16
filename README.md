@@ -301,6 +301,10 @@ treg org ls | use <slug> | members            # switch orgs, see the roster
 treg org access <member> --tools a,b          # per-member tool access (admin+)
 ```
 
+Team owners can enable enterprise SSO from the dashboard's **Team → SSO** tab. WorkOS connects the
+company's identity provider; treg keeps its team roles and API keys. The optional Directory Sync
+plan removes a deactivated employee's team access. See [enterprise SSO setup](docs/enterprise-sso.md).
+
 ## Going deeper
 
 - **Feedback:** `treg feedback submit friction "The pagination example is unclear."`
@@ -370,6 +374,8 @@ Environment variables (prefix `TREG_`, read from `.env`):
 | `TREG_SESSION_SECRET`                     | *(empty)*                       | signs the dashboard session cookie; falls back to `TREG_SECRET_KEY`. Set a real value in prod                                                                              |
 | `TREG_GITHUB_CLIENT_ID` / `_SECRET`       | *(empty)*                       | GitHub OAuth sign-in (callback `<public_url>/auth/github/callback`); empty hides the button                                                                                |
 | `TREG_GOOGLE_CLIENT_ID` / `_SECRET`       | *(empty)*                       | Google OAuth sign-in (redirect `<public_url>/auth/google/callback`); empty hides the button                                                                                |
+| `TREG_WORKOS_API_KEY` / `_CLIENT_ID` / `_WEBHOOK_SECRET` | *(empty)* | WorkOS enterprise SSO; configure callback and signed directory webhook as described in [enterprise SSO setup](docs/enterprise-sso.md) |
+| `TREG_ENTERPRISE_SSO_ONLY_ENABLED` / `_MARKUP_USD` | `true` / `0` | Show only the SSO + Directory Sync plan by default; set the first to `false` to offer both monthly plans. The second adds whole USD to their monthly prices. |
 | `TREG_INSTAGRAM_CLIENT_ID` / `_SECRET`    | *(empty)*                       | Instagram App ID and secret for direct Instagram Login (redirect `<public_url>/oauth/callback`)                                                                           |
 | `TREG_META_CLIENT_ID` / `_SECRET`         | *(empty)*                       | Meta app credentials for Facebook Pages, Meta Ads, and optional Instagram `page-tools`                                                                                     |
 | `TREG_OAUTH_REVIEW_PENDING`               | `instagram-login,page-messages` | Comma-separated registry review keys whose capabilities must remain gated; hosted review state is maintained privately.                                                   |

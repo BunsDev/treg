@@ -1205,6 +1205,7 @@ async def auth_cli_token(
     user: User = Depends(require_identity),
     x_treg_org: str = Header(default=""),
     x_treg_token: str = Header(default=""),
+    treg_session: str = Cookie(default=""),
 ) -> dict:
     """Mint a fresh CLI/bearer token for the authenticated caller (session cookie OR token). Identity
     tokens are signed (`sess.make_identity`); minting the current generation invalidates nothing — it lets
@@ -1223,12 +1224,14 @@ async def auth_cli_token(
     if (claims or {}).get("scope") == sess.BOOTSTRAP_SCOPE:
         raise HTTPException(status_code=403, detail=(
             "complete team selection in the browser — a bootstrap token cannot mint a Default key"))
-    result = await auth_use_cases.issue_cli_token(
-        user_id=user.id,
-        email=user.email,
-        token_version=user.token_version,
-        org_ref=x_treg_org,
-    )
+    try:
+        result = await auth_use_cases.issue_cli_token(
+            user_id=user.id, email=user.email, token_version=user.token_version,
+            org_ref=x_treg_org,
+            sso_org_id=(sess.read_session_claims(treg_session) or {}).get("sso_org_id"),
+        )
+    except auth_use_cases.IdentityLookupError as exc:
+        raise HTTPException(403, str(exc)) from exc
     response.headers["Cache-Control"] = "no-store"
     return result
 

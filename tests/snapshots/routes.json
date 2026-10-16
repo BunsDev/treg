@@ -1814,6 +1814,73 @@
   {
     "kind": "APIRoute",
     "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "sso_status",
+    "path": "/orgs/{org_id}/sso"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_checkout",
+    "path": "/orgs/{org_id}/sso/checkout"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_setup",
+    "path": "/orgs/{org_id}/sso/setup/{intent}"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "sso_start",
+    "path": "/auth/sso/{org_slug}/start"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "sso_callback",
+    "path": "/auth/sso/callback"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_enforce",
+    "path": "/orgs/{org_id}/sso/enforce"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_cancel",
+    "path": "/orgs/{org_id}/sso/cancel"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_workos_webhook",
+    "path": "/auth/sso/workos/webhook"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
       "PATCH"
     ],
     "name": "set_member_cap",

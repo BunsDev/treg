@@ -13,7 +13,7 @@ from sqlmodel import select
 from ... import crypto
 from ...config import get_settings
 from ...infra.db import get_admin_session, get_session
-from ...models import ROLE_RANK, ApiKey, Membership, Org, User
+from ...models import ROLE_RANK, ApiKey, EnterpriseSSO, Membership, Org, User
 from . import api_keys as managed_keys
 from . import session as sess
 
@@ -310,6 +310,15 @@ async def require_member(
         raise HTTPException(status_code=403, detail="account suspended")
     if org.suspended:
         raise HTTPException(status_code=403, detail="org suspended")
+    # A regular email/GitHub/Google browser session may still identify this person globally,
+    # but it is not proof of this team's corporate IdP. Bearer keys are separate machine/CLI
+    # credentials; Directory Sync revokes those by removing the membership.
+    if not x_treg_token and membership.role != "owner":
+        enterprise = await db.get(EnterpriseSSO, org.id)
+        if enterprise is not None and enterprise.enforced:
+            sso_claims = sess.read_session_claims(treg_session) or {}
+            if sso_claims.get("sso_org_id") != org.id:
+                raise HTTPException(status_code=403, detail="sign in through this team's SSO")
     # Public-demo lockdown: the published token (non-admin roles) may ONLY call tools and read.
     # Centralized here — not per-endpoint — so every mutation (tools, secrets, skills, members,
     # leave, runs) is frozen no matter what routes are added later. Admin+ keeps full control.

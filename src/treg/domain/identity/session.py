@@ -55,6 +55,7 @@ def _make(
     org: str | None = None,
     key_generation: int | None = None,
     scope: str | None = None,
+    sso_org_id: int | None = None,
 ) -> str:
     # `tv` binds the token to the user's current token_version; bumping that row invalidates every
     # token minted at an older version. Callers pass user.token_version.
@@ -75,15 +76,21 @@ def _make(
         claims["kg"] = key_generation
     if scope:
         claims["scp"] = scope
+    if sso_org_id is not None:
+        claims["sso_org_id"] = sso_org_id
     raw = json.dumps(claims, separators=(",", ":")).encode()
     sig = hmac.new(_key(), raw, hashlib.sha256).digest()
     return f"{_b64(raw)}.{_b64(sig)}"
 
 
-def make_session(user_id: int, ttl: int = TTL_SECONDS, token_version: int = 0) -> str:
+def make_session(
+    user_id: int, ttl: int = TTL_SECONDS, token_version: int = 0,
+    *, sso_org_id: int | None = None,
+) -> str:
     """Mint a time-bounded browser credential that bearer paths always reject."""
     return _make(
         user_id, audience=SESSION_AUDIENCE, ttl=ttl, token_version=token_version,
+        sso_org_id=sso_org_id,
     )
 
 
@@ -126,6 +133,8 @@ def _read_claims(token: str) -> dict | None:
             out["aud"] = str(data["aud"])
         if data.get("scp") is not None:
             out["scope"] = str(data["scp"])
+        if data.get("sso_org_id") is not None:
+            out["sso_org_id"] = int(data["sso_org_id"])
         return out
     except Exception:  # noqa: BLE001 — any malformed credential is simply invalid
         return None

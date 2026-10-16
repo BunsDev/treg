@@ -24,6 +24,10 @@ sources:
   - src/treg/domain/identity/access.py
   - src/treg/domain/identity/api_keys.py
   - src/treg/domain/identity/session.py
+  - src/treg/application/enterprise_sso.py
+  - src/treg/routers/enterprise_sso.py
+  - src/treg/infra/workos.py
+  - tests/test_enterprise_sso.py
   - src/treg/domain/identity/promotions.py
   - tests/test_team_limit.py
   - tests/test_auth.py
@@ -49,6 +53,30 @@ related:
 ---
 
 # Multi-tenancy (orgs)
+
+## Enterprise SSO
+
+A team owner may purchase an enterprise SSO subscription, then open a short-lived WorkOS Admin
+Portal link from the team dashboard. WorkOS handles the customer's SAML or OIDC connection; treg
+keeps its own `User`, `Membership`, roles, sessions, and API keys. A successful WorkOS code exchange
+is accepted only when the returned organization matches this team's stored WorkOS organization and
+its connection is the same one previously used. A new human joins the existing team as `member`;
+an owner changes roles through the normal Members controls. Email domain alone never grants access.
+
+The owner may require SSO after one successful test sign-in. `require_member` then requires a signed
+browser session carrying this team ID for non-owners. Regular email or social login still identifies
+the global user but does not open that team. The owner retains a regular-login recovery path. API
+keys are separate credentials, and a regular browser session cannot mint a new Default key for an
+enforced team. A WorkOS profile is linked by stable profile and IdP IDs, with account email checked
+on later sign-ins; email changes need explicit review rather than silent account reassignment. A
+profile can link to an existing global account only after that account has verified its email.
+
+On the Directory Sync plan, signed WorkOS events maintain a roster of active directory users,
+including people who have not yet signed in. Once a directory is connected, SSO sign-in requires a
+matching active IdP user in that roster. Inactive/deleted users lose their team membership and keys;
+deleting the directory removes all linked non-owner memberships. Owner recovery remains available.
+WorkOS event IDs make redelivery harmless. The SSO-only plan does not promise automatic offboarding.
+Provisioning never maps external groups into treg roles.
 
 The registry is **tenant-isolated**: an **Org** owns resources, a **User** is a global identity, and a
 **Membership** links them with a role and IS where the caller's token lives. A token = a `(user, org)`

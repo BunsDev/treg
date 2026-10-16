@@ -46,6 +46,10 @@ class BlockedEmailError(Exception):
     """An address on a blocked email domain reached an identity door."""
 
 
+class UnverifiedExistingUserError(Exception):
+    """SSO cannot attach a verified assertion to an unverified existing account."""
+
+
 def blocked_email(email: str, door: str) -> bool:
     """The blocklist DECISION for the identity doors, over the pure classifier `_is_blocked_email`:
     True means refuse. One structured line per block, so a burst of refusals is countable from the
@@ -66,7 +70,7 @@ def blocked_email(email: str, door: str) -> bool:
 async def find_or_create_user(
     db: AsyncSession, email: str, *, door: str = "login",
     created: set[int] | None = None, verified: bool = False, promo_eligible: bool = True,
-    proven: set[int] | None = None,
+    proven: set[int] | None = None, reject_unverified_existing: bool = False,
 ) -> User:
     """Find a user by email, else register them — the user ONLY, **no auto personal org**. The shared
     core of every identity door (GitHub / Google / email OTP). A brand-new user therefore lands with
@@ -75,7 +79,8 @@ async def find_or_create_user(
     token is user-scoped, so it works before they have any org (org chosen per-request via X-Treg-Org).
     Only trusted email-proof callers pass verified=True; `proven` collects a user this call verified
     for the first time (see `grant_signup_promo_on_proof`). promo_eligible=False creates the user
-    without a signup-credit claim; it never touches an existing user. Caller commits."""
+    without a signup-credit claim; it never touches an existing user. SSO can refuse to link an
+    existing account that has not proved its email. Caller commits."""
     email = _norm_email(email)
     # Machine identities (agents, the published demo token) are minted by an admin and act ONLY by
     # their token. This is the single choke point every identity door shares, so blocking here means
@@ -96,9 +101,13 @@ async def find_or_create_user(
         except IntegrityError:
             await db.rollback()  # another worker just created this same new user — reuse theirs
             user = (await db.execute(select(User).where(User.email == email))).scalar_one()
+            if reject_unverified_existing and user.email_verified_at is None:
+                raise UnverifiedExistingUserError
         else:
             if created is not None:
                 created.add(user.id)
+    elif reject_unverified_existing and user.email_verified_at is None:
+        raise UnverifiedExistingUserError
     if verified and user.email_verified_at is None:
         # Conditional, so of two proofs racing for one unverified user only the one that flips the
         # column is the first proof; the other sees no row and is an ordinary sign-in.

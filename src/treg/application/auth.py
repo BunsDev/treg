@@ -493,6 +493,7 @@ async def cli_session_email(session_cookie: str) -> str | None:
 
 async def issue_cli_token(
     *, user_id: int, email: str, token_version: int, org_ref: str,
+    sso_org_id: int | None = None,
 ) -> dict:
     async with database.session_maker() as db:
         org_slug = None
@@ -504,6 +505,11 @@ async def issue_cli_token(
                     Membership.org_id == org.id,
                 ))).scalar_one_or_none()
                 if membership is not None:
+                    from ..models import EnterpriseSSO
+                    enterprise = await db.get(EnterpriseSSO, org.id)
+                    if (enterprise is not None and enterprise.enforced and membership.role != "owner"
+                            and sso_org_id != org.id):
+                        raise IdentityLookupError("sign in through this team's SSO")
                     org_slug = org.slug
                     user = await db.get(User, user_id)
                     default = await managed_keys.ensure_default_key(db, membership, user) if user else None

@@ -5,12 +5,13 @@ import Money from '../components/ui/Money.vue'
 import Avatar from '../components/ui/Avatar.vue'
 import TeamShowcase from './team/TeamShowcase.vue'
 import TeamAvatar from './team/TeamAvatar.vue'
+import EnterpriseSSO from '../components/EnterpriseSSO.vue'
 import { NO_KEY } from '../state/constants.js'
 import stripeSlate from '../assets/stripe-wordmark-slate.svg'
 import stripeWhite from '../assets/stripe-wordmark-white.svg'
 // The new agent's check-in poll lives as long as this page (state/agents.js).
 export default {
-  components: { InfoTip, Money, Avatar, TeamShowcase, TeamAvatar },
+  components: { InfoTip, Money, Avatar, TeamShowcase, TeamAvatar, EnterpriseSSO },
   data: () => ({ NO_KEY, stripeSlate, stripeWhite }),
   setup: useDashboard,
   mounted() { this.resumeCredentialIssue(); this.resumeAgentPoll() },
@@ -34,6 +35,7 @@ export default {
               <button v-if="canAdmin" :class="{active:orgTab==='policy'}" @click="orgTab='policy'">Policy</button>
               <button v-if="canAdmin" :class="{active:orgTab==='billing'}" @click="orgTab='billing'">Billing</button>
               <button v-if="canAdmin" :class="{active:orgTab==='showcase'}" @click="orgTab='showcase'">Showcase</button>
+              <button :class="{active:orgTab==='sso'}" @click="orgTab='sso'">SSO</button>
               <button :class="{active:orgTab==='danger'}" @click="orgTab='danger'; resetRenameForm()">Team settings</button>
             </div>
             <p v-if="!canAdmin && !['keys','danger'].includes(orgTab)" class="sub" style="margin-bottom:12px">Members, projects and policy are visible to admins.</p>
@@ -42,6 +44,7 @@ export default {
             <div v-if="orgMsg" class="tut-notice" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
               <span>{{orgMsg}}</span><button class="btn sm ico" @click="orgMsg=''" aria-label="Dismiss">✕</button>
             </div>
+            <EnterpriseSSO v-if="orgTab==='sso'" :org-id="activeOrg.org_id" :slug="activeOrg.slug" :owner="activeRole==='owner'" />
             <div v-if="credentialIssue" class="tut-notice" role="status" style="margin-bottom:12px">
               <template v-if="credentialIssue.status==='pending'">Your key request is in progress. You can switch teams and return here for the result. Keep this browser tab open.</template>
               <template v-else-if="credentialIssue.status==='checking'">Checking that your issued key is still active before showing it…</template>

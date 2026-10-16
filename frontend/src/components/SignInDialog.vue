@@ -1,7 +1,17 @@
 <script>
 import { useDashboard } from '../state/context'
 import BrandMark from './BrandMark.vue'
-export default { components: { BrandMark }, setup: useDashboard }
+export default {
+  components: { BrandMark }, setup: useDashboard,
+  data: () => ({ ssoTeam: '' }),
+  methods: {
+    ssoLogin() {
+      const slug = this.ssoTeam.trim().toLowerCase()
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) { this.loginErr = 'Enter your team link name.'; return }
+      location.href = `/auth/sso/${encodeURIComponent(slug)}/start`
+    },
+  },
+}
 </script>
 
 <template>
@@ -28,6 +38,12 @@ export default { components: { BrandMark }, setup: useDashboard }
         <div class="field"><input v-model="codeInput" inputmode="numeric" placeholder="6-digit code" @keyup.enter="emailVerify"/></div>
         <button class="btn primary" style="width:100%" @click="emailVerify" :disabled="busy">{{busy?'Verifying…':'Sign in'}}</button>
       </div>
+      <details v-if="!oauthSignin && !invitePrefill && !shareGate" style="margin-top:12px;text-align:left">
+        <summary class="sub" style="cursor:pointer;text-align:center">Sign in with company SSO</summary>
+        <p class="sub" style="font-size:11px">Enter the team name from your company's treg link.</p>
+        <div class="field"><input v-model="ssoTeam" placeholder="team-name" @keyup.enter="ssoLogin"/></div>
+        <button class="btn" style="width:100%" @click="ssoLogin">Continue with SSO</button>
+      </details>
       <details v-if="!oauthSignin" style="margin-top:12px;text-align:left">
         <summary class="sub" style="cursor:pointer;text-align:center">or paste an org token (agents &amp; CLI)</summary>
         <div class="field" style="margin-top:8px"><input v-model="tokenInput" type="password" placeholder="X-Treg-Token" @keyup.enter="addToken(tokenInput)"/></div>

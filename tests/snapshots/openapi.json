@@ -279,6 +279,19 @@
         "title": "CapabilityPinIn",
         "type": "object"
       },
+      "CheckoutIn": {
+        "properties": {
+          "plan": {
+            "title": "Plan",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan"
+        ],
+        "title": "CheckoutIn",
+        "type": "object"
+      },
       "CliApproveIn": {
         "properties": {
           "code": {
@@ -442,6 +455,19 @@
           "code"
         ],
         "title": "EmailVerifyIn",
+        "type": "object"
+      },
+      "EnforceIn": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "EnforceIn",
         "type": "object"
       },
       "ExtraCredentialIn": {
@@ -4648,6 +4674,91 @@
           }
         },
         "summary": "Auth Revoke Tokens"
+      }
+    },
+    "/auth/sso/callback": {
+      "get": {
+        "operationId": "sso_callback_auth_sso_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "State",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sso Callback"
+      }
+    },
+    "/auth/sso/{org_slug}/start": {
+      "get": {
+        "operationId": "sso_start_auth_sso__org_slug__start_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_slug",
+            "required": true,
+            "schema": {
+              "title": "Org Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sso Start"
       }
     },
     "/billing": {
@@ -12848,6 +12959,390 @@
           }
         },
         "summary": "Set Org Settings"
+      }
+    },
+    "/orgs/{org_id}/sso": {
+      "get": {
+        "operationId": "sso_status_orgs__org_id__sso_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-treg-token",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Treg-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-treg-org",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Treg-Org",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "treg_session",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Treg Session",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Sso Status Orgs  Org Id  Sso Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sso Status"
+      }
+    },
+    "/orgs/{org_id}/sso/cancel": {
+      "post": {
+        "operationId": "sso_cancel_orgs__org_id__sso_cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-treg-token",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Treg-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-treg-org",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Treg-Org",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "treg_session",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Treg Session",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Sso Cancel Orgs  Org Id  Sso Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sso Cancel"
+      }
+    },
+    "/orgs/{org_id}/sso/checkout": {
+      "post": {
+        "operationId": "sso_checkout_orgs__org_id__sso_checkout_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-treg-token",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Treg-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-treg-org",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Treg-Org",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "treg_session",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Treg Session",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Sso Checkout Orgs  Org Id  Sso Checkout Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sso Checkout"
+      }
+    },
+    "/orgs/{org_id}/sso/enforce": {
+      "post": {
+        "operationId": "sso_enforce_orgs__org_id__sso_enforce_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-treg-token",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Treg-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-treg-org",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Treg-Org",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "treg_session",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Treg Session",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnforceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Sso Enforce Orgs  Org Id  Sso Enforce Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sso Enforce"
+      }
+    },
+    "/orgs/{org_id}/sso/setup/{intent}": {
+      "post": {
+        "operationId": "sso_setup_orgs__org_id__sso_setup__intent__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "intent",
+            "required": true,
+            "schema": {
+              "title": "Intent",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-treg-token",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Treg-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-treg-org",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Treg-Org",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "treg_session",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Treg Session",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Sso Setup Orgs  Org Id  Sso Setup  Intent  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sso Setup"
       }
     },
     "/orgs/{org_id}/tag-keys": {

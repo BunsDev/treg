@@ -1331,6 +1331,9 @@ async def handle_webhook_event(db: AsyncSession, event: dict) -> dict:
     """
     kind = event.get("type") or ""
     obj = ((event.get("data") or {}).get("object") or {})
+    if (obj.get("metadata") or {}).get("treg_kind") == "enterprise_sso":
+        from . import enterprise_billing
+        return await enterprise_billing.handle_event(db, event)
     if kind == "checkout.session.completed":
         return await _on_checkout_completed(db, obj)
     if kind == "payment_intent.succeeded":

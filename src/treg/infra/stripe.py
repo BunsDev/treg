@@ -56,6 +56,12 @@ async def call(operation: str | Callable, /, *, api_key: str, **kwargs):
     return result.to_dict() if isinstance(result, stripe_sdk.StripeObject) else result
 
 
+async def schedule_subscription_cancel(subscription_id: str, *, api_key: str) -> dict:
+    result = await anyio.to_thread.run_sync(lambda: stripe_sdk.Subscription.modify(
+        subscription_id, api_key=api_key, cancel_at_period_end=True))
+    return result.to_dict() if isinstance(result, stripe_sdk.StripeObject) else result
+
+
 def verify_event(payload: bytes, signature: str, secret: str) -> dict:
     try:
         # `verify_header` signs a STRING (`f"{t}.{payload}"`), so bytes must be decoded first or the

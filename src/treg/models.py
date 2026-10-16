@@ -291,6 +291,66 @@ class Membership(SQLModel, table=True):
     created_at: NaiveUTC = Field(default_factory=_now)
 
 
+class EnterpriseSSO(SQLModel, table=True):
+    """One team's enterprise sign-in entitlement and its external organization."""
+
+    org_id: int = Field(primary_key=True, foreign_key="org.id")
+    plan: str = Field(default="sso")  # sso | sso_directory
+    subscription_status: str = Field(default="pending")
+    stripe_subscription_id: str | None = Field(default=None, index=True, unique=True)
+    stripe_event_created: int = Field(default=0)
+    cancel_at_period_end: bool = Field(default=False)
+    workos_org_id: str | None = Field(default=None, index=True, unique=True)
+    connection_id: str | None = Field(default=None)
+    directory_id: str | None = Field(default=None)
+    directory_active: bool = Field(default=False)
+    directory_event_ms: int = Field(default=0, sa_type=BigInteger)
+    # Switched on only after a successful test sign-in; then other login doors cannot enter this team.
+    enforced: bool = Field(default=False)
+    created_at: NaiveUTC = Field(default_factory=_now)
+
+
+class EnterpriseSSOIdentity(SQLModel, table=True):
+    """Stable IdP subject for one human in one customer connection."""
+
+    __table_args__ = (
+        UniqueConstraint("org_id", "profile_id", name="uq_enterprise_sso_profile"),
+        UniqueConstraint("org_id", "user_id", name="uq_enterprise_sso_user"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    org_id: int = Field(foreign_key="org.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    profile_id: str
+    idp_id: str
+    connection_id: str
+    directory_user_id: str | None = Field(default=None, index=True)
+    active: bool = Field(default=True)
+    created_at: NaiveUTC = Field(default_factory=_now)
+
+
+class EnterpriseSSOEvent(SQLModel, table=True):
+    """Processed WorkOS event id; webhook redelivery must be harmless."""
+
+    id: str = Field(primary_key=True)
+    created_at: NaiveUTC = Field(default_factory=_now)
+
+
+class EnterpriseDirectoryUser(SQLModel, table=True):
+    """Directory roster and deactivation state, including people who have never signed in."""
+
+    __table_args__ = (UniqueConstraint("org_id", "directory_user_id", name="uq_enterprise_directory_user"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    org_id: int = Field(foreign_key="org.id", index=True)
+    directory_user_id: str
+    directory_id: str
+    idp_id: str
+    email: str
+    active: bool = Field(default=True)
+    last_event_ms: int = Field(default=0, sa_type=BigInteger)
+
+
 class ApiKey(SQLModel, table=True):
     """One credential control record for a human or scoped-agent membership.
 

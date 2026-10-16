@@ -11,6 +11,8 @@ sources:
   - src/treg/domain/asynctasks/__init__.py
   - src/treg/models.py
   - src/treg/application/billing.py
+  - src/treg/application/enterprise_billing.py
+  - src/treg/routers/enterprise_sso.py
   - src/treg/application/call/idempotency.py
   - src/treg/application/call/intake.py
   - src/treg/application/call/resolve.py
@@ -64,6 +66,19 @@ related:
 ---
 
 # Money
+
+## Enterprise SSO subscription
+
+The team dashboard offers SSO at $125/month and SSO with Directory Sync at $250/month, plus
+`TREG_ENTERPRISE_SSO_MARKUP_USD` (zero by default). `TREG_ENTERPRISE_SSO_ONLY_ENABLED=false` exposes
+both plans; the default exposes only the bundle. Stripe Checkout uses monthly recurring USD prices.
+The existing signed billing webhook records subscription status and gates WorkOS setup/sign-in on
+`active` or `trialing`; a redirect from Checkout grants nothing. Subscription metadata binds the
+event to a team and plan, and the Stripe customer must match that team. Older Stripe events cannot
+restore an entitlement after a later cancellation. Owners can schedule cancellation at period end;
+when the subscription ends, linked non-owner memberships and their keys are revoked. Team deletion
+waits until the subscription has ended. This subscription never credits or debits the
+prepaid tool-call balance, so the five ledger entry kinds remain unchanged.
 
 TrestleIQ charges USD 0.015 for Phone Validation, USD 0.03 for Real Contact, and USD 0.01 for
 Address Validation. Every HTTP 200 response is billable, including a negative verdict; 4xx and 5xx

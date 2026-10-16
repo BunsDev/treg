@@ -12,6 +12,7 @@ import glob
 import os
 import socket
 import tempfile
+from pathlib import Path
 
 # Tests and their CLI subprocesses must never emit production analytics.
 os.environ["TREG_TELEMETRY"] = "0"
@@ -64,6 +65,22 @@ if _test_db_url and _worker and _test_db_url.startswith("postgresql"):
 os.environ["TREG_DATABASE_URL"] = _test_db_url or _default
 # Replica tests opt in explicitly; never inherit a real replica from the shell or .env.
 os.environ["TREG_READ_DATABASE_URL"] = ""
+os.environ["TREG_WORKOS_API_KEY"] = ""
+os.environ["TREG_WORKOS_CLIENT_ID"] = ""
+os.environ["TREG_WORKOS_WEBHOOK_SECRET"] = ""
+os.environ["TREG_PUBLIC_URL"] = "https://treg.to"
+os.environ["TREG_OVERFLOW_MODE"] = "off"
+os.environ["TREG_OVERFLOW_KEY_ORTHOGONAL"] = ""
+os.environ["TREG_OVERFLOW_KEY_MONID"] = ""
+# A merged local .env can carry newly added funded platform keys that the fixed list below has not
+# learned yet. Blank their names without reading values into logs or exposing them to tests.
+_local_env = Path(__file__).resolve().parents[1] / ".env"
+_platform_names = {name for name in os.environ if name.startswith("TREG_PLATFORM_KEY_")}
+if _local_env.exists():
+    _platform_names.update(line.split("=", 1)[0].strip() for line in _local_env.read_text().splitlines()
+                           if line.startswith("TREG_PLATFORM_KEY_") and "=" in line)
+for _platform_name in _platform_names:
+    os.environ[_platform_name] = ""
 # Never let a developer's Redis URL or rollout settings turn tests into shared-store traffic.
 os.environ["TREG_KV_URL"] = ""
 os.environ["TREG_MONEY_ADMISSION_ENABLED"] = "false"
