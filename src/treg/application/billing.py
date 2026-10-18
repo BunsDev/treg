@@ -520,10 +520,10 @@ async def create_setup_checkout(db: AsyncSession, org: Org, *, return_base: str 
         stripe_adapter.CHECKOUT_SESSION_CREATE,
         mode="setup",
         customer=customer,
-        # `off_session` tells Stripe the saved card is destined for unattended charges, which is what
-        # makes the bank collect the SCA mandate NOW instead of declining the first auto-charge later.
-        setup_intent_data={"metadata": {"treg_org_id": str(org.id), "treg_kind": "autotopup_card"},
-                           "usage": "off_session"},
+        # mode=setup Checkout sessions automatically create SetupIntents that are usable for
+        # off-session charges. The bank collects SCA mandate during the Checkout flow itself.
+        # setup_intent_data only accepts: description, metadata, on_behalf_of.
+        setup_intent_data={"metadata": {"treg_org_id": str(org.id), "treg_kind": "autotopup_card"}},
         metadata={"treg_org_id": str(org.id), "treg_kind": "autotopup_card"},
         integration_identifier=INTEGRATION_ID,
         success_url=f"{base}/app?card=saved#billing",
@@ -1719,6 +1719,9 @@ async def configure_autotopup(
                     db, org, return_base=return_base, email=email))["url"]
             except BillingNotConfigured as e:
                 raise BillingJourneyError("not_configured", str(e)) from e
+            except stripe_adapter.InvalidRequestError as e:
+                log.error("billing: Stripe rejected setup checkout: %s", e)
+                raise BillingJourneyError("rejected", "payment provider rejected the request") from e
         return state
 
 
