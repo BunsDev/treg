@@ -52,11 +52,19 @@ endpoints:
     path: /v1/contact-details/single
     name: "Find a person's work email by LinkedIn URL (standard)"
     summary: "Reveal contact details (standard)"
+    platform_request: {body.enrichmentType.getWorkEmails: true, body.enrichmentType.getPersonalEmails: false, body.enrichmentType.getPhoneNumbers: false}
     input:
       bodyType: json
       body:
         linkedinUrl: {type: string, required: true, note: "full LinkedIn URL, bare slug, Sales Navigator URN, or numeric user id", example: "https://www.linkedin.com/in/williamhgates/"}
-        enrichmentType: {type: object, required: false, note: "flags getWorkEmails / getPersonalEmails / getPhoneNumbers — ALL default true, which bills the 5-credit bundle. Set only what you need", example: {getWorkEmails: true, getPersonalEmails: false, getPhoneNumbers: false}}
+        enrichmentType:
+          type: object
+          required: true
+          note: "exactly these three flags on treg's key: work email only, the price this row is metered at (the all-on default bills the 5-credit bundle). Own key: any flags"
+          properties:
+            getWorkEmails: {type: boolean, required: true, enum: [true]}
+            getPersonalEmails: {type: boolean, required: true, enum: [false]}
+            getPhoneNumbers: {type: boolean, required: true, enum: [false]}
         validateEmails: {type: boolean, required: false, note: "bounce-validate emails before returning; default true; no extra cost"}
       note: "operationId syncQuickContactReveal. Balanced speed/cost default. Does not return a full profile — use fiber-ai.people.enrich or fiber-ai.linkedin.user.profile for that. Pay only when deliverable contact data comes back."
     test_request:
@@ -136,11 +144,19 @@ endpoints:
     path: /v1/contact-details/turbo/sync
     name: "Find a person's work email by LinkedIn URL (turbo)"
     summary: "Reveal contact details (turbo)"
+    platform_request: {body.enrichmentType.getWorkEmails: true, body.enrichmentType.getPersonalEmails: false, body.enrichmentType.getPhoneNumbers: false}
     input:
       bodyType: json
       body:
         linkedinUrl: {type: string, required: true, note: "full LinkedIn URL, bare slug, Sales Navigator URN, or numeric user id", example: "https://www.linkedin.com/in/williamhgates/"}
-        enrichmentType: {type: object, required: false, note: "same flags as standard reveal; ALL default true = 7-credit bundle", example: {getWorkEmails: true, getPersonalEmails: false, getPhoneNumbers: false}}
+        enrichmentType:
+          type: object
+          required: true
+          note: "exactly these three flags on treg's key: work email only, the price this row is metered at (the all-on default bills the 7-credit bundle). Own key: any flags"
+          properties:
+            getWorkEmails: {type: boolean, required: true, enum: [true]}
+            getPersonalEmails: {type: boolean, required: true, enum: [false]}
+            getPhoneNumbers: {type: boolean, required: true, enum: [false]}
       note: "operationId syncTurboContactEnrichment. Fastest sync tier, higher credits. Fall back to this when latency matters; use standard reveal otherwise."
     test_request:
       body:
