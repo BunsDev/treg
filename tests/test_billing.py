@@ -542,6 +542,55 @@ async def test_disabling_autotopup_clears_the_failure_banner(c: AsyncClient, mon
     assert r.json()["autotopup"]["disabled_reason"] is None
 
 
+async def test_setup_checkout_sends_valid_stripe_params(c: AsyncClient, monkeypatch):
+    """mode=setup Checkout must NOT pass `usage` under setup_intent_data: Stripe rejects it with
+    InvalidRequestError, and Checkout's SetupIntent is already off_session by default."""
+    org_id, owner = await _org(c)
+    captured: list[dict] = []
+
+    async def capture_sdk(fn, /, **kw):
+        if "Customer" in str(fn):
+            return {"id": "cus_test_params"}
+        if "Session" in str(fn):
+            captured.append(kw)
+            return {"id": "cs_params", "url": "https://checkout.stripe.com/c/pay/cs_params"}
+        raise AssertionError(f"unexpected call: {fn}")
+
+    monkeypatch.setattr(billing, "_sdk", capture_sdk)
+    r = await c.post("/billing/autotopup",
+                     json={"enabled": True, "consent": True, "threshold_usd": 5, "amount_usd": 25},
+                     headers=_h(owner))
+    assert r.status_code == 200, r.text
+    assert len(captured) == 1, "expected one Checkout session create call"
+    session_kw = captured[0]
+    assert session_kw["mode"] == "setup"
+    setup_data = session_kw.get("setup_intent_data", {})
+    assert "usage" not in setup_data, "setup_intent_data must not contain 'usage' — Stripe rejects it"
+    assert setup_data.get("metadata", {}).get("treg_org_id") == str(org_id)
+    assert session_kw.get("metadata", {}).get("treg_org_id") == str(org_id)
+
+
+async def test_setup_checkout_stripe_error_returns_422_not_500(c: AsyncClient, monkeypatch):
+    """A Stripe InvalidRequestError must surface as a clean 422 with a JSON detail, not a 500 trace."""
+    org_id, owner = await _org(c)
+
+    async def reject_sdk(fn, /, **kw):
+        if "Customer" in str(fn):
+            return {"id": "cus_test_reject"}
+        if "Session" in str(fn):
+            raise billing.stripe_adapter.InvalidRequestError(
+                "Received unknown parameter: setup_intent_data[usage]",
+                param="setup_intent_data[usage]")
+        raise AssertionError(f"unexpected call: {fn}")
+
+    monkeypatch.setattr(billing, "_sdk", reject_sdk)
+    r = await c.post("/billing/autotopup",
+                     json={"enabled": True, "consent": True, "threshold_usd": 5, "amount_usd": 25},
+                     headers=_h(owner))
+    assert r.status_code == 422, f"expected 422, got {r.status_code}: {r.text}"
+    assert "detail" in r.json(), "error response must include detail"
+
+
 # ---- auto top-up: the charge and its guards ----------------------------------------------------
 async def _armed(org_id: int, **over) -> None:
     """Put an org in the state where an auto-charge is legitimate: consent, customer, card, enabled."""
