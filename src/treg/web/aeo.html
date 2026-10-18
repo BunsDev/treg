@@ -201,6 +201,10 @@
   /* hero (user: like the launch film's title card): ink pixel type on the colour field, "for" + the agents,
      then the film's hook line with "you?" painted like the film's highlight */
   .hero { padding: 160px 24px 120px; text-align: center; color: var(--ink); }
+  /* user: a softer wash that melts into the page instead of ending in a hard edge */
+  .hero.field { background: var(--bg); }
+  .hero > .paint { opacity: .5; filter: blur(60px) saturate(1.15) brightness(1.12); }
+  .hero::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(180deg, rgba(253,252,251,0) 0%, rgba(253,252,251,.15) 45%, var(--bg) 100%); }
   .hero-in { max-width: 1040px; margin: 0 auto; }
   .eyebrow { display: inline-block; margin: 0 0 26px; padding: 7px 16px; border-radius: 999px; background: rgba(255,255,255,.55); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); font-family: var(--pixel); font-size: 16px; letter-spacing: .01em; }
   .eyebrow span { color: var(--muted); }
