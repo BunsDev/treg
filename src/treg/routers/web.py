@@ -3455,6 +3455,7 @@ _SITEMAP_PAGES: tuple[tuple[str, str, str], ...] = (
     ("/connectors/claude", "claude-connector.html", "0.6"),
     ("/people-search", "people-search.html", "0.8"),
     ("/leads-signals", "leads-signals.html", "0.8"),
+    ("/recruit", "recruit.html", "0.8"),
     ("/web-access", "web-access.html", "0.8"),
     ("/grokbot", "grokbot.html", "0.8"),
     ("/fable", "fable-gtm.html", "0.8"),
@@ -3979,6 +3980,14 @@ async def leads_signals_page(request: Request):
     return _static_page("leads-signals.html", request)
 
 
+@app.get("/recruit", include_in_schema=False)
+async def recruit_page(request: Request):
+    """Landing page for the recruiter launch ("OpenSource LinkedIn Recruiter") — the destination the
+    launch film points viewers at, and the page that sells the recruit skill. Served like
+    /leads-signals: canonical, in the sitemap, relative asset paths."""
+    return _static_page("recruit.html", request)
+
+
 @app.get("/web-access", include_in_schema=False)
 async def web_access_page(request: Request):
     """Landing page for the web-access launch ("Free WebAccess for agents"). Served like /leads-signals;
@@ -4096,6 +4105,8 @@ async def jev_xboost_judge(request: Request, db: AsyncSession = Depends(get_sess
 # chronological (newest first), not alphabetical.
 _BLOG_LAUNCHES: list[tuple[str, str, str, str]] = [
     # (slug, title, date, one-line blurb)
+    ("/recruit", "OpenSource LinkedIn Recruiter", "2026-10-17",
+     "Paste a job post; your agent ranks candidates and finds personal email and mobile for $0.19 each."),
     ("/web-access", "Free WebAccess for agents", "2026-10-15",
      "Free web search and page reads for your agent; when free fails, the next vendor answers."),
     ("/showcase", "Built with treg", "2026-10-12",

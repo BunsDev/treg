@@ -1059,6 +1059,15 @@
       "GET",
       "HEAD"
     ],
+    "name": "recruit_page",
+    "path": "/recruit"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
     "name": "web_access_page",
     "path": "/web-access"
   },

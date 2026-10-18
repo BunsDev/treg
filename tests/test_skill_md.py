@@ -111,3 +111,11 @@ async def test_jev_memory_skill_is_served_but_opt_in(clients):
     market = json.loads((mod / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
     assert f"jev-memory@{market['name']}" in r.text
     assert [p["source"] for p in market["plugins"]] == ["./jev-memory"]
+
+
+async def test_recruit_landing_page_installs_the_skill(clients):
+    """The /recruit launch page is served with its placeholders filled and points at the skill it sells."""
+    r = await clients.get("/recruit")
+    assert r.status_code == 200 and "{BASE}" not in r.text
+    assert "npx skills add superdesigndev/treg --skill recruit" in r.text
+    assert "/skills/recruit/SKILL.md" in r.text
