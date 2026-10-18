@@ -135,7 +135,6 @@
   /* code card */
   .code { background: #1B1B1A; color: #D6D6D2; border-radius: 16px; padding: 18px 20px; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; overflow-x: auto; white-space: pre-wrap; position: relative; }
   .section { padding: 124px 24px 0; }
-  #prompt.section { padding-top: 110px; }
   .section h2 { font-family: var(--display); font-weight: 500; letter-spacing: -.025em; line-height: 1.12; font-size: clamp(30px, 4.6vw, 46px); text-align: center; margin: 0 0 14px; text-wrap: balance; }
   .section .lede { text-align: center; color: var(--muted); max-width: 56ch; margin: 0 auto 48px; font-size: 17px; text-wrap: balance; }
   .hl2 { color: var(--green); font-weight: 600; }
@@ -164,13 +163,6 @@
   .final .pill { border-color: rgba(255,255,255,.2); background: transparent; color: #fff; }
   .final .pill.light { background: #fff; color: var(--ink); border-color: #fff; }
   .final .pill.light:hover { background: #ECEAE5; }
-  .copybox { background: #0F0F0E; border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 16px 18px; font-family: var(--mono); font-size: 13px; color: #D6D6D2; width: min(560px, 100%); text-align: left; }
-  .copybox .h { color: #9A9A9A; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 10px; }
-  .copybox .line { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
-  .copybox .line span { color: #45E39E; word-break: break-all; }
-  .copybox button { flex: none; border: 1px solid rgba(255,255,255,.2); background: transparent; color: #fff; border-radius: 999px; padding: 6px 12px; font: 500 12px var(--text); cursor: pointer; }
-  .copybox button:hover { background: rgba(255,255,255,.08); }
-  .copybox .then { margin-top: 12px; color: #B5B5B0; }
   @media (max-width: 860px) { .final-in { padding: 40px 22px; } }
 
   /* footer */
@@ -240,15 +232,6 @@
   .hero.in .hero-in > :nth-child(2) { transition-delay: .08s } .hero.in .hero-in > :nth-child(3) { transition-delay: .16s } 
 
 
-  /* the map: SEO, GEO, AEO */
-  .map { margin-top: 32px; }
-  .terms { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .term { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: grid; grid-template-columns: 84px 1fr; gap: 14px; align-items: center; }
-  .term b { font: 600 17px var(--display); letter-spacing: -.01em; }
-  .term span { font-size: 14.5px; color: #43413E; }
-  .term.on { border-color: rgba(196,122,138,.5); box-shadow: 0 0 0 3px var(--pink-soft); }
-  .term.on b { color: var(--pink); }
-  @media (max-width: 760px) { .terms { grid-template-columns: 1fr; } }
 
   /* the CRM example: a question goes in, an answer comes back without us in it */
   .askcard { border-radius: 24px; margin-top: 32px; padding: 54px 24px; }
@@ -312,7 +295,6 @@
   .bill .tot .m { font-weight: 600; background: linear-gradient(90deg, #C9707F, #D98C6E, #C9A02E); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
   /* step scenes: the AI SEO launch film's step animations (V2), rebuilt in HTML on the colour field */
   .stage { position: relative; isolation: isolate; overflow: hidden; border-radius: 20px; padding: 16px; color: var(--ink); font-size: 12.5px; line-height: 1.4; }
-  .stage + .stage { margin-top: 14px; }
   .stage.field { background: #F3E2E6; color: var(--ink); }
   .stage > .paint { opacity: .6; filter: blur(48px) saturate(1.4) brightness(1.02); }
   .stage .ill { position: absolute; top: 9px; right: 14px; font: 10.5px var(--mono); color: rgba(16,16,16,.42); z-index: 2; }
@@ -421,27 +403,7 @@
   .tps .ck { fill: #fff; display: none; }
   .tps.found .spin { display: none; }
   .tps.found .ck { display: block; }
-  /* pitch */
-  .pt-h { font-weight: 500; font-size: 15px; margin-top: 6px; display: flex; align-items: baseline; gap: 8px; }
-  .pt-h .mono { font-size: 10.5px; font-weight: 400; }
-  .cmp { position: relative; margin-top: 10px; padding: 12px 14px 54px; }
-  .cmp > b { font-size: 14px; display: block; padding-bottom: 8px; border-bottom: 1px solid rgba(0,0,0,.1); }
-  .cmp .kv { display: flex; gap: 10px; font-size: 11px; padding: 6px 0; border-bottom: 1px solid rgba(0,0,0,.06); white-space: nowrap; overflow: hidden; }
-  .cmp .body { margin: 10px 0 0; font-weight: 500; font-size: 13px; line-height: 1.45; min-height: 57px; }
-  .cmp .body.typing::after, .q4 .qt.typing::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: -2px; background: var(--ink); animation: blink 1s steps(1) infinite; }
-  .sendb { position: absolute; right: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 16px; border-radius: 999px; background: var(--ink); color: #fff; font-weight: 500; font-size: 13px; overflow: hidden; transition: transform .12s ease; }
-  .sendb::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #C9707F, #D98C6E, #C9A02E); opacity: 0; transition: opacity .4s ease; }
-  .sendb > * { position: relative; }
-  .sendb .ck { fill: #fff; display: none; }
-  .sendb.press { transform: scale(.94); }
-  .sendb.sent::before { opacity: 1; }
-  .sendb.sent .ck { display: block; }
-  .au { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 10px; }
-  .au .who { display: grid; min-width: 0; flex: 1; }
-  .au .who .mono { font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .au .state { font-size: 10.5px; flex: none; }
-  .au .state.sent { display: inline-flex; align-items: center; gap: 4px; background: var(--ink); color: #fff; border-radius: 999px; padding: 4px 10px; font: 500 12px var(--text); animation: pop .3s cubic-bezier(.3,1.5,.5,1); }
-  .au .state.sent .ck { fill: #fff; width: 12px; height: 12px; }
+  .q4 .qt.typing::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: -2px; background: var(--ink); animation: blink 1s steps(1) infinite; }
   @media (prefers-reduced-motion: reduce) { .sx, .cam, .tr .lf .bar i { transition: none; } .tr .lf.unnamed.on { animation: none; } }
   /* the meta prompt */
   .oneline { max-width: 820px; margin: 0 auto; display: flex; align-items: center; gap: 14px; background: #1B1B1A; color: #D6D6D2; border-radius: 999px; padding: 10px 10px 10px 22px; font-family: var(--mono); font-size: 13px; }
@@ -451,10 +413,20 @@
   .meta-d.open { width: min(820px, 100%); }
   .meta-d .oneline { padding: 7px 7px 7px 20px; gap: 10px; }
   .meta-d .oneline .h { margin-right: 6px; }
+  .final .oneline, .final .prompt-d .code { background: #0F0F0E; border: 1px solid rgba(255,255,255,.12); text-align: left; }
+  .final .prompt-d.open .oneline { border-bottom: 0; }
+  .final .meta-d { width: min(640px, 100%); }
+  .final .meta-d.open { width: min(820px, 100%); }
+  .final .meta-d .oneline { flex-wrap: wrap; border-radius: 16px; padding: 12px 12px 16px 20px; }
+  .final .meta-d.open .oneline { border-radius: 16px 16px 0 0; }
+  .final .meta-d .oneline .h { margin-right: auto; }
+  .final .sum { flex-basis: 100%; margin: 4px 0 0; font-size: 13px; line-height: 1.6; color: #B5B5B0; }
+  .final .sum .g { color: #45E39E; word-break: break-all; }
+  .final .sum .p { color: #F2B3C1; }
   .prompt-d .code { border-radius: 0 0 18px 18px; border-top: 1px solid #2E2E2C; max-height: 520px; overflow: auto; font-size: 12px; }
   .oneline .h { flex: none; color: #9A9A9A; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; }
   @media (max-width: 600px) { .oneline { justify-content: space-between; } }
-  .oneline button, .copybox button { flex: none; border: 1px solid rgba(255,255,255,.2); background: transparent; color: #fff; border-radius: 999px; padding: 6px 12px; font: 500 12px var(--text); cursor: pointer; }
+  .oneline button { flex: none; border: 1px solid rgba(255,255,255,.2); background: transparent; color: #fff; border-radius: 999px; padding: 6px 12px; font: 500 12px var(--text); cursor: pointer; }
   .oneline button:hover { background: rgba(255,255,255,.08); }
 
   @media (prefers-reduced-motion: reduce) {
@@ -469,7 +441,6 @@
     .callouts .bubble { font-size: 11.5px; padding: 6px 9px; max-width: 48%; }
     .callouts { margin-top: 34px; gap: 8px; }
     .askcard { padding: 36px 14px; }
-    .term { grid-template-columns: 72px 1fr; }
     .stage { padding: 14px 12px; }
     .stage[data-scene="chain"] { height: 420px; }
     .cam { padding: 32px 10px 14px; }
@@ -514,18 +485,6 @@
     </div>
   </div>
 </header>
-
-<section class="sec rv" id="map">
-  <div class="wrap">
-    <h2>What is AEO</h2>
-    <div class="map">
-      <div class="terms">
-        <div class="term"><b>SEO</b><span>Search engine optimization: showing up on Google.</span></div>
-        <div class="term on"><b>AEO/GEO</b><span>Generative or answer engine optimization: showing up in AI answers. One idea, two names. This guide works here.</span></div>
-      </div>
-    </div>
-  </div>
-</section>
 
 <section class="sec" id="steps">
   <div class="wrap">
@@ -687,22 +646,61 @@ Search with 2-5 word keyword forms of the questions.
       </div>
       <div class="vis">
         <div class="stage field" data-scene="chain"><div class="paint" aria-hidden="true"></div><span class="ill">illustrative</span><div class="cam"><svg class="links" aria-hidden="true"></svg><div class="ch-lab sx" data-at="50">Sites AI cites</div><div class="ch-row "><div class="cc pn sx" id="c00" data-at="200"><span class="cs"><span class="tl"><img src="media/aeo/logos/reddit.png" alt=""></span><span class="mono">reddit.com</span></span><span class="tiles"><span class="tl"><img src="media/aeo/logos/chatgpt.svg" alt=""></span><span class="tl"><img src="media/aeo/logos/claude.svg" alt=""></span><span class="tl"><img src="media/aeo/logos/perplexity-icon.svg" alt=""></span><span class="tl"><img src="media/aeo/logos/gemini.svg" alt=""></span></span></div><div class="cc pn sx" id="c01" data-at="320"><span class="cs"><span class="tl"><img src="media/aeo/logos/youtube.png" alt=""></span><span class="mono">youtube.com</span></span><span class="tiles"><span class="tl"><img src="media/aeo/logos/chatgpt.svg" alt=""></span><span class="tl"><img src="media/aeo/logos/claude.svg" alt=""></span><span class="tl"><img src="media/aeo/logos/perplexity-icon.svg" alt=""></span><span class="tl"><img src="media/aeo/logos/gemini.svg" alt=""></span></span></div><div class="cc pn sx" id="c02" data-at="440"><span class="cs"><span class="tl"><img src="media/aeo/logos/linkedin.png" alt=""></span><span class="mono">linkedin.com</span></span><span class="tiles"><span class="tl"><img src="media/aeo/logos/chatgpt.svg" alt=""></span><span class="tl"><img src="media/aeo/logos/claude.svg" alt=""></span><span class="tl"><img src="media/aeo/logos/perplexity-icon.svg" alt=""></span></span></div></div><div class="ch-lab sx" data-at="850">Posts</div><div class="ch-row "><div class="cc pn sx" id="c10" data-link="c00" data-at="1000"><span class="mono mut">thread</span><b>What CRM does your small team use?</b></div><div class="cc pn sx" id="c11" data-link="c01" data-at="1120"><span class="mono mut">video</span><b>Best CRMs for small business, tested</b></div><div class="cc pn sx" id="c12" data-link="c02" data-at="1240"><span class="mono mut">post</span><b>Our agency's CRM stack</b></div></div><div class="tps sx" data-at="1750" data-found="2700"><span class="tm"><svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#fff"/><rect x="111" y="111" width="140.5" height="140.5" rx="20" fill="#101010"/><rect x="260.5" y="260.5" width="140.5" height="140.5" rx="20" fill="#101010"/></svg></span><span class="px">treg</span> people search<span class="spin w"></span><svg class="ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6 12-12-1.4-1.4z"/></svg></div><div class="ch-lab sx" data-at="1750">People behind them</div><div class="ch-row "><div class="cc pn sx person" id="c20" data-link="c10" data-at="1900" data-found="2700"><span class="look mono"><span class="spin"></span>people search</span><span class="who"><span class="av" style="background:#c7dca0">DO</span><span><b>Dan Okafor</b><span class="mono mut">u/opsguy_dan</span></span></span></div><div class="cc pn sx person" id="c21" data-link="c11" data-at="2020" data-found="2880"><span class="look mono"><span class="spin"></span>people search</span><span class="who"><span class="av" style="background:#f2b8c6">MC</span><span><b>Maya Chen</b><span class="mono mut">@mayareviews</span></span></span></div><div class="cc pn sx person" id="c22" data-link="c12" data-at="2140" data-found="3060"><span class="look mono"><span class="spin"></span>people search</span><span class="who"><span class="av" style="background:#b9cdea">PN</span><span><b>Priya Nair</b><span class="mono mut">RevOps lead</span></span></span></div></div><div class="ch-lab sx" data-at="3150">Contact</div><div class="ch-row "><div class="cc pn sx ct" id="c30" data-link="c20" data-at="3300"><svg class="ml" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm8 7.2L19 7.5V7H5v.5z"/></svg><span class="mono">dan@opsguy.co</span><svg class="ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6 12-12-1.4-1.4z"/></svg></div><div class="cc pn sx ct" id="c31" data-link="c21" data-at="3420"><svg class="ml" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm8 7.2L19 7.5V7H5v.5z"/></svg><span class="mono">hi@mayachen.tv</span><svg class="ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6 12-12-1.4-1.4z"/></svg></div><div class="cc pn sx ct" id="c32" data-link="c22" data-at="3540"><svg class="ml" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm8 7.2L19 7.5V7H5v.5z"/></svg><span class="mono">LinkedIn DM</span><svg class="ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6 12-12-1.4-1.4z"/></svg></div></div></div></div>
-        <div class="stage field" data-scene="pitch"><div class="paint" aria-hidden="true"></div><span class="ill">illustrative</span><div class="pt-h sx" data-at="0">Drafting pitches <span class="mono mut">you review and send</span></div><div class="cmp pn sx" data-at="500"><b>Draft pitch</b><div class="kv mono"><span class="mut">to</span>Dan Okafor · dan@opsguy.co</div><div class="kv mono"><span class="mut">re</span>Your CRM thread on r/smallbusiness</div><p class="body" data-type="Hi Dan, loved your thread on CRMs for small teams. We built Your brand for exactly that. Want a free seat to try it?" data-at="800" data-speed="15"></p><span class="sendb" data-at="2850"><span class="lbl">Save draft</span><svg class="ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6 12-12-1.4-1.4z"/></svg></span></div><div class="au pn sx" data-at="150"><span class="tl"><img src="media/aeo/logos/reddit.png" alt=""></span><span class="av" style="background:#c7dca0">DO</span><span class="who"><b>Dan Okafor</b><span class="mono mut">dan@opsguy.co</span></span><span class="state mono mut" data-sent="3000">drafting</span></div><div class="au pn sx" data-at="280"><span class="tl"><img src="media/aeo/logos/youtube.png" alt=""></span><span class="av" style="background:#f2b8c6">MC</span><span class="who"><b>Maya Chen</b><span class="mono mut">hi@mayachen.tv</span></span><span class="state mono mut" data-sent="3260">queued</span></div><div class="au pn sx" data-at="410"><span class="tl"><img src="media/aeo/logos/linkedin.png" alt=""></span><span class="av" style="background:#b9cdea">PN</span><span class="who"><b>Priya Nair</b><span class="mono mut">LinkedIn DM</span></span><span class="state mono mut" data-sent="3520">queued</span></div></div>
       </div>
     </article>
   </div>
 </section>
 
-<section class="section rv" id="prompt">
-  <h2>One prompt runs all four steps.<br><span class="hl2">You decide at every gate.</span></h2>
-  <p class="lede">Each step above shows its part. The copy is the whole prompt: setup, the four steps, the report, and step 5 for when you come back in 3 to 4 weeks to measure the change.</p>
-  <div class="prompt-d meta-d" id="metaPrompt">
-  <div class="oneline">
-    <span class="h">the meta prompt</span>
-    <button type="button" class="tog" id="togPrompt" aria-expanded="false" aria-controls="promptText">Show prompt ▾</button>
-    <button type="button" id="copyPrompt">Copy prompt</button>
+<section class="section rv" id="pricing">
+  <h2>No subscription. No contract.<br><span class="hl2">$0.31</span> an AEO workflow.</h2>
+  <p class="lede">Every call is metered at the provider's own rate from a prepaid balance, and the prompt quotes each step's cost before it spends.</p>
+  <div class="bill">
+    <div><span>Step 1 · What customers ask<small>keyword ideas, volume, search intent, Google results</small></span><span class="m">~$0.04</span></div>
+    <div><span>Step 2 · Who AI recommends<small>10 questions × ChatGPT, Gemini, AI Mode, Perplexity at ~$0.015 a question</small></span><span class="m">~$0.15</span></div>
+    <div><span>Step 3 · Websites AI reads<small>page and site strength, linking domains, 15 page reads</small></span><span class="m">~$0.09</span></div>
+    <div><span>Step 4 · Find the people behind the sites<small>Reddit and YouTube search, your own page</small></span><span class="m">~$0.03</span></div>
+    <div class="tot"><span>One full AEO workflow</span><span class="m">≈ $0.31</span></div>
   </div>
-  <div class="code" id="promptText" hidden>GOAL: 4-step audit of whether AI recommends the user's product. User decides at each ◆ gate. Step 5 (3-4 weeks later) measures movement.
+  <p class="fineprint">Estimates from the prompt's own cost card. The step 5 re-check, 3 to 4 weeks later, is about $0.15 more. New teams start with $1.00 free.</p>
+</section>
+
+<section class="section tools-sec rv" id="tools">
+  <h2>One token. {ENDPOINTS} data &amp; tools.</h2>
+  <p class="lede">AEO is one aisle. The same token reaches keyword data, the AI engines, backlinks, page reads and social search, and your own keys always win over treg's.</p>
+  <div class="catwrap">
+    <div class="pgrid">
+      <div class="pcard hl"><span class="ph"><img src="logos/cloro.svg" alt=""></span><span class="pt"><b>cloro</b><s><img src="media/aeo/logos/chatgpt.svg" alt="">ChatGPT answers</s></span></div>
+      <div class="pcard hl"><span class="ph"><img src="logos/cloro.svg" alt=""></span><span class="pt"><b>cloro</b><s><img src="media/aeo/logos/gemini.svg" alt="">Gemini answers</s></span></div>
+      <div class="pcard hl"><span class="ph"><img src="logos/cloro.svg" alt=""></span><span class="pt"><b>cloro</b><s><img src="media/aeo/logos/google.svg" alt="">Google AI Mode</s></span></div>
+      <div class="pcard"><span class="ph"><img src="logos/perplexity.svg" alt=""></span><span class="pt"><b>Perplexity answers</b><s>with sources</s></span></div>
+      <div class="pcard"><span class="ph"><img src="logos/seranking.svg" alt=""></span><span class="pt"><b>Keyword ideas</b><s>SE Ranking</s></span></div>
+      <div class="pcard"><span class="ph"><img src="logos/dataforseo.svg" alt=""></span><span class="pt"><b>Search intent</b><s>DataForSEO</s></span></div>
+      <div class="pcard"><span class="ph"><img src="media/aeo/logos/google.svg" alt=""></span><span class="pt"><b>Google results</b><s>People also ask</s></span></div>
+      <div class="pcard"><span class="ph"><img src="logos/seranking.svg" alt=""></span><span class="pt"><b>Page &amp; site strength</b><s>URL metrics</s></span></div>
+      <div class="pcard"><span class="ph"><img src="logos/seranking.svg" alt=""></span><span class="pt"><b>Linking domains</b><s>SE Ranking</s></span></div>
+      <div class="pcard"><span class="ph"><img src="logos/dataforseo.svg" alt=""></span><span class="pt"><b>Page extractor</b><s>text of any page</s></span></div>
+      <div class="pcard"><span class="ph"><img src="logos/scrapecreators.svg" alt=""></span><span class="pt"><b>Reddit search</b><s>Scrape Creators</s></span></div>
+      <div class="pcard"><span class="ph"><img src="logos/youtube.svg" alt=""></span><span class="pt"><b>YouTube search</b><s>videos &amp; channels</s></span></div>
+    </div>
+    <div class="moreline" style="margin-top:16px">+ many more across {PROVIDERS} providers</div>
+    <div class="ctas" style="justify-content:center;margin-top:20px"><a class="pill dark" href="/catalog">Browse the catalog →</a></div>
+  </div>
+</section>
+
+<section class="rv final" id="prompt">
+  <div class="final-in">
+    <h2>Get AI to recommend you, from <span class="hero-agents"><img src="media/people-search/claude-code.png" alt="Claude Code"><img src="media/people-search/codex.png" alt="Codex"><img src="media/people-search/openclaw.png" alt="OpenClaw"><img src="media/people-search/hermes.png" alt="Hermes"></span></h2>
+    <div class="prompt-d meta-d" id="metaPrompt">
+    <div class="oneline">
+      <span class="h">paste this into your agent</span>
+      <button type="button" class="tog" id="togPrompt" aria-expanded="false" aria-controls="promptText">Show prompt ▾</button>
+      <button type="button" id="copyPrompt">Copy prompt</button>
+      <p class="sum"><span class="g">set up treg - {BASE}/llms.txt</span><br><span class="p">then run AEO: buyer questions → AI answers → cited sites → people</span></p>
+    </div>
+    <div class="code" id="promptText" hidden>set up treg - {BASE}/llms.txt
+then run the AEO workflow below.
+
+GOAL: 4-step audit of whether AI recommends the user's product. User decides at each ◆ gate. Step 5 (3-4 weeks later) measures movement.
 
 ═══ SETUP ═══
 - `audit.md` with baseline appendix exists → ask: Step 5 | new audit | stop.
@@ -772,52 +770,6 @@ Search with 2-5 word keyword forms of the questions.
 4. Re-run everything, recompute Step 2 metrics, Δ for each. Gained/Lost = answers flipping named ↔ not named. NewCites = target pages newly quoted. Credit an action only if its target is newly quoted or linked.
 ◆ G10: "AI now recommends you in X of Y answers (was A of B)" · before → now cards with a noise tag · per AI · per question · leaderboard · site movement · what worked · next 3 actions.
 Append to the report and audit.md as the new baseline.</div>
-  </div>
-</section>
-
-<section class="section rv" id="pricing">
-  <h2>No subscription. No contract.<br><span class="hl2">$0.31</span> an AEO workflow.</h2>
-  <p class="lede">Every call is metered at the provider's own rate from a prepaid balance, and the prompt quotes each step's cost before it spends.</p>
-  <div class="bill">
-    <div><span>Step 1 · What customers ask<small>keyword ideas, volume, search intent, Google results</small></span><span class="m">~$0.04</span></div>
-    <div><span>Step 2 · Who AI recommends<small>10 questions × ChatGPT, Gemini, AI Mode, Perplexity at ~$0.015 a question</small></span><span class="m">~$0.15</span></div>
-    <div><span>Step 3 · Websites AI reads<small>page and site strength, linking domains, 15 page reads</small></span><span class="m">~$0.09</span></div>
-    <div><span>Step 4 · Find the people behind the sites<small>Reddit and YouTube search, your own page</small></span><span class="m">~$0.03</span></div>
-    <div class="tot"><span>One full AEO workflow</span><span class="m">≈ $0.31</span></div>
-  </div>
-  <p class="fineprint">Estimates from the prompt's own cost card. The step 5 re-check, 3 to 4 weeks later, is about $0.15 more. New teams start with $1.00 free.</p>
-</section>
-
-<section class="section tools-sec rv" id="tools">
-  <h2>One token. {ENDPOINTS} data &amp; tools.</h2>
-  <p class="lede">AEO is one aisle. The same token reaches keyword data, the AI engines, backlinks, page reads and social search, and your own keys always win over treg's.</p>
-  <div class="catwrap">
-    <div class="pgrid">
-      <div class="pcard hl"><span class="ph"><img src="logos/cloro.svg" alt=""></span><span class="pt"><b>cloro</b><s><img src="media/aeo/logos/chatgpt.svg" alt="">ChatGPT answers</s></span></div>
-      <div class="pcard hl"><span class="ph"><img src="logos/cloro.svg" alt=""></span><span class="pt"><b>cloro</b><s><img src="media/aeo/logos/gemini.svg" alt="">Gemini answers</s></span></div>
-      <div class="pcard hl"><span class="ph"><img src="logos/cloro.svg" alt=""></span><span class="pt"><b>cloro</b><s><img src="media/aeo/logos/google.svg" alt="">Google AI Mode</s></span></div>
-      <div class="pcard"><span class="ph"><img src="logos/perplexity.svg" alt=""></span><span class="pt"><b>Perplexity answers</b><s>with sources</s></span></div>
-      <div class="pcard"><span class="ph"><img src="logos/seranking.svg" alt=""></span><span class="pt"><b>Keyword ideas</b><s>SE Ranking</s></span></div>
-      <div class="pcard"><span class="ph"><img src="logos/dataforseo.svg" alt=""></span><span class="pt"><b>Search intent</b><s>DataForSEO</s></span></div>
-      <div class="pcard"><span class="ph"><img src="media/aeo/logos/google.svg" alt=""></span><span class="pt"><b>Google results</b><s>People also ask</s></span></div>
-      <div class="pcard"><span class="ph"><img src="logos/seranking.svg" alt=""></span><span class="pt"><b>Page &amp; site strength</b><s>URL metrics</s></span></div>
-      <div class="pcard"><span class="ph"><img src="logos/seranking.svg" alt=""></span><span class="pt"><b>Linking domains</b><s>SE Ranking</s></span></div>
-      <div class="pcard"><span class="ph"><img src="logos/dataforseo.svg" alt=""></span><span class="pt"><b>Page extractor</b><s>text of any page</s></span></div>
-      <div class="pcard"><span class="ph"><img src="logos/scrapecreators.svg" alt=""></span><span class="pt"><b>Reddit search</b><s>Scrape Creators</s></span></div>
-      <div class="pcard"><span class="ph"><img src="logos/youtube.svg" alt=""></span><span class="pt"><b>YouTube search</b><s>videos &amp; channels</s></span></div>
-    </div>
-    <div class="moreline" style="margin-top:16px">+ many more across {PROVIDERS} providers</div>
-    <div class="ctas" style="justify-content:center;margin-top:20px"><a class="pill dark" href="/catalog">Browse the catalog →</a></div>
-  </div>
-</section>
-
-<section class="rv final">
-  <div class="final-in">
-    <h2>Get AI to recommend you, from <span class="hero-agents"><img src="media/people-search/claude-code.png" alt="Claude Code"><img src="media/people-search/codex.png" alt="Codex"><img src="media/people-search/openclaw.png" alt="OpenClaw"><img src="media/people-search/hermes.png" alt="Hermes"></span></h2>
-    <div class="copybox">
-      <div class="h">paste this into your agent</div>
-      <div class="line"><span id="llmsUrl">{BASE}/llms.txt</span><button type="button" id="copyLlms">Copy</button></div>
-      <div class="then">then paste <a href="#prompt" style="color:#8FD4F2;text-decoration:none">the meta prompt</a> and answer its first question: your product.</div>
     </div>
     <div class="ctas">
       <a class="pill light" href="/app?ref=aeo" id="ctaFinal">Set up treg</a>
@@ -944,9 +896,7 @@ Append to the report and audit.md as the new baseline.</div>
     q('.stat').forEach(function (e) { e.innerHTML = ''; });
     q('.bar i').forEach(function (e) { e.style.width = '0'; });
     q('.found').forEach(function (e) { e.classList.remove('found'); });
-    q('.send, .sendb').forEach(function (e) { e.classList.remove('on', 'press', 'sent'); });
-    q('.sendb .lbl').forEach(function (e) { e.textContent = 'Save draft'; });
-    q('[data-sent]').forEach(function (e, k) { e.className = 'state mono mut'; e.textContent = k ? 'queued' : 'drafting'; });
+    q('.send').forEach(function (e) { e.classList.remove('on'); });
     var svg = st.querySelector('.links'); if (svg) svg.innerHTML = '';
     var cam = st.querySelector('.cam'); if (cam) cam.style.transform = '';
     /* rise in */
@@ -1012,12 +962,6 @@ Append to the report and audit.md as the new baseline.</div>
         at(c[0], function () { var y = c[1] ? Math.min(maxY, c[1].offsetTop - 34) : 0; cam.style.transform = 'translateY(' + (-y) + 'px)'; });
       });
     }
-    /* pitch: the draft is saved, then each author's draft is ready; the user sends them */
-    q('.sendb').forEach(function (e) {
-      at(+e.dataset.at, function () { e.classList.add('press'); });
-      at(+e.dataset.at + 120, function () { e.classList.remove('press'); e.classList.add('sent'); e.querySelector('.lbl').textContent = 'Draft saved'; });
-    });
-    q('[data-sent]').forEach(function (e) { at(+e.dataset.sent, function () { e.className = 'state sent'; e.innerHTML = 'draft ready ' + ck; }); });
   }
   var stages = Array.prototype.slice.call(document.querySelectorAll('.stage[data-scene]'));
   if ('IntersectionObserver' in window) {
@@ -1077,7 +1021,7 @@ Append to the report and audit.md as the new baseline.</div>
   var nav = $('nav');
   addEventListener('scroll', function () { nav.classList.toggle('scrolled', scrollY > 8); }, { passive: true });
 
-  /* copy buttons: llms.txt and the meta prompt */
+  /* copy buttons: the meta prompt and each step's prompt */
   function copy(btn, txt, label) {
     function done() { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = label; }, 1600); }
     (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(done, function () {
@@ -1086,7 +1030,6 @@ Append to the report and audit.md as the new baseline.</div>
       if (ok) done(); else { btn.textContent = 'Copy failed'; setTimeout(function () { btn.textContent = label; }, 1600); }
     });
   }
-  $('copyLlms').addEventListener('click', function () { copy(this, $('llmsUrl').textContent, 'Copy'); });
   $('copyPrompt').addEventListener('click', function () { copy(this, $('promptText').textContent, 'Copy prompt'); });
   $('togPrompt').addEventListener('click', function () {
     var open = $('promptText').hidden;
