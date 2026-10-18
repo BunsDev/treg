@@ -520,9 +520,9 @@ async def create_setup_checkout(db: AsyncSession, org: Org, *, return_base: str 
         stripe_adapter.CHECKOUT_SESSION_CREATE,
         mode="setup",
         customer=customer,
-        # mode=setup Checkout sessions automatically create SetupIntents that are usable for
-        # off-session charges. The bank collects SCA mandate during the Checkout flow itself.
-        # setup_intent_data only accepts: description, metadata, on_behalf_of.
+        # Checkout's setup-mode SetupIntent is already `usage=off_session`, so the bank collects the SCA
+        # mandate now. Checkout rejects `setup_intent_data[usage]`; it accepts only description,
+        # metadata and on_behalf_of there.
         setup_intent_data={"metadata": {"treg_org_id": str(org.id), "treg_kind": "autotopup_card"}},
         metadata={"treg_org_id": str(org.id), "treg_kind": "autotopup_card"},
         integration_identifier=INTEGRATION_ID,

@@ -543,8 +543,8 @@ async def test_disabling_autotopup_clears_the_failure_banner(c: AsyncClient, mon
 
 
 async def test_setup_checkout_sends_valid_stripe_params(c: AsyncClient, monkeypatch):
-    """mode=setup Checkout must NOT pass `usage` under setup_intent_data — Stripe rejects it.
-    This was the 2026-10-18 incident: InvalidRequestError on setup_intent_data[usage]."""
+    """mode=setup Checkout must NOT pass `usage` under setup_intent_data: Stripe rejects it with
+    InvalidRequestError, and Checkout's SetupIntent is already off_session by default."""
     org_id, owner = await _org(c)
     captured: list[dict] = []
 
