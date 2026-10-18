@@ -196,42 +196,28 @@
   .field { position: relative; isolation: isolate; overflow: hidden; background: #c79aa2; color: #fff; }
   .field > .paint { position: absolute; inset: -30%; z-index: -1; background: url(media/aeo/field.jpg) center / cover no-repeat; filter: blur(48px) saturate(1.5) brightness(.86); transform: scale(1.08); animation: dolly 18s ease-in-out infinite alternate; }
   @keyframes dolly { 0% { transform: scale(1.05) translate(-7%, -5%) rotate(0deg); } 50% { transform: scale(1.3) translate(6%, 4%) rotate(10deg); } 100% { transform: scale(1.15) translate(-3%, 7%) rotate(-8deg); } }
-  .nav:not(.scrolled) .nav-links a { color: #fff; }
-  .nav:not(.scrolled) .wordmark { color: #fff; }
-  .nav:not(.scrolled) .wordmark > span:first-of-type { color: rgba(255,255,255,.75) !important; } /* the "/" separator carries an inline muted colour */
   .glass { background: rgba(255,255,255,.5); -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4); border: 1px solid rgba(255,255,255,.65); border-radius: 16px; color: var(--ink); box-shadow: 0 30px 70px -40px rgba(40,20,30,.45); }
 
-  /* hero: "Use [harness] for AI SEO." then the misted line that clears on "you." */
-  .hero { padding: 170px 24px 130px; text-align: center; }
-  .hero-in { max-width: 1000px; margin: 0 auto; }
-  .hero h1 { font-family: var(--pixel); font-weight: 400; letter-spacing: -.01em; font-size: clamp(42px, 7vw, 78px); line-height: 1.04; margin: 0 0 10px; text-wrap: balance; }
-  .roll { display: inline-block; position: relative; vertical-align: bottom; height: 1.12em; overflow: hidden; transition: width .45s cubic-bezier(.22,.9,.24,1); text-align: left; }
-  .roll b { font-weight: inherit; display: inline-block; white-space: nowrap; transition: transform .45s cubic-bezier(.22,.9,.24,1), opacity .35s ease, filter .35s ease; }
-  .roll b.out { position: absolute; top: 0; left: 0; transform: translateY(-60%); opacity: 0; filter: blur(6px); }
-  .roll b.pre { transform: translateY(60%); opacity: 0; filter: blur(6px); transition: none; }
-  .seo { position: relative; z-index: 0; white-space: nowrap; margin-left: .3em; }
-  .seo::before { content: ""; position: absolute; z-index: -1; inset: .04em -.3em -.02em; border-radius: 999px; background: rgba(255,255,255,.24); transform: scale(0); transition: transform .9s cubic-bezier(.3,1.5,.5,1) .5s; }
-  .hero.in .seo::before { transform: scale(1); }
-  .find { font-family: var(--display); font-weight: 500; letter-spacing: -.02em; font-size: clamp(24px, 3vw, 34px); margin: 14px 0 30px; }
-  /* the white arrow from "find." to "you.": drawn in, held, faded, again */
-  .find { position: relative; }
-  .arrow { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-  .arrow path { fill: none; stroke: #fff; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-  .arrow .ap { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: arrowDraw 3.6s ease-in-out .8s infinite; }
-  .arrow .ah { opacity: 0; animation: arrowHead 3.6s ease-in-out .8s infinite; }
-  @keyframes arrowDraw { 0% { stroke-dashoffset: var(--len); opacity: 1; } 35%, 80% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
-  @keyframes arrowHead { 0%, 30% { opacity: 0; } 38%, 80% { opacity: 1; } 100% { opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .arrow .ap { animation: none; stroke-dashoffset: 0; } .arrow .ah { animation: none; opacity: 1; } }
-  .you { padding: 0 .14em; border-radius: .14em; background: #fff; color: #000; mix-blend-mode: screen; }
-  .hero .pill { border-color: rgba(255,255,255,.5); background: rgba(255,255,255,.14); color: #fff; }
-  .hero .pill:hover { background: rgba(255,255,255,.26); }
-  .hero .pill.dark { background: #fff; color: var(--ink); border-color: #fff; }
-  .hero .pill.dark:hover { background: #F1EEEA; }
-  .hero-in > :not(.find) { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s cubic-bezier(.2,.8,.2,1); }
-  .hero.in .hero-in > :not(.find) { opacity: 1; transform: none; }
-  .hero.in .hero-in > :nth-child(2) { transition-delay: .08s } .hero.in .hero-in > :nth-child(3) { transition-delay: .16s } 
-
-
+  /* hero (user: like the launch film's title card): ink pixel type on the colour field, "for" + the agents,
+     then the film's hook line with "you?" painted like the film's highlight */
+  .hero { padding: 160px 24px 120px; text-align: center; color: var(--ink); }
+  .hero-in { max-width: 1040px; margin: 0 auto; }
+  .eyebrow { display: inline-block; margin: 0 0 26px; padding: 7px 16px; border-radius: 999px; background: rgba(255,255,255,.55); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); font-family: var(--pixel); font-size: 16px; letter-spacing: .01em; }
+  .eyebrow span { color: var(--muted); }
+  .hero h1 { font-family: var(--pixel); font-weight: 400; letter-spacing: -.02em; font-size: clamp(38px, 7.4vw, 96px); line-height: 1.06; margin: 0 0 22px; }
+  .hero h1 .for { white-space: nowrap; }
+  .hero h1 .hero-agents img { background: rgba(255,255,255,.7); padding: .05em; box-shadow: none; }
+  .find { font-family: var(--display); font-weight: 500; letter-spacing: -.02em; font-size: clamp(20px, 2.4vw, 28px); margin: 0 auto 10px; max-width: 760px; text-wrap: balance; }
+  .nowrap { white-space: nowrap; }
+  .you { padding: 0 .22em; border-radius: .28em; background: linear-gradient(120deg, #f4a6bd, #c9a3d6 55%, #a9cf7f); }
+  .meta { font-size: 17px; color: rgba(17,17,17,.7); margin: 0 auto 30px; max-width: 620px; text-wrap: balance; }
+  .hero .pill { border-color: rgba(17,17,17,.18); background: rgba(255,255,255,.45); color: var(--ink); }
+  .hero .pill:hover { background: rgba(255,255,255,.7); }
+  .hero .pill.dark { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .hero .pill.dark:hover { background: #2a2a2a; }
+  .hero-in > * { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s cubic-bezier(.2,.8,.2,1); }
+  .hero.in .hero-in > * { opacity: 1; transform: none; }
+  .hero.in .hero-in > :nth-child(2) { transition-delay: .06s } .hero.in .hero-in > :nth-child(3) { transition-delay: .14s } .hero.in .hero-in > :nth-child(4) { transition-delay: .2s } .hero.in .hero-in > :nth-child(5) { transition-delay: .26s }
 
   /* the CRM example: a question goes in, an answer comes back without us in it */
   .askcard { border-radius: 24px; margin-top: 32px; padding: 54px 24px; }
@@ -432,12 +418,11 @@
   @media (prefers-reduced-motion: reduce) {
     .callouts .bubble, .arrows .ap, .arrows .ah { transition: none !important; }
     .field > .paint { animation: none; }
-    .seo::before, .hero-in > *, .ans, .brands span { transition: none !important; filter: none; opacity: 1; transform: none; }
+    .hero-in > *, .ans, .brands span { transition: none !important; filter: none; opacity: 1; transform: none; }
   }
   /* phones: last in the sheet so these win over the base rules above */
   @media (max-width: 760px) {
     .hero { padding: 110px 20px 70px; }
-    .hero .find { font-size: clamp(16px, 4.6vw, 26px); }
     .callouts .bubble { font-size: 11.5px; padding: 6px 9px; max-width: 48%; }
     .callouts { margin-top: 34px; gap: 8px; }
     .askcard { padding: 36px 14px; }
@@ -477,8 +462,10 @@
 <header class="hero field">
   <div class="paint" aria-hidden="true"></div>
   <div class="hero-in">
-    <h1>Use <span class="roll" id="roll" aria-label="Claude"><b>Claude</b></span> for <span class="seo">AI SEO</span></h1>
-    <p class="find">AI only recommends what it can <span id="fFind">find.</span><br>So we help AI <span style="white-space:nowrap">find <span class="you" id="fYou">you.</span></span><svg class="arrow" id="arrow" aria-hidden="true"><path class="ap" id="arrowPath"/><path class="ah" id="arrowHead"/></svg></p>
+    <p class="eyebrow">treg <span>/</span> AEO toolkit · open source</p>
+    <h1>Open-source AI SEO<br><span class="for">for <span class="hero-agents"><img src="media/people-search/claude-code.png" alt="Claude Code"><img src="media/people-search/codex.png" alt="Codex"><img src="media/people-search/openclaw.png" alt="OpenClaw"><img src="media/people-search/hermes.png" alt="Hermes"></span></span></h1>
+    <p class="find">ChatGPT, Claude and Gemini recommend your competitor. <span class="nowrap">But not <span class="you">you?</span></span></p>
+    <p class="meta">See what AI cites, reach the people behind it, get recommended. About 1¢ per prompt, no subscription.</p>
     <div class="ctas">
       <a class="pill dark" href="/app?ref=aeo" id="ctaHero">Set up treg</a>
       <a class="pill" href="#prompt">Get the prompt ↓</a>
@@ -822,35 +809,9 @@ Append to the report and audit.md as the new baseline.</div>
   function $(id) { return document.getElementById(id); }
   var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  /* hero intro: copy rises, the mist clears, the "you." dot pops; then the harness name rolls */
+  /* hero intro: the copy rises in */
   var heroEl = document.querySelector('.hero');
   requestAnimationFrame(function () { requestAnimationFrame(function () { heroEl.classList.add('in'); }); });
-  var roll = $('roll'), names = ['Claude', 'ChatGPT', 'Codex', 'Cursor', 'Hermes', 'Gemini', 'Copilot'], ni = 0;
-  function fitRoll() { roll.style.width = roll.firstChild.offsetWidth + 'px'; }
-  fitRoll(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitRoll);
-  if (!reduced) setInterval(function () {
-    var old = roll.firstChild, nb = document.createElement('b');
-    ni = (ni + 1) % names.length; nb.textContent = names[ni]; nb.className = 'pre';
-    old.classList.add('out');
-    roll.appendChild(nb); roll.setAttribute('aria-label', names[ni]);
-    roll.style.width = nb.offsetWidth + 'px'; /* the read also commits .pre before it is lifted */
-    nb.className = '';
-    setTimeout(function () { if (old.parentNode) roll.removeChild(old); }, 500);
-  }, 1600);
-
-  /* the arrow: from the right of "find." curving out and back into the right of "you." */
-  function drawArrow() {
-    var box = $('arrow').getBoundingClientRect(), f = $('fFind').getBoundingClientRect(), y = $('fYou').getBoundingClientRect();
-    var x1 = f.right - box.left + 10, y1 = f.top + f.height / 2 - box.top;
-    var x2 = y.right - box.left + 10, y2 = y.top + y.height / 2 - box.top;
-    var bulge = Math.max(x1, x2) + 46;
-    var d = 'M' + x1 + ' ' + y1 + ' C' + bulge + ' ' + y1 + ' ' + bulge + ' ' + y2 + ' ' + x2 + ' ' + y2;
-    var p = $('arrowPath'); p.setAttribute('d', d);
-    p.style.setProperty('--len', Math.ceil(p.getTotalLength()) + 'px');
-    $('arrowHead').setAttribute('d', 'M' + (x2 + 9) + ' ' + (y2 - 7) + ' L' + x2 + ' ' + y2 + ' L' + (x2 + 9) + ' ' + (y2 + 7));
-  }
-  drawArrow(); addEventListener('resize', drawArrow);
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawArrow);
 
   /* layout offset of el inside root (ignores transforms, so slide-ins never skew a measurement) */
   function sceneOffset(el, root) {
