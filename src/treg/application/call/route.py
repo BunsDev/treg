@@ -424,7 +424,8 @@ async def run_routed(parent: CallContext, ep: dict, body_bytes: bytes, get_heade
                      execute_child, *, audit_client: str = "") -> tuple[UpstreamResponse, int]:
     """Execute a routed call under `parent`. Returns (the assembled response, total charged).
 
-    Every child leaves its hold OPEN in `pending` (CallContext.deferred_settles) and this call
+    A child that charges nothing releases its hold at once, before the next child reserves. Every
+    child that bills leaves its hold OPEN in `pending` (CallContext.deferred_settles) and this call
     closes all of them once, at the end: settled when the routed call answers (a hit, or a 200
     miss), released when it fails. A routed call that fails charges the caller nothing, even when
     a provider on the way answered and billed treg (owner decision 2026-09-21)."""

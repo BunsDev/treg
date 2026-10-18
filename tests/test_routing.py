@@ -168,6 +168,29 @@ def test_every_adapter_const_passes_its_child_body_allowlist():
     assert failures == {}, failures
 
 
+def test_every_routed_adapter_sends_its_rows_platform_request_pins():
+    """A shared-key pin (`platform_request`) is enforced, not injected: a routed child whose adapter
+    does not send the pinned value is a 400 on treg's key, and the router reads a 400 as the
+    caller's fault and fails the whole routed call instead of trying the next child."""
+    cat = catalog_store.load()
+    missing = {}
+    for endpoint_id, adapter in cat.adapters.items():
+        pins = {path: value for path, value in (cat.by_id[endpoint_id].get("platform_request") or {}).items()
+                if path.startswith(("body.", "queryParams."))}
+        if not adapter.route or not pins:
+            continue
+        sent: dict = {}
+        for path, value in adapter.const.items():
+            P.set_path(sent, path, value)
+        # a query string carries text: the relay reads a query pin back as the pinned value's type
+        wrong = {path: P.get_path(sent, path) for path, value in pins.items()
+                 if (str(P.get_path(sent, path)) != str(value) if path.startswith("queryParams.")
+                     else P.get_path(sent, path) != value)}
+        if wrong:
+            missing[endpoint_id] = wrong
+    assert missing == {}, missing
+
+
 def test_firecrawl_web_adapters_are_verified_routed_children():
     cat = catalog_store.load()
     for parent, child in (

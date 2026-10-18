@@ -2535,6 +2535,7 @@ adapters:
   fiber-ai.people.contacts.turbo:
     accepts: [[linkedin_url]]
     in:  {linkedin_url: body.linkedinUrl}
+    const: {body.enrichmentType: {getWorkEmails: true, getPersonalEmails: false, getPhoneNumbers: false}}
     out: {email: "output.profile.emails[0].email", verified: "output.profile.emails[0].status == 'valid'"}
     miss: "output.profile.emails == []"
 
