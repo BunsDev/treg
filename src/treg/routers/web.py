@@ -3453,6 +3453,7 @@ _SITEMAP_PAGES: tuple[tuple[str, str, str], ...] = (
     ("/vendor-listing", "vendor-listing.md", "0.5"),
     ("/support", "support.html", "0.4"),
     ("/connectors/claude", "claude-connector.html", "0.6"),
+    ("/sheets", "sheets.html", "0.6"),
     ("/people-search", "people-search.html", "0.8"),
     ("/leads-signals", "leads-signals.html", "0.8"),
     ("/recruit", "recruit.html", "0.8"),
@@ -3820,6 +3821,13 @@ async def privacy_page(request: Request):
 async def claude_connector_page(request: Request):
     """Setup, scope, billing, privacy, and removal instructions for the Claude connector."""
     return _static_page("claude-connector.html", request)
+
+
+@app.get("/sheets", include_in_schema=False)
+async def sheets_page(request: Request):
+    """What the Google Sheets add-on does, how it is paid for, and where its data goes. Given to
+    Google at Marketplace review, so this path is effectively public API, like /privacy."""
+    return _static_page("sheets.html", request)
 
 
 @app.get("/agent-setup.js", include_in_schema=False)

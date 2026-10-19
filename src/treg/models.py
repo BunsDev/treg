@@ -2333,3 +2333,69 @@ class ShowcaseVote(SQLModel, table=True):
     app_id: int = Field(foreign_key="showcaseapp.id", ondelete="CASCADE")
     user_id: int = Field(foreign_key="user.id", ondelete="CASCADE", index=True)
     created_at: NaiveUTC = Field(default_factory=_now)
+
+
+class TeamDatabase(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("org_id", name="uq_teamdatabase_org"),
+        UniqueConstraint("turso_database_ref", name="uq_teamdatabase_turso_ref"),
+        UniqueConstraint("connection_ref", name="uq_teamdatabase_connection_ref"),
+        CheckConstraint("length(trim(turso_database_ref)) > 0", name="ck_teamdatabase_turso_ref"),
+        CheckConstraint("database_generation > 0", name="ck_teamdatabase_generation"),
+        CheckConstraint(
+            "status != 'ready' OR (connection_ref IS NOT NULL AND length(trim(connection_ref)) > 0)",
+            name="ck_teamdatabase_ready_connection",
+        ),
+    )
+    id: int | None = Field(default=None, primary_key=True)
+    org_id: int
+    turso_database_ref: str
+    connection_ref: str | None = Field(default=None)
+    status: str = Field(default="provisioning", sa_column=Column(String, nullable=False, server_default="provisioning"))
+    database_generation: int = Field(default=1, sa_column=Column(Integer, nullable=False, server_default="1"))
+    created_at: NaiveUTC = Field(default_factory=_now)
+    updated_at: NaiveUTC = Field(default_factory=_now)
+
+
+class TableDoc(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("org_id", "name", name="uq_tabledoc_org_name"),
+        UniqueConstraint("org_id", "creation_key", name="uq_tabledoc_creation_request"),
+        UniqueConstraint("team_database_id", "sql_name", name="uq_tabledoc_database_sql_name"),
+        CheckConstraint(
+            "length(trim(id)) > 0 AND length(trim(name)) > 0 AND length(trim(sql_name)) > 0 "
+            "AND length(trim(creation_key)) > 0 AND length(trim(creation_fingerprint)) > 0",
+            name="ck_tabledoc_identity",
+        ),
+        CheckConstraint("substr(sql_name, 1, 7) != 'sqlite_'", name="ck_tabledoc_sql_name_reserved"),
+        CheckConstraint(
+            "sql_name GLOB '[a-z_]*' AND sql_name NOT GLOB '*[^a-z0-9_]*' "
+            "AND length(CAST(sql_name AS BLOB)) = length(sql_name)",
+            name="ck_tabledoc_sql_name_format",
+        ).ddl_if(dialect="sqlite"),
+        CheckConstraint(
+            "sql_name COLLATE \"C\" ~ '^[a-z_][a-z0-9_]*$'", name="ck_tabledoc_sql_name_format",
+        ).ddl_if(dialect="postgresql"),
+        CheckConstraint("schema_version IS NULL OR schema_version > 0", name="ck_tabledoc_schema_version"),
+        CheckConstraint("database_generation IS NULL OR database_generation > 0", name="ck_tabledoc_generation"),
+        CheckConstraint("metadata_revision > 0", name="ck_tabledoc_metadata_revision"),
+        CheckConstraint("status != 'ready' OR schema_version IS NOT NULL", name="ck_tabledoc_ready_schema"),
+        CheckConstraint("status != 'ready' OR database_generation IS NOT NULL", name="ck_tabledoc_ready_generation"),
+    )
+    id: str = Field(primary_key=True)
+    org_id: int
+    team_database_id: int
+    name: str
+    sql_name: str
+    creation_key: str
+    creation_fingerprint: str
+    schema_version: int | None = Field(default=None)
+    database_generation: int | None = Field(default=None)
+    metadata_revision: int = Field(default=1, sa_column=Column(Integer, nullable=False, server_default="1"))
+    status: str = Field(default="creating", sa_column=Column(String, nullable=False, server_default="creating"))
+    column_metadata: list = Field(default_factory=list, sa_column=Column(
+        JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql"), nullable=False,
+    ))
+    created_by: str
+    created_at: NaiveUTC = Field(default_factory=_now)
+    updated_at: NaiveUTC = Field(default_factory=_now)

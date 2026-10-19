@@ -378,7 +378,8 @@ bearer path refuses it once expired rather than reviving an expired cookie.
   pending `AdConversion`: a queued conversion belongs to the team it would be attributed to,
   `Media`: hosted reference files would otherwise outlive the team until their TTL, and
   `HubListing`/`HubTool`: a maker's published tools and search listings go with the team that owned
-  them).
+  them). Workbench `TableDoc` entries are removed before their `TeamDatabase` mapping; see
+  [the storage boundary](workbench-storage.md#management-metadata) for remote-resource cleanup.
   **That list is the only one**, plus one named exception: `cascade_delete_org` also deletes every
   `HubRun` where `caller_org_id == org.id` before that sweep, because a run names the team that
   CALLED by that foreign key and the maker only by number — a caller's traces go with the caller, a

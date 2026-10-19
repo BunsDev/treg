@@ -57,6 +57,8 @@ from ...models import (
     Secret,
     TagBudget,
     TagSpend,
+    TableDoc,
+    TeamDatabase,
     Tool,
     ToolRequest,
     User,
@@ -261,6 +263,7 @@ async def list_user_orgs(
 # points at Membership, so Membership stays last and IdempotentCall sits above it.
 ORG_SCOPED_MODELS = (
     ArenaEvaluation, ArenaRun, WebArenaRun,
+    TableDoc, TeamDatabase,
     Tool, Secret, Bundle, PendingOAuth, CallRecord, RunRecord, Invite, DenyRule, Project,
     ApiKeyEvent, ApiKey,
     ApiKeySpendDay,  # the spend rollup: a deleted team's history goes with it

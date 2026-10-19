@@ -1,7 +1,11 @@
 ---
-title: Workbench table storage adapters
+title: Workbench table storage
 status: foundational
 sources:
+  - src/treg/models.py
+  - src/treg/alembic/versions/0077_workbench_table_metadata.py
+  - src/treg/domain/governance/teams.py
+  - tests/test_workbench_table_schema.py
   - src/treg/infra/workbench_store.py
   - tests/test_workbench_store.py
   - tests/test_workbench_store_lifecycle.py
@@ -9,7 +13,63 @@ related:
   - architecture/import-boundaries.md
 ---
 
-# Workbench table storage adapters
+# Workbench table storage
+
+## Management metadata
+
+Revision `0077` adds `TeamDatabase` and `TableDoc` to the existing control-plane database.
+It creates empty management tables only: no team is provisioned, no Turso SQL table is created,
+and no table API or runtime is enabled. Business rows belong in team storage, not in these records.
+
+`TeamDatabase` is unique per Org and per Turso resource reference. `turso_database_ref` identifies
+the fixed target including its provider organization, not just a display name or a bare database
+name shared by several accounts. `connection_ref` is an opaque reference to trusted connection
+configuration, including separate read-only and read-write credentials; never store tokens here.
+Non-null connection references are unique across teams. The resolver must still verify the target
+and credential scope: different references could otherwise point to the same remote database.
+The mapping starts as `provisioning` with a nullable connection reference. `ready` requires a
+nonempty reference; verifying the remote resource and its access remains the writer's responsibility.
+`database_generation` starts at one and must stay positive. It fences a replaced/restored database;
+it is not a table schema revision.
+
+`TeamDatabase.org_id` and `TableDoc`'s ownership references deliberately have no database foreign
+keys. Creating these tables must not acquire foreign-key locks on the existing Org table.
+Referential integrity belongs to the application: future management writers must verify that the
+Org exists and that a table's database mapping belongs to that Org, including on reassignment.
+Data access must resolve both records within the authenticated team's scope; an unchecked database
+ID is not authorization. This schema-only change does not implement those writers or access guards.
+
+`TableDoc` keeps a stable Table ID, display and SQL names, creation key and fingerprint, column
+metadata, and schema/metadata revisions. Names and creation keys are unique within an Org;
+physical SQL names are unique within a database. The table starts as `creating` with no confirmed
+schema version or validated database generation. `ready` requires both to be positive.
+Metadata revisions also stay positive.
+The application writer must compare request fingerprints before resuming a duplicate creation,
+verify the physical schema before publishing readiness, and update revisions and timestamps.
+These constraints do not implement provisioning, immutable creation operations, or recovery leases.
+
+Table IDs, names and creation identities cannot be empty or space-only. Physical names must match
+the lowercase ASCII form `[a-z_][a-z0-9_]*` and cannot start with SQLite's reserved `sqlite_` prefix.
+This makes their uniqueness agree with Turso's case-insensitive identifiers; DDL writers must still
+quote identifiers. SQLite uses a built-in GLOB check with a NUL guard, PostgreSQL a C-collated regular
+expression. Column metadata uses PostgreSQL JSONB and SQLite JSON; its application schema still
+needs writer validation.
+
+`TableDoc.database_generation` records the database generation in which the physical table was last
+verified. It has no default and stays null until verification; it must not automatically follow
+`TeamDatabase.database_generation` on restore. Future data access must require both records to be
+ready and their generations to match. Restored tables become eligible only after physical identity
+and schema verification updates their recorded generation. Missing or unresolved tables keep their
+old generation and remain ineligible. These schema fields do not implement an access guard yet;
+the provisioning, restore and data-access writers/readers must enforce that contract when added.
+
+`cascade_delete_org` removes TableDoc records before their TeamDatabase mapping through the common
+`ORG_SCOPED_MODELS` list, without relying on database cascades. Direct deletes outside this path can
+leave orphaned metadata. This cleans control-plane metadata only. Remote-resource cleanup must be
+connected before provisioning is enabled. An application rollback retains these additive tables;
+an explicit schema downgrade drops their metadata and does not delete any remote resource.
+
+## Storage adapters
 
 `infra.workbench_store` is a standalone infrastructure boundary, not yet wired into product
 routes or bootstrap. `TursoStore` uses SQL over HTTP; `SQLiteStore` uses a file-backed database
@@ -71,6 +131,12 @@ Remote BLOB results accept both padded and unpadded standard Base64: Turso Cloud
 padding. Invalid Base64 still fails as `invalid_response`.
 
 ## Verification boundary
+
+`test_workbench_table_schema.py` exercises constraints, the absence of foreign keys, pending/ready
+transitions, team deletion, and upgrade/downgrade behavior against both model-created and migrated
+schemas. A PostgreSQL regression holds an Org update open while upgrading the Workbench schema,
+so adding a foreign key that blocks the migration fails the test. PostgreSQL CI runs
+the same tests; the full Alembic drift check also compares the deployed schema with the models.
 
 `test_workbench_store.py` and `test_workbench_store_lifecycle.py` run the same storage contract against
 file-backed SQLite and an HTTP protocol fixture backed by real SQLite transactions. They exercise

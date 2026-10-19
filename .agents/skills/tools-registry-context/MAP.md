@@ -171,6 +171,7 @@ Regenerate via `scripts/build-map.py`.
 | `src/treg/alembic/versions/0074_endpoint_stat_dirty.py` | architecture/data-model.md |
 | `src/treg/alembic/versions/0075_ad_click_stash.py` | architecture/ads-conversions.md, architecture/data-model.md |
 | `src/treg/alembic/versions/0076_showcase_and_avatars.py` | architecture/showcase.md |
+| `src/treg/alembic/versions/0077_workbench_table_metadata.py` | architecture/workbench-storage.md |
 | `src/treg/analytics.py` | architecture/data-model.md |
 | `src/treg/api.py` | architecture/archive.md, architecture/money.md, architecture/multi-tenancy.md, architecture/proxy-model.md, architecture/super-admin.md, interface/api.md, interface/landing-sandbox.md, interface/seo.md |
 | `src/treg/application/__init__.py` | architecture/import-boundaries.md |
@@ -424,7 +425,7 @@ Regenerate via `scripts/build-map.py`.
 | `src/treg/domain/governance/budgets.py` | architecture/import-boundaries.md, architecture/money.md, architecture/multi-tenancy.md, interface/api.md |
 | `src/treg/domain/governance/publicdemo.py` | architecture/import-boundaries.md, architecture/multi-tenancy.md, architecture/proxy-model.md, interface/api.md |
 | `src/treg/domain/governance/sandbox.py` | interface/landing-sandbox.md |
-| `src/treg/domain/governance/teams.py` | architecture/import-boundaries.md, architecture/multi-tenancy.md, interface/api.md, interface/enrich-arena.md |
+| `src/treg/domain/governance/teams.py` | architecture/import-boundaries.md, architecture/multi-tenancy.md, architecture/workbench-storage.md, interface/api.md, interface/enrich-arena.md |
 | `src/treg/domain/governance/usage.py` | architecture/import-boundaries.md, architecture/multi-tenancy.md, architecture/proxy-model.md, interface/api.md |
 | `src/treg/domain/hub/__init__.py` | architecture/hub.md |
 | `src/treg/domain/hub/graph.py` | architecture/hub.md |
@@ -497,7 +498,7 @@ Regenerate via `scripts/build-map.py`.
 | `src/treg/maintenance.py` | architecture/data-model.md, ops/deploy.md |
 | `src/treg/mcp.py` | architecture/catalog.md, architecture/hub.md, architecture/instagram-oauth.md, architecture/mcp-oauth.md, architecture/org-concurrency.md, architecture/org-traffic.md |
 | `src/treg/mcp_install.py` | interface/skill.md |
-| `src/treg/models.py` | architecture/data-model.md, architecture/hub.md, architecture/media.md, architecture/money.md, architecture/multi-tenancy.md, interface/enrich-arena.md, interface/web-arena.md |
+| `src/treg/models.py` | architecture/data-model.md, architecture/hub.md, architecture/media.md, architecture/money.md, architecture/multi-tenancy.md, architecture/workbench-storage.md, interface/enrich-arena.md, interface/web-arena.md |
 | `src/treg/oauth.py` | architecture/auth-secrets.md |
 | `src/treg/oauth_providers.py` | architecture/auth-secrets.md, guides/expanding-a-category.md |
 | `src/treg/policy.py` | architecture/money.md, architecture/policy-extensions.md |
@@ -740,6 +741,7 @@ Regenerate via `scripts/build-map.py`.
 | `tests/test_wiza.py` | architecture/catalog.md |
 | `tests/test_workbench_store.py` | architecture/workbench-storage.md |
 | `tests/test_workbench_store_lifecycle.py` | architecture/workbench-storage.md |
+| `tests/test_workbench_table_schema.py` | architecture/workbench-storage.md |
 
 ## Fragment → sources
 
@@ -772,7 +774,7 @@ Regenerate via `scripts/build-map.py`.
 | `architecture/showcase.md` | `__init__.py`, `showcase.py`, `showcase.py`, `__init__.py`, `images.py`, `images.py`, `imaging.py`, `media_store.py`, `0076_showcase_and_avatars.py`, `showcase.html`, `test_showcase_leaderboard.py`, `test_images.py` |
 | `architecture/super-admin.md` | `api.py`, `admin.py`, `evidence_retention.py`, `access.py`, `config.py` |
 | `architecture/table.md` | `__init__.py`, `table.py`, `table.py`, `call.py`, `call_surface.py`, `config.py`, `mcp_oauth.py`, `auth.py`, `auth.py`, `test_table.py`, `test_table_oauth.py` |
-| `architecture/workbench-storage.md` | `workbench_store.py`, `test_workbench_store.py`, `test_workbench_store_lifecycle.py` |
+| `architecture/workbench-storage.md` | `models.py`, `0077_workbench_table_metadata.py`, `teams.py`, `test_workbench_table_schema.py`, `workbench_store.py`, `test_workbench_store.py`, `test_workbench_store_lifecycle.py` |
 | `foundation/charter.md` | `2026-06-30-jason-tools-registry.md`, `README.md` |
 | `guides/expanding-a-category.md` | `oauth_providers.py`, `authorization.py`, `oauth_flow.py`, `oauth_exchange.py`, `connect.py`, `connections.py`, `config.py` |
 | `interface/api.md` | `key_spend.py`, `media.py`, `sitetrack.js`, `api.py`, `bootstrap_handlers.py`, `bootstrap_http.py`, `call_surface.py`, `caller_metadata.py`, `client_identity.py`, `auth.py`, `provider_resources.py`, `access.py`, `authorize.py`, `idempotency.py`, `intake.py`, `resolve.py`, `reserve.py`, `settle.py`, `evidence.py`, `service.py`, `types.py`, `relay.py`, `connect.py`, `__init__.py`, `referrals.py`, `signup.py`, `__init__.py`, `activity.py`, `admin.py`, `auth.py`, `auth_helpers.py`, `billing.py`, `call.py`, `catalog.py`, `connections.py`, `onboard.py`, `orgs.py`, `provider_resources.py`, `api_keys.py`, `resources.py`, `referrals.py`, `signup_cookies.py`, `web.py`, `access.py`, `api_keys.py`, `teams.py`, `access.py`, `budgets.py`, `publicdemo.py`, `usage.py`, `mcp_oauth.py`, `session.py`, `timeutil.py`, `store.py`, `email.py`, `runner.py`, `ratestore.py`, `test_cli_pairing.py` |
