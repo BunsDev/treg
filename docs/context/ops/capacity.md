@@ -74,6 +74,12 @@ token, never the API key treg holds, so `NO_BALANCE_API` reports the account as 
 requests a minute that Search, Extract and Entity Search each allow. HTTP 402 insufficient credit
 was not forced, and no overflow route is claimed.
 
+OpenRouter's `GET /api/v1/credits` is free but accepts only a management key, which cannot make
+inference calls, and `GET /api/v1/key` reports only the inference key's own spending cap.
+`collectors._openrouter` therefore reads the separate `platform_openrouter_management_key` setting
+and reports `total_credits - total_usage` in USD; without that setting the row is `no_api`, as
+before.
+
 Litescrape's internal collector reads the free `GET /api/keys/status` route with the platform
 Bearer key. It accepts a nonnegative integer `remaining_calls` as the prepaid call balance and
 records the key's reported concurrency limit as an informational note. The policy is

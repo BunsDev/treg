@@ -947,6 +947,23 @@ def _balance(raw, vendor: str):
     return raw
 
 
+async def _openrouter(c, key):
+    # GET /api/v1/credits is free but takes a management key; the inference key held in the slot
+    # gets 401 there, and GET /api/v1/key reports only that key's own spending cap.
+    management = get_settings().platform_openrouter_management_key.strip()
+    if not management:
+        return {"value": None, "unit": "", "no_api": True,
+                "note": "no OpenRouter management credential configured; account credits are in the dashboard"}
+    d = await _get(c, "https://openrouter.ai/api/v1/credits",
+                   headers={"Authorization": f"Bearer {management}"})
+    data = d.get("data") if isinstance(d, dict) else None
+    total = _finite(data.get("total_credits")) if isinstance(data, dict) else None
+    used = _finite(data.get("total_usage")) if isinstance(data, dict) else None
+    if total is None or used is None or total < 0 or used < 0:
+        raise ValueError("OpenRouter returned no valid credit totals")
+    return {"value": total - used, "unit": "USD", "note": f"{used:g} used of {total:g} purchased"}
+
+
 async def _anyapi(c, key):
     # GET /v1/balance is documented as free; `usd` is the prepaid wallet (api.getanyapi.com/openapi.json).
     d = await _get(c, "https://api.getanyapi.com/v1/balance", headers={"X-API-Key": key})
@@ -993,6 +1010,7 @@ async def _piapi(c, key):
 BALANCE_ROUTES = {
     "anyapi": _anyapi,
     "cloro": _cloro,
+    "openrouter": _openrouter,
     "crawl4ai": _crawl4ai,
     "piapi": _piapi,
     "reapi": _reapi,
@@ -1113,9 +1131,6 @@ NO_BALANCE_API = {
                "verification responses; do not spend a verification merely to collect capacity",
     "minimax": "no balance or quota endpoint in the international API reference (checked "
                "platform.minimax.io/docs 2026-10-01) — usage is on the console page only",
-    "openrouter": "GET /api/v1/credits needs a management key, not the inference key held here, and "
-                  "GET /api/v1/key reports only the key's own spending cap (checked openrouter.ai/docs "
-                  "2026-10-01) — account credits are in the dashboard",
     "replicate": "no balance, credit or billing endpoint; GET /v1/account returns identity only "
                  "(checked replicate.com/docs/reference/http 2026-10-01) — dashboard only",
     "tiingo": "no usage API (api/account/usage 404s, checked 2026-08-31) — tiingo.com/account/usage is "

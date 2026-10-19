@@ -975,3 +975,46 @@ async def test_overdrawn_vendors_read_negative_without_refusing_calls():
     assert cloro["note"].startswith("50000 per cycle; cycle resets 2026-11-01; informational: overdrawn")
     assert hlr["note"] == "informational: overdrawn, the vendor still serves and bills the overage"
 
+
+async def test_openrouter_reads_credits_with_the_management_key(monkeypatch):
+    monkeypatch.setenv("TREG_PLATFORM_KEY_OPENROUTER", "inference-test-key")
+    monkeypatch.setenv("TREG_PLATFORM_OPENROUTER_MANAGEMENT_KEY", "management-test-key")
+    collectors.get_settings.cache_clear()
+    try:
+        def probe(request):
+            assert str(request.url) == "https://openrouter.ai/api/v1/credits"
+            assert request.headers["authorization"] == "Bearer management-test-key"
+            return httpx.Response(200, json={"data": {"total_credits": 100.5, "total_usage": 25.75}})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(probe)) as client:
+            row = await collectors.provider_balance("openrouter", client)
+    finally:
+        collectors.get_settings.cache_clear()
+    assert (row["value"], row["unit"]) == (74.75, "USD")
+    assert not sweep.snapshot_from("openrouter", row).error
+
+
+async def test_openrouter_without_a_management_key_is_no_api_and_skips_request(monkeypatch):
+    monkeypatch.setenv("TREG_PLATFORM_KEY_OPENROUTER", "inference-test-key")
+    monkeypatch.setenv("TREG_PLATFORM_OPENROUTER_MANAGEMENT_KEY", "")
+    collectors.get_settings.cache_clear()
+    try:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(
+                lambda _r: pytest.fail("the inference key must not be sent to /credits"))) as client:
+            row = await collectors.provider_balance("openrouter", client)
+    finally:
+        collectors.get_settings.cache_clear()
+    snap = sweep.snapshot_from("openrouter", row)
+    assert snap.error == "no_balance_api" and snap.remaining is None
+
+
+@pytest.mark.parametrize("data", [{}, {"total_credits": 10}, {"total_credits": True, "total_usage": 1},
+                                  {"total_credits": -1, "total_usage": 0}])
+async def test_openrouter_rejects_malformed_credit_totals(monkeypatch, data):
+    monkeypatch.setenv("TREG_PLATFORM_OPENROUTER_MANAGEMENT_KEY", "management-test-key")
+    collectors.get_settings.cache_clear()
+    try:
+        with pytest.raises(ValueError, match="OpenRouter"):
+            await _serve_json(collectors._openrouter, {"data": data})
+    finally:
+        collectors.get_settings.cache_clear()
