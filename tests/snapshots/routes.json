@@ -2507,6 +2507,15 @@
       "GET",
       "HEAD"
     ],
+    "name": "admin_daily",
+    "path": "/admin/daily"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
     "name": "admin_errors",
     "path": "/admin/errors"
   },
