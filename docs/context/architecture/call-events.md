@@ -78,7 +78,8 @@ One table for every capability. Generic columns: `schema_version`, `event_id`, `
 `cost_estimated_micro`, `cost_charged_micro`, `upstream_ms`, `duration_ms`, `served_by`,
 `tried_count`, `check_verdict`, `async_outcome`, `archive_key_hash`, `archive_content_hash`,
 `adapter_fingerprint` (12 hex of the adapter definition, so a change of mapping shows in the data).
-Every column is present on every event, null when unknown.
+A column with no value is omitted from the event rather than sent as null, so it reads as SQL
+NULL (a JSON null in a `json` column would be stored as the string `'null'`).
 
 Capability-specific data rides in string-keyed maps, so a new capability needs no table change.
 The stream has no map type; they travel as JSON objects (`json` columns):

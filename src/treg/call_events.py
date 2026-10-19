@@ -131,7 +131,10 @@ def _next_batch() -> list[bytes]:
     size = 2
     while _queue and len(batch) < _BATCH_MAX:
         try:
-            line = json.dumps(_materialize(_take()), separators=(",", ":"),
+            # An omitted field lands as SQL NULL; an explicit null in a `json` column would
+            # land as the string 'null'.
+            event = {k: v for k, v in _materialize(_take()).items() if v is not None}
+            line = json.dumps(event, separators=(",", ":"),
                               ensure_ascii=False, allow_nan=False, default=str).encode()
         except (TypeError, ValueError):
             counters["dropped_unserializable"] += 1
