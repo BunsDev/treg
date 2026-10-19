@@ -55,7 +55,9 @@ Every platform-key slot is either on `BALANCE_ROUTES` (a free collector reads it
 `test_every_platform_key_has_a_balance_decision` fails a new slot that is on neither. A sweep
 reading below `EMPTY_BELOW` refuses the provider's shared-key calls, so a collector reports a meter
 that bills overage rather than refusing (SpyFu's monthly allowance) as informational once spent,
-and sums every pool that can pay for a call (Fiber AI's trial and paid pools).
+and sums every pool that can pay for a call (Fiber AI's trial and paid pools). Vendors in
+`OVERDRAFT_SERVED` keep serving past zero, so their low balance is informational and `overdrawn`;
+each needs a refusal signature.
 
 Octen's PAYG balance has no account balance or usage endpoint in its published OpenAPI, so
 `NO_BALANCE_API` reports it as dashboard-only. `_KNOWN` classifies the account as manually funded
@@ -69,6 +71,9 @@ token, never the API key treg holds, so `NO_BALANCE_API` reports the account as 
 `_KNOWN` classifies it as manually funded cash. The shared key is paced at the documented 600
 requests a minute that Search, Extract and Entity Search each allow. HTTP 402 insufficient credit
 was not forced, and no overflow route is claimed.
+
+OpenRouter's balance needs a management key (`platform_openrouter_management_key`); without it
+the row is `no_api`.
 
 Litescrape's internal collector reads the free `GET /api/keys/status` route with the platform
 Bearer key. It accepts a nonnegative integer `remaining_calls` as the prepaid call balance and
@@ -169,7 +174,7 @@ auto recharge, manually verified as enabled in the portal, and a documented 10 r
 shared-key pace. treg does not read or change the vendor's auto-top-up setting.
 
 HLR Lookup's collector posts the platform key and secret to the free `/apiv2/balance` route and
-accepts only `Status: OK` with a finite nonnegative `Credits`, which can be fractional because
+accepts only `Status: OK` with a finite `Credits`, which can be fractional because
 cache hits and portability lookups cost half a credit. The policy is `credits / manual / api`:
 bundles are bought by hand and expire 18 months after purchase. The vendor caps concurrency at 210
 requests and throttles per telephone network, so shared-key smoothing uses a conservative 50

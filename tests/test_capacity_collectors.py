@@ -13,7 +13,7 @@ from datetime import timedelta
 import httpx
 import pytest
 
-from treg.domain.capacity import collectors, policy, sweep
+from treg.domain.capacity import collectors, policy, signatures, sweep
 from treg.timeutil import utcnow_naive
 
 
@@ -159,6 +159,16 @@ async def test_openmart_balance_collector():
     }
 
 
+async def test_openmart_negative_balance_is_exact_and_exhausts():
+    # Openmart refuses with 402 once spent, so past zero is a real, exhausting reading.
+    row = await _serve_json(collectors._openmart, {"balance": -12, "period_end": None})
+    assert row["value"] == -12 and not row.get("informational")
+    snap = sweep.snapshot_from("openmart", row)
+    state = policy.latest_state(policy.default_policy("openmart", has_key=True), snap)
+    assert state.health == "exhausted" and state.exhausted_until is not None
+
+
+
 async def test_tavily_capacity_uses_key_credit_remainder():
     def probe(request):
         assert request.method == "GET"
@@ -238,7 +248,7 @@ async def test_hlrlookup_capacity_sends_the_pair_to_the_free_balance_route(monke
 
 
 @pytest.mark.parametrize("payload", [
-    {"Status": "OK", "Credits": -1}, {"Status": "OK", "Credits": True},
+    {"Status": "OK", "Credits": True},
     {"Status": "OK", "Credits": "NaN"}, {"Status": "OK"}, {"Status": "ERROR", "Credits": 10},
 ])
 async def test_hlrlookup_capacity_rejects_uncertain_balances(payload):
@@ -878,9 +888,11 @@ async def test_fiber_ai_rejects_uncertain_pools(output):
 async def test_spyfu_spent_allowance_is_informational_not_empty():
     row = await _serve_json(collectors._spyfu, {"baseUnits": 10000, "unitsUsed": 17114,
                                                 "finalCost": 3.56, "requestCount": 40})
-    assert row["informational"] is True and row["value"] is None
+    assert row["informational"] is True and row["value"] == -7114
     snap = sweep.snapshot_from("spyfu", row)
-    assert snap.confidence == "informational" and not snap.error
+    assert snap.confidence == "informational" and not snap.error and snap.remaining == -7114
+    state = policy.latest_state(policy.default_policy("spyfu", has_key=True), snap)
+    assert state.exhausted_until is None
 
 
 async def test_spyfu_reports_units_left_under_allowance():
@@ -921,10 +933,75 @@ async def test_documented_balance_collectors(collector, payload, value, unit):
     assert (row["value"], row["unit"]) == (value, unit)
 
 
-@pytest.mark.parametrize("collector", [collectors._anyapi, collectors._cloro,
-                                       collectors._reapi, collectors._piapi])
-@pytest.mark.parametrize("payload", [{}, {"usd": -1, "remaining": -1, "balance": -1,
-                                          "equivalent_in_usd": -1}])
+@pytest.mark.parametrize("collector", [collectors._anyapi, collectors._reapi, collectors._piapi])
+@pytest.mark.parametrize("payload", [{}, {"usd": -1, "balance": -1, "equivalent_in_usd": -1}])
 async def test_documented_balance_collectors_reject_missing_or_negative(collector, payload):
     with pytest.raises(ValueError):
         await _serve_json(collector, payload)
+
+
+@pytest.fixture
+def platform_env(monkeypatch):
+    """Set env vars and drop the cached settings; the cache is dropped again afterwards."""
+    def set_env(**env):
+        for name, value in env.items():
+            monkeypatch.setenv(name, value)
+        collectors.get_settings.cache_clear()
+    yield set_env
+    collectors.get_settings.cache_clear()
+
+
+@pytest.mark.parametrize("provider,body,value", [
+    ("cloro", {"remaining": -1200, "perCycle": 50000, "cycleResetsAt": "2026-11-01T00:00:00.000Z"}, -1200),
+    ("firecrawl", {"success": True, "data": {"remainingCredits": -250.5}}, -250.5),
+    ("hlrlookup", {"Status": "OK", "Credits": "-3.5"}, -3.5),
+    ("firecrawl", {"success": True, "data": {"remainingCredits": 0}}, 0),
+])
+async def test_overdraft_vendors_read_negative_without_refusing_calls(platform_env, provider, body, value):
+    platform_env(**{f"TREG_PLATFORM_KEY_{provider.upper()}": "test-key"})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(
+            lambda _r: httpx.Response(200, json=body))) as client:
+        row = await collectors.provider_balance(provider, client)
+    assert row["value"] == value and row["informational"] is True and row["overdrawn"] is True
+    assert row["note"].endswith("informational: overdrawn, the vendor still serves and bills the overage")
+    snap = sweep.snapshot_from(provider, row)
+    assert snap.remaining == value and snap.confidence == "informational" and not snap.error
+    state = policy.latest_state(policy.default_policy(provider, has_key=True), snap)
+    assert state.exhausted_until is None and not state.is_exhausted()
+
+
+def test_every_overdraft_vendor_has_a_refusal_signature():
+    # An overdrawn reading never exhausts, so the vendor's refusal is the only thing that will.
+    refusals = {
+        "cloro": (403, '{"error": {"code": "INSUFFICIENT_CREDITS"}}'),
+        "firecrawl": (402, '{"success": false, "error": "Insufficient credits"}'),
+        "hlrlookup": (200, '{"results": [{"error": "INSUFFICIENT_CREDIT"}]}'),
+    }
+    assert set(refusals) == collectors.OVERDRAFT_SERVED
+    for provider, (status, body) in refusals.items():
+        assert signatures.classify(provider, status, body=body).kind in ("balance", "quota"), provider
+
+
+async def test_openrouter_reads_credits_with_the_management_key(platform_env):
+    platform_env(TREG_PLATFORM_KEY_OPENROUTER="inference-test-key",
+                 TREG_PLATFORM_OPENROUTER_MANAGEMENT_KEY="management-test-key")
+
+    def probe(request):
+        assert str(request.url) == "https://openrouter.ai/api/v1/credits"
+        assert request.headers["authorization"] == "Bearer management-test-key"
+        return httpx.Response(200, json={"data": {"total_credits": 100.5, "total_usage": 25.75}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(probe)) as client:
+        row = await collectors.provider_balance("openrouter", client)
+    assert (row["value"], row["unit"]) == (74.75, "USD")
+    assert not sweep.snapshot_from("openrouter", row).error
+
+
+async def test_openrouter_without_a_management_key_is_no_api_and_skips_request(platform_env):
+    platform_env(TREG_PLATFORM_KEY_OPENROUTER="inference-test-key",
+                 TREG_PLATFORM_OPENROUTER_MANAGEMENT_KEY="")
+    async with httpx.AsyncClient(transport=httpx.MockTransport(
+            lambda _r: pytest.fail("the inference key must not be sent to /credits"))) as client:
+        row = await collectors.provider_balance("openrouter", client)
+    snap = sweep.snapshot_from("openrouter", row)
+    assert snap.error == "no_balance_api" and snap.remaining is None

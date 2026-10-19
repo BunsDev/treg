@@ -42,6 +42,9 @@ Fish Audio shared-key capacity monitoring requires both `TREG_PLATFORM_KEY_FISHA
 free API-credit probe; without it, capacity remains unknown rather than reading the unrelated
 personal wallet.
 
+OpenRouter capacity monitoring reads `TREG_PLATFORM_OPENROUTER_MANAGEMENT_KEY` (sweep only);
+without it, OpenRouter reports no balance API.
+
 ## Call events
 
 Call events ([call-events.md](../architecture/call-events.md)) are off until
