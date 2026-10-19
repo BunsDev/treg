@@ -42,7 +42,7 @@ covers (frontmatter `sources:`). Regenerate this index with
 | [Showcase leaderboard and pictures - applications, review, votes, avatars](architecture/showcase.md) | shipped | __init__.py, showcase.py, showcase.py, __init__.py, … |
 | [Super-admin — cross-tenant read + control](architecture/super-admin.md) | shipped | api.py, admin.py, evidence_retention.py, access.py, … |
 | [The table layer — one call, answered as rows and columns (`/table/`)](architecture/table.md) | built, behind `table_enabled` (TREG_TABLE_ENABLED), off by default | __init__.py, table.py, table.py, call.py, … |
-| [Workbench table storage adapters](architecture/workbench-storage.md) | foundational | workbench_store.py, test_workbench_store.py, test_workbench_store_lifecycle.py |
+| [Workbench table storage](architecture/workbench-storage.md) | foundational | models.py, 0077_workbench_table_metadata.py, teams.py, test_workbench_table_schema.py, … |
 
 ## Interfaces (API · CLI · skill)
 

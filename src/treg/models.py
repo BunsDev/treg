@@ -12,7 +12,7 @@ from datetime import date, datetime, timezone
 from typing import Annotated
 
 from pydantic import NaiveDatetime
-from sqlalchemy import BigInteger, Boolean, JSON, CheckConstraint, Column, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import BigInteger, Boolean, JSON, CheckConstraint, Column, ForeignKeyConstraint, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -2333,3 +2333,54 @@ class ShowcaseVote(SQLModel, table=True):
     app_id: int = Field(foreign_key="showcaseapp.id", ondelete="CASCADE")
     user_id: int = Field(foreign_key="user.id", ondelete="CASCADE", index=True)
     created_at: NaiveUTC = Field(default_factory=_now)
+
+
+class TeamDatabase(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("org_id", name="uq_teamdatabase_org"),
+        UniqueConstraint("id", "org_id", name="uq_teamdatabase_id_org"),
+        UniqueConstraint("turso_database_ref", name="uq_teamdatabase_turso_ref"),
+        CheckConstraint("length(trim(turso_database_ref)) > 0", name="ck_teamdatabase_turso_ref"),
+        CheckConstraint("database_generation > 0", name="ck_teamdatabase_generation"),
+        CheckConstraint(
+            "status != 'ready' OR (connection_ref IS NOT NULL AND length(trim(connection_ref)) > 0)",
+            name="ck_teamdatabase_ready_connection",
+        ),
+    )
+    id: int | None = Field(default=None, primary_key=True)
+    org_id: int = Field(foreign_key="org.id")
+    turso_database_ref: str
+    connection_ref: str | None = Field(default=None)
+    status: str = Field(default="provisioning", sa_column=Column(String, nullable=False, server_default="provisioning"))
+    database_generation: int = Field(default=1, sa_column=Column(Integer, nullable=False, server_default="1"))
+    created_at: NaiveUTC = Field(default_factory=_now)
+    updated_at: NaiveUTC = Field(default_factory=_now)
+
+
+class TableDoc(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("org_id", "name", name="uq_tabledoc_org_name"),
+        UniqueConstraint("org_id", "creation_key", name="uq_tabledoc_creation_request"),
+        UniqueConstraint("team_database_id", "sql_name", name="uq_tabledoc_database_sql_name"),
+        ForeignKeyConstraint(
+            ["team_database_id", "org_id"], ["teamdatabase.id", "teamdatabase.org_id"],
+            name="fk_tabledoc_team_database_owner",
+        ),
+        CheckConstraint("schema_version IS NULL OR schema_version > 0", name="ck_tabledoc_schema_version"),
+        CheckConstraint("metadata_revision > 0", name="ck_tabledoc_metadata_revision"),
+        CheckConstraint("status != 'ready' OR schema_version IS NOT NULL", name="ck_tabledoc_ready_schema"),
+    )
+    id: str = Field(primary_key=True)
+    org_id: int
+    team_database_id: int
+    name: str
+    sql_name: str
+    creation_key: str
+    creation_fingerprint: str
+    schema_version: int | None = Field(default=None)
+    metadata_revision: int = Field(default=1, sa_column=Column(Integer, nullable=False, server_default="1"))
+    status: str = Field(default="creating", sa_column=Column(String, nullable=False, server_default="creating"))
+    column_metadata: list = Field(default_factory=list, sa_column=Column(JSON(none_as_null=True), nullable=False))
+    created_by: str
+    created_at: NaiveUTC = Field(default_factory=_now)
+    updated_at: NaiveUTC = Field(default_factory=_now)

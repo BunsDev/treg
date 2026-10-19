@@ -154,6 +154,7 @@ jobs:
           tests/test_asynctasks.py
           tests/test_alembic_baseline.py
           tests/test_org_flow_control_schema.py
+          tests/test_workbench_table_schema.py
           tests/test_redundant_index_migration.py
           tests/test_callrecord_call_ref_index_migration.py
           tests/test_enrich_arena.py
