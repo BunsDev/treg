@@ -4,7 +4,7 @@ import json
 import pytest
 from sqlalchemy import select
 
-from treg import archive
+from treg import archive, audit
 from treg.application.call import service
 from treg.config import get_settings
 from treg.infra.db import session_maker
@@ -418,6 +418,7 @@ async def test_declared_miss_status_is_a_miss_but_never_cached(clients, monkeypa
         assert r.status_code == 404 and 'x-treg-cache' not in r.headers
         await archive.drain()
     assert upstream == [404, 404]
+    await audit.drain()  # audit rows are fire-and-forget
     async with session_maker() as db:
         assert (await db.execute(select(ArchiveKey))).scalars().all() == []
         hits = (await db.execute(select(CallRecord.hit).where(CallRecord.endpoint_id == ep))).scalars().all()

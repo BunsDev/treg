@@ -23,7 +23,7 @@ adapters:
     const: {queryParams.email_type: work, queryParams.include_phone: false}
     test_identity: {linkedin_url: "https://www.linkedin.com/in/routing-fixture"}
     out: {email: "profile.work_email[0]"}
-    miss: "at_least(status_code != 200, coalesce(profile.work_email) == null)"
+    miss: "at_least(status_code != 200, coalesce(profile.work_email, []) == [])"
   dropleads.people.email.find:
     accepts: [[first_name, last_name, domain]]
     in: {first_name: body.first_name, last_name: body.last_name, domain: body.company_domain}
@@ -184,7 +184,7 @@ adapters:
     const: {queryParams.email_type: personal, queryParams.include_phone: false}
     test_identity: {linkedin_url: "https://www.linkedin.com/in/routing-fixture"}
     out: {email: "profile.personal_email[0]"}
-    miss: "at_least(status_code != 200, coalesce(profile.personal_email) == null)"
+    miss: "at_least(status_code != 200, coalesce(profile.personal_email, []) == [])"
 
   # ---- instagram.user.profile ---------------------------------------------------------------
   # Instagram users come in GraphQL (edge_*.count) or private API (*_count) shape; read both.
@@ -356,7 +356,7 @@ adapters:
     const: {queryParams.email_type: none, queryParams.include_phone: true}
     test_identity: {linkedin_url: "https://www.linkedin.com/in/routing-fixture"}
     out: {phone: "profile.phone[0]", line_type: "'mobile'"}
-    miss: "at_least(status_code != 200, coalesce(profile.phone) == null)"
+    miss: "at_least(status_code != 200, coalesce(profile.phone, []) == [])"
   dropleads.people.phone.find:
     accepts: [[linkedin_url]]
     in: {linkedin_url: body.linkedin_url}
