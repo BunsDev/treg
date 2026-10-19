@@ -53,7 +53,13 @@ Every platform-key slot is either on `BALANCE_ROUTES` (a free collector reads it
 `test_every_platform_key_has_a_balance_decision` fails a new slot that is on neither. A sweep
 reading below `EMPTY_BELOW` refuses the provider's shared-key calls, so a collector reports a meter
 that bills overage rather than refusing (SpyFu's monthly allowance) as informational once spent,
-and sums every pool that can pay for a call (Fiber AI's trial and paid pools).
+and sums every pool that can pay for a call (Fiber AI's trial and paid pools). An informational
+reading still carries its number, negative included, so the operator board shows how far past zero
+the account is; only `latest_state` ignores it. A negative balance is never a malformed one: on a
+vendor that keeps answering past zero (cloro, Firecrawl, HLR Lookup) the collector reports it
+through `_overdrawn` as informational, and that vendor's refusal signature marks the account when
+it finally refuses; on a vendor that refuses once spent (Openmart's 402) it is exact and exhausts
+the account like zero.
 
 Octen's PAYG balance has no account balance or usage endpoint in its published OpenAPI, so
 `NO_BALANCE_API` reports it as dashboard-only. `_KNOWN` classifies the account as manually funded
@@ -167,7 +173,7 @@ auto recharge, manually verified as enabled in the portal, and a documented 10 r
 shared-key pace. treg does not read or change the vendor's auto-top-up setting.
 
 HLR Lookup's collector posts the platform key and secret to the free `/apiv2/balance` route and
-accepts only `Status: OK` with a finite nonnegative `Credits`, which can be fractional because
+accepts only `Status: OK` with a finite `Credits` (negative is overdrawn, see above), which can be fractional because
 cache hits and portability lookups cost half a credit. The policy is `credits / manual / api`:
 bundles are bought by hand and expire 18 months after purchase. The vendor caps concurrency at 210
 requests and throttles per telephone network, so shared-key smoothing uses a conservative 50
@@ -678,8 +684,9 @@ results varied, so no numeric free-plan concurrency/rate limit is configured.
 
 ## ContactOut independent pools
 
-`collectors._contactout` exposes the three raw credit pools through an informational observation,
-not a scalar balance. `snapshot_from` and `latest_state` preserve it without marking the provider
+`collectors._contactout` exposes the three raw credit pools through an informational observation.
+Its number is the smallest pool's remainder, the one to top up first, never a provider-wide
+balance. `snapshot_from` and `latest_state` preserve it without marking the provider
 exhausted. Prepaid quotas are already remaining credits. The pools are independent and require
 separate operator monitoring and top-ups. Stats freshness remains unconfirmed; treg
 keeps the existing sweep cadence and does not assume behavior at zero credits.

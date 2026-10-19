@@ -159,6 +159,22 @@ async def test_openmart_balance_collector():
     }
 
 
+async def test_openmart_negative_balance_is_exact_and_exhausts():
+    # Openmart refuses with 402 once spent, so past zero is a real, exhausting reading.
+    row = await _serve_json(collectors._openmart, {"balance": -12, "period_end": None})
+    assert row["value"] == -12 and not row.get("informational")
+    snap = sweep.snapshot_from("openmart", row)
+    state = policy.latest_state(policy.default_policy("openmart", has_key=True), snap)
+    assert state.health == "exhausted" and state.exhausted_until is not None
+
+
+@pytest.mark.parametrize("balance", [None, True, "12"])
+async def test_openmart_malformed_balance_is_unknown(balance):
+    row = await _serve_json(collectors._openmart, {"balance": balance})
+    assert row["value"] is None
+    assert sweep.snapshot_from("openmart", row).error
+
+
 async def test_tavily_capacity_uses_key_credit_remainder():
     def probe(request):
         assert request.method == "GET"
@@ -238,7 +254,7 @@ async def test_hlrlookup_capacity_sends_the_pair_to_the_free_balance_route(monke
 
 
 @pytest.mark.parametrize("payload", [
-    {"Status": "OK", "Credits": -1}, {"Status": "OK", "Credits": True},
+    {"Status": "OK", "Credits": True},
     {"Status": "OK", "Credits": "NaN"}, {"Status": "OK"}, {"Status": "ERROR", "Credits": 10},
 ])
 async def test_hlrlookup_capacity_rejects_uncertain_balances(payload):
@@ -622,6 +638,13 @@ async def test_firecrawl_balance_uses_free_credit_usage_endpoint():
             await collectors._firecrawl(client, "test-key")
 
 
+async def test_firecrawl_overdrawn_balance_is_informational():
+    row = await _serve_json(collectors._firecrawl, {"success": True, "data": {
+        "remainingCredits": -250.5, "billingPeriodEnd": "2026-10-28T00:00:00Z"}})
+    assert row["value"] == -250.5 and row["informational"] is True
+    assert "overdrawn" in row["note"] and "billing period ends" in row["note"]
+
+
 async def test_linkup_balance_uses_free_credit_route_and_rejects_invalid_values():
     def probe(request):
         assert str(request.url) == "https://api.linkup.so/v1/credits/balance"
@@ -821,7 +844,9 @@ async def test_contactout_pool_stats_are_informational_even_when_empty(contactou
         ) as c:
             row = await collectors.provider_balance("contactout", c)
         snap = sweep.snapshot_from("contactout", row)
-        assert not snap.error and snap.remaining is None
+        # The smallest pool: email's quota 0 in the first case, email's remaining -5 in the second.
+        assert not snap.error and snap.remaining == (0 if not extra else -5)
+        assert snap.unit == "credits (email pool, the smallest)"
         assert "email: used=10, quota=0" in snap.note
         state = policy.latest_state(
             policy.default_policy("contactout", has_key=True), snap
@@ -878,9 +903,11 @@ async def test_fiber_ai_rejects_uncertain_pools(output):
 async def test_spyfu_spent_allowance_is_informational_not_empty():
     row = await _serve_json(collectors._spyfu, {"baseUnits": 10000, "unitsUsed": 17114,
                                                 "finalCost": 3.56, "requestCount": 40})
-    assert row["informational"] is True and row["value"] is None
+    assert row["informational"] is True and row["value"] == -7114
     snap = sweep.snapshot_from("spyfu", row)
-    assert snap.confidence == "informational" and not snap.error
+    assert snap.confidence == "informational" and not snap.error and snap.remaining == -7114
+    state = policy.latest_state(policy.default_policy("spyfu", has_key=True), snap)
+    assert state.exhausted_until is None
 
 
 async def test_spyfu_reports_units_left_under_allowance():
@@ -921,10 +948,30 @@ async def test_documented_balance_collectors(collector, payload, value, unit):
     assert (row["value"], row["unit"]) == (value, unit)
 
 
-@pytest.mark.parametrize("collector", [collectors._anyapi, collectors._cloro,
-                                       collectors._reapi, collectors._piapi])
-@pytest.mark.parametrize("payload", [{}, {"usd": -1, "remaining": -1, "balance": -1,
-                                          "equivalent_in_usd": -1}])
+@pytest.mark.parametrize("collector", [collectors._anyapi, collectors._reapi, collectors._piapi])
+@pytest.mark.parametrize("payload", [{}, {"usd": -1, "balance": -1, "equivalent_in_usd": -1}])
 async def test_documented_balance_collectors_reject_missing_or_negative(collector, payload):
     with pytest.raises(ValueError):
         await _serve_json(collector, payload)
+
+
+@pytest.mark.parametrize("remaining", [None, True, "5"])
+async def test_cloro_rejects_a_missing_balance(remaining):
+    with pytest.raises(ValueError, match="cloro"):
+        await _serve_json(collectors._cloro, {"remaining": remaining})
+
+
+async def test_overdrawn_vendors_read_negative_without_refusing_calls():
+    # cloro and HLR Lookup keep answering past zero, so the number is shown and never acted on.
+    cloro = await _serve_json(collectors._cloro, {"remaining": -1200, "perCycle": 50000,
+                                                  "cycleResetsAt": "2026-11-01T00:00:00.000Z"})
+    hlr = await _serve_json(collectors._hlrlookup, {"Status": "OK", "Credits": "-3.5"})
+    for provider, row, value in (("cloro", cloro, -1200), ("hlrlookup", hlr, -3.5)):
+        assert row["value"] == value and row["informational"] is True
+        snap = sweep.snapshot_from(provider, row)
+        assert snap.remaining == value and snap.confidence == "informational" and not snap.error
+        state = policy.latest_state(policy.default_policy(provider, has_key=True), snap)
+        assert state.exhausted_until is None and not state.is_exhausted()
+    assert cloro["note"].startswith("50000 per cycle; cycle resets 2026-11-01; informational: overdrawn")
+    assert hlr["note"] == "informational: overdrawn, the vendor still serves and bills the overage"
+
