@@ -389,6 +389,7 @@ _CONTROL_ROUTE_KEYS: frozenset[RouteKey] = frozenset({
     ('/admin/hub/updates/{tool_id}', ('POST',), 'admin_hub_update_decide'),
     ('/admin/calls', ('GET',), 'admin_calls'),
     ('/admin/share', ('GET',), 'admin_share'),
+    ('/admin/daily', ('GET',), 'admin_daily'),
     ('/admin/errors', ('GET',), 'admin_errors'),
     ('/admin/health', ('GET',), 'admin_health'),
     ('/admin/kv', ('GET',), 'admin_kv'),

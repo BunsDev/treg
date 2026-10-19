@@ -289,6 +289,28 @@ async def test_stats_count_calls_from_the_day_table_not_the_call_table(c):
     assert calls["success_rate"] == round(130 / 150, 3)
 
 
+async def test_admin_daily_splits_one_providers_calls_and_answers_per_job(c):
+    """Per UTC day, newest first: all provider calls (routed parents left out), one provider's calls,
+    and per job the answered calls of every provider and of that provider."""
+    from datetime import datetime, timedelta, timezone
+    from treg.infra.db import session_maker
+    from treg.models import EndpointDayStat
+
+    await _seed(c)
+    today = datetime.now(timezone.utc).date()
+    yesterday = (today - timedelta(days=1)).isoformat()
+    async with session_maker() as db:
+        for ep, n, ok in (("crawl4ai.web.scrape", 10, 8), ("tinyfish.web.fetch", 30, 24), ("treg.web.extract", 40, 32)):
+            db.add(EndpointDayStat(endpoint_id=ep, day=yesterday, n=n, ok=ok))
+        db.add(EndpointDayStat(endpoint_id="crawl4ai.web.scrape", day=(today - timedelta(days=20)).isoformat(), n=5, ok=5))
+        await db.commit()
+    body = (await c.get("/admin/daily?days=7&provider=crawl4ai&jobs=web.extract", headers=_a())).json()
+    assert [d["day"] for d in body["days"]] == [yesterday]      # the 20-day-old row is outside the window
+    day = body["days"][0]
+    assert day["calls"] == 40 and day["provider_calls"] == 10    # treg.* parents are not provider calls
+    assert day["jobs"]["web.extract"] == {"answered": 32, "provider_answered": 8}
+
+
 async def test_admin_calls_reads_new_rows_after_a_cursor_by_provider(c):
     """A live poller reads only what is new: `since_id` returns rows after it oldest first, with
     the provider, charge and timing; `provider` alone is refused so the read stays a key range."""
