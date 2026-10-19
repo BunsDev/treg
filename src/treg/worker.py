@@ -252,8 +252,13 @@ async def _asynctasks_settle(args) -> int:
     from .application.call import keyslots
 
     keyslots.check_accounts()  # polls use treg's accounts: an unusable one refuses to start
+    from . import call_events
+
     await verify_db()
-    result = await settle_due(limit=args.limit)
+    try:
+        result = await settle_due(limit=args.limit)
+    finally:
+        await call_events.drain()  # the terminal events this tick observed
     print(json.dumps(result.__dict__, sort_keys=True))
     return 0
 

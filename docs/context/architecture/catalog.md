@@ -2075,7 +2075,9 @@ to choose (`docs/CAPABILITY-ROUTING-PLAN.md`). Everything else in the catalog st
   never provider names — `{full_name, domain}`, `{first_name, last_name, domain}`,
   `{linkedin_url}`), `derive` rules so the two name shapes match the same adapters, a small
   *output* core (`email` required; `confidence`, names, `verified` optional) and `miss` in
-  canonical terms. `raw` — the winning provider's body — is always returned and never documented
+  canonical terms. An output field may say where it lands in a call event (`analytics: key |
+  value | skip`, default skip; [call-events.md](call-events.md)); the public contract view drops
+  it. `raw` — the winning provider's body — is always returned and never documented
   as stable. `advice_unverified` (email and phone finds, and `people.search`) is one sentence the
   router attaches as `_treg.advice` to a hit whose `verified` is not true — a found contact is not
   a confirmed one (Hunter's `accept_all`, LeadMagic's personal finder, every phone provider), and a

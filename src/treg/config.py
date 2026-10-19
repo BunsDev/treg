@@ -733,6 +733,16 @@ class Settings(BaseSettings):
     # ingestion key (safe to expose to the browser); host defaults to EU cloud.
     posthog_key: str = ""
     posthog_host: str = "https://eu.i.posthog.com"
+    # Call events (call_events.py, docs/context/architecture/call-events.md): one structured,
+    # pseudonymous event per catalog call, POSTed in batches to an HTTP stream (a Cloudflare
+    # Pipelines stream writing an Iceberg table). OFF unless the URL and the HMAC secret are both
+    # set; the token is sent as a bearer when the stream requires one. The secret keys every hash
+    # in an event, so a table holder without it cannot test a guessed email against the table.
+    call_events_url: str = ""
+    call_events_token: str = Field(default="", repr=False)
+    call_events_hmac_secret: str = Field(default="", repr=False)
+    # Comma-separated team ids whose calls are evaluation traffic (`is_eval` on their events).
+    call_events_eval_orgs: str = ""
     # The code identity stamped on every analytics event as `build`. Empty means "use the commit the
     # host exposes, else the installed package version" (analytics.build_id), so an operator only
     # sets TREG_BUILD when the platform does not publish a commit variable.

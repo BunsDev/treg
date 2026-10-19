@@ -27,12 +27,14 @@ contracts:
       linkedin_url: "linkedin_url(linkedin_handle)"
       linkedin_handle: "linkedin_handle(linkedin_url)"
     filters: {}
+    # `analytics` says where an output field lands in a call event: `key` (HMAC'd identifier),
+    # `value` (non-sensitive, as is) or `skip` (the default). docs/context/architecture/call-events.md
     output:
-      email: {type: str, required: true}
-      confidence: {type: float, note: "0..1 — provider scales mapped; the original rides in raw"}
-      first_name: {type: str}
-      last_name: {type: str}
-      verified: {type: bool, note: "the provider says it checked the mailbox"}
+      email: {type: str, required: true, analytics: key}
+      confidence: {type: float, note: "0..1 — provider scales mapped; the original rides in raw", analytics: value}
+      first_name: {type: str, analytics: skip}
+      last_name: {type: str, analytics: skip}
+      verified: {type: bool, note: "the provider says it checked the mailbox", analytics: value}
     miss: "email == null"
     idempotent: true            # a lookup — error-fallback to the next provider is safe
     one_subject: true           # every variant names one person: cost per hit ranks first
@@ -56,8 +58,8 @@ contracts:
       linkedin_handle: "linkedin_handle(linkedin_url)"
     filters: {}
     output:
-      email: {type: str, required: true, note: "a personal mailbox (gmail, outlook, …), not the work address"}
-      verified: {type: bool, note: "the provider says it checked the mailbox"}
+      email: {type: str, required: true, note: "a personal mailbox (gmail, outlook, …), not the work address", analytics: key}
+      verified: {type: bool, note: "the provider says it checked the mailbox", analytics: value}
     miss: "email == null"
     idempotent: true
     one_subject: true           # every variant names one person: cost per hit ranks first
@@ -197,9 +199,9 @@ contracts:
       - {email: str}
     filters: {}
     output:
-      valid: {type: bool, required: true, note: "the provider says the mailbox accepts mail"}
-      status: {type: str, note: "the provider's own verdict word (valid | invalid | accept_all | unknown | …)"}
-      score: {type: int}
+      valid: {type: bool, required: true, note: "the provider says the mailbox accepts mail", analytics: value}
+      status: {type: str, note: "the provider's own verdict word (valid | invalid | accept_all | unknown | …)", analytics: value}
+      score: {type: int, analytics: value}
     miss: "status == null"
     idempotent: true
     # Stored per call. Each adapter maps its provider's words (`verdicts`); `unknown` is a word,

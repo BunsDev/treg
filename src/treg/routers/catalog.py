@@ -630,7 +630,10 @@ async def catalog_endpoint(
                                    cost_at(cat.cost_view(k.get("cost"), k["provider"]), {}, ad), st.get("hit_rate"),
                                    st.get("ok_rate"), st.get("p50_ms"), st.get("last_ok_days")))
         routing = {
-            "contract": {"identity": [list(v) for v in contract.identity], "output": contract.output,
+            "contract": {"identity": [list(v) for v in contract.identity], "output": {
+                             # `analytics` is treg's own event mapping, not part of the answer.
+                             k: {a: b for a, b in (v or {}).items() if a != "analytics"}
+                             for k, v in contract.output.items()},
                          "miss": contract.miss, "derive": contract.derive} if contract else None,
             "plan": [_plan_row(c) for c in rank(cands)],
             # The same job from providers whose adapter is not (yet) verified: not chosen by the

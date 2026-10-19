@@ -203,6 +203,14 @@ def parse_contracts(doc: dict) -> dict[str, Contract]:
             # A typo'd key would silently scope nothing; failing the routing load instead makes
             # every `treg.*` capability disappear, which test_routing notices at once.
             raise ValueError(f"contract {cap}: scoping must list identity keys of the contract, got {scoping!r}")
+        for section in ("output", "filters"):
+            for k, spec in (c.get(section) or {}).items():
+                mode = spec.get("analytics", "skip") if isinstance(spec, dict) else "skip"
+                if mode not in ("key", "value", "skip") or (section == "filters" and mode == "key"):
+                    # Where a field lands in a call event (application/call_events.py): a typo
+                    # must fail loudly, never quietly emit an identifier as a plain value.
+                    raise ValueError(f"contract {cap}: {section}.{k} analytics must be key, value or skip "
+                                     f"(filters: value or skip), got {mode!r}")
         out[cap] = Contract(
             capability=cap, summary=str(c.get("summary") or ""), identity=_variants(c.get("identity")),
             identity_types=types, derive=dict(c.get("derive") or {}),

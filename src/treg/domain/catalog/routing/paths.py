@@ -156,6 +156,11 @@ def linkedin_url(v: Any) -> str | None:
     return f"https://www.linkedin.com/in/{v.strip('/')}"
 
 
+def free_mail(domain: Any) -> bool:
+    """True for a mailbox domain anyone can open (gmail.com, outlook.com, ...)."""
+    return isinstance(domain, str) and domain.lower() in _FREE_MAIL
+
+
 def email_domain(v: Any) -> str | None:
     if not isinstance(v, str) or "@" not in v:
         return None
