@@ -290,6 +290,39 @@ def check_platform_request(rule: object, input_schema: object, where: str,
             fail(errors, where, "platform_request value must match the field's singleton enum")
 
 
+def check_team_label(rule: object, input_schema: object, where: str, errors: list[str]) -> None:
+    """Fields that must carry the calling team's label on treg's key: declared string fields."""
+    fields = _input_fields(input_schema)
+    if not isinstance(rule, list) or not rule or len(set(map(str, rule))) != len(rule):
+        fail(errors, where, "team_label must be a non-empty list of distinct field paths")
+        return
+    for path in rule:
+        spec = fields.get(path) if isinstance(path, str) else None
+        if (not isinstance(path, str) or spec is None
+                or not path.startswith(("body.", "headers.", "queryParams.", "pathParams."))
+                or spec.get("type") != "string"):
+            fail(errors, where, "team_label must name declared string body, header, query or path fields")
+
+
+def check_cost_quantity(cost: dict, input_schema: object, where: str, errors: list[str]) -> None:
+    """A price by a quantity the caller chooses: a declared integer field with a maximum, settled
+    exactly at what was bought."""
+    rule = cost.get("quantity")
+    fields = _input_fields(input_schema)
+    field = rule.get("field") if isinstance(rule, dict) else None
+    spec = fields.get(field) if isinstance(field, str) else None
+    top = rule.get("max") if isinstance(rule, dict) else None
+    applied = rule.get("applied") if isinstance(rule, dict) else None
+    if (not isinstance(rule, dict) or not {"field", "max"} <= set(rule) <= {"field", "max", "applied"}
+            or (applied is not None and (not isinstance(applied, str) or not JSON_PATH.fullmatch(applied)))
+            or spec is None
+            or not str(field).startswith(("body.", "queryParams.")) or spec.get("type") != "integer"
+            or type(top) is not int or top < 1):
+        fail(errors, where, "cost.quantity requires {field: a declared integer body or query field, max: a positive integer, applied?: a JSON path}")
+    if cost.get("settle") != "quantity" or cost.get("type") != "per_success" or "reported_charge" in cost:
+        fail(errors, where, "cost.quantity requires settle: quantity on a per_success price with no reported_charge")
+
+
 TAVILY_RATE_KEYS = {
     "tavily.web.search": {"basic", "fast", "ultra_fast", "advanced"},
     "tavily.web.extract": {"basic", "advanced"},
@@ -920,8 +953,10 @@ def check_cost(cost: dict, where: str, errors: list[str], warnings: list[str],
         check_cost_table(cost, input_schema, where, errors, provider)
     if not has_table:
         settle = cost.get("settle")
-        if settle is not None and settle not in ("base", "modifiers", "usage"):
-            fail(errors, where, "cost.settle currently supports only 'base', 'modifiers' or 'usage'")
+        if settle is not None and settle not in ("base", "modifiers", "usage", "quantity"):
+            fail(errors, where, "cost.settle currently supports only 'base', 'modifiers', 'usage' or 'quantity'")
+        if settle == "quantity" or "quantity" in cost:
+            check_cost_quantity(cost, input_schema, where, errors)
         if settle == "usage":
             # A flat rate-card price with the provider's reported charge settling: the fallback is
             # the reserve, the reply's `usage.path` the charge (sync body or async terminal document).
@@ -1315,6 +1350,8 @@ def main(argv: list[str]) -> int:
             check_platform_auth(ep, where, errors)
             if "platform_request" in ep:
                 check_platform_request(ep["platform_request"], inp, where, errors)
+            if "team_label" in ep:
+                check_team_label(ep["team_label"], inp, where, errors)
             default_array_encoding = inp.get("queryArrayEncoding")
             if (default_array_encoding is not None
                     and default_array_encoding not in QUERY_ARRAY_ENCODINGS):

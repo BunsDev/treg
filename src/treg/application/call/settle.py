@@ -495,6 +495,16 @@ def _observed_cost_micro(mk: MarketplaceCall, body: bytes, headers=None) -> int 
     catalog = catalog_store.load()
     ep = catalog.by_id.get(mk.endpoint_id)
     cost = catalog.cost_view(ep.get("cost"), provider) if ep else None
+    if cost and cost.get("settle") == "quantity":
+        # The caller bought `quantity` units (a budget, a block of checks): the charge is what
+        # was bought, held exactly at reserve. A provider's own report for the call (often 0, as
+        # adding room is free on its side) must not turn a purchase into a free one. When the row
+        # names `quantity.applied`, the provider's answer must say the units were added: a retry
+        # it recognised (same purchase id, nothing added) settles at 0.
+        applied = (cost.get("quantity") or {}).get("applied")
+        if applied and _dig(_usage_document(body), applied) is not True:
+            return 0
+        return mk.estimate_micro
     if cost and cost.get("settle") == "base" and cost.get("usd") is not None:
         # The reserve can include documented request riders while the observed settlement remains
         # the catalog base. Aviato simple search earned this rule from two multi-row live probes:
