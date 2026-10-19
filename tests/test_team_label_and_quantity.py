@@ -149,3 +149,37 @@ async def test_a_retry_the_provider_recognised_adds_nothing_and_charges_nothing(
                            json={"credits": 1000, "ref": "p1"})
     assert r.status_code == 200, r.text
     assert seen and (await _team(clients))[1] == before
+
+
+def test_an_alert_email_may_only_be_the_callers_own():
+    """`caller_email`: absent is fine, the caller's own address passes (any case), anyone else's
+    is refused with the caller's own address named; nested body paths are read."""
+    ep = {"id": "p.watch", "caller_email": ["body.notify.email"]}
+    own = "tim@superdesign.dev"
+    call_resolution._enforce_caller_email(ep, own, json.dumps({"url": "https://x.test"}).encode())
+    call_resolution._enforce_caller_email(ep, own, json.dumps({"notify": {"email": "Tim@Superdesign.dev"}}).encode())
+    call_resolution._enforce_caller_email(ep, own, json.dumps({"notify": {"webhook": "https://hook.test"}}).encode())
+    with pytest.raises(ResolutionFailed) as exc:
+        call_resolution._enforce_caller_email(ep, own, json.dumps({"notify": {"email": "stranger@example.com"}}).encode())
+    assert exc.value.status_code == 400 and exc.value.detail["expected"] == own
+
+
+async def test_a_strangers_alert_email_never_reaches_the_provider(
+    clients: AsyncClient, budget_row, monkeypatch,
+):
+    """End to end on treg's key: another address is refused before any call; the caller's own goes."""
+    seen: list = []
+    monkeypatch.setattr(call_service, "relay", _relay(200, seen))
+    cat = catalog_store.load()
+    ep = {**budget_row, "id": "crawl4ai.test.watch", "path": "/monitors", "team_label": ["body.agent"],
+          "caller_email": ["body.notify.email"], "cost": {"type": "free", "value": 0, "currency": "USD", "unit": "call"},
+          "input": {"body": {"agent": {"type": "string", "required": True},
+                             "notify": {"type": "object", "properties": {"email": {"type": "string"}}}}}}
+    monkeypatch.setitem(cat.by_id, "crawl4ai.test.watch", ep)
+    org_id, _ = await _team(clients)
+    label = call_resolution.team_label(org_id)
+    r = await clients.post("/call/crawl4ai.test.watch", json={"agent": label, "notify": {"email": "stranger@example.com"}})
+    assert r.status_code == 400 and seen == []
+    r = await clients.post("/call/crawl4ai.test.watch", json={"agent": label, "notify": {"email": "tim@superdesign.dev"}})
+    assert r.status_code == 200, r.text
+    assert len(seen) == 1

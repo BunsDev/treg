@@ -245,6 +245,11 @@ team. `_enforce_team_label` checks it on the shared key only, before reserve; th
 so the relay stays faithful, and a missing or other team's label is a 400 naming the expected
 value. A team's own key never applies it.
 
+`caller_email` lists request fields (nested body paths allowed, such as `notify.email`) that, when
+sent on the shared key, may only carry the caller's own verified email, compared case-insensitively;
+another address is a 400 before reserve, and leaving the field out is fine. `_enforce_caller_email`
+checks without rewriting, so a shared provider account sends alerts only to the person who asked.
+
 `cost.quantity` prices a call by a whole number the caller chooses (a budget of provider credits):
 `{field, max}` names a declared integer body or query field and its ceiling. A missing or
 out-of-range value is a 400 before reserve, the hold is `quantity x price`, and `settle: quantity`

@@ -304,6 +304,20 @@ def check_team_label(rule: object, input_schema: object, where: str, errors: lis
             fail(errors, where, "team_label must name declared string body, header, query or path fields")
 
 
+def check_caller_email(rule: object, input_schema: object, where: str, errors: list[str]) -> None:
+    """Fields that may only carry the caller's own email on treg's key: declared string fields."""
+    fields = _input_fields(input_schema)
+    if not isinstance(rule, list) or not rule or len(set(map(str, rule))) != len(rule):
+        fail(errors, where, "caller_email must be a non-empty list of distinct field paths")
+        return
+    for path in rule:
+        spec = fields.get(path) if isinstance(path, str) else None
+        if (not isinstance(path, str) or spec is None
+                or not path.startswith(("body.", "headers.", "queryParams."))
+                or spec.get("type") != "string"):
+            fail(errors, where, "caller_email must name declared string body, header or query fields")
+
+
 def check_cost_quantity(cost: dict, input_schema: object, where: str, errors: list[str]) -> None:
     """A price by a quantity the caller chooses: a declared integer field with a maximum, settled
     exactly at what was bought."""
@@ -1352,6 +1366,8 @@ def main(argv: list[str]) -> int:
                 check_platform_request(ep["platform_request"], inp, where, errors)
             if "team_label" in ep:
                 check_team_label(ep["team_label"], inp, where, errors)
+            if "caller_email" in ep:
+                check_caller_email(ep["caller_email"], inp, where, errors)
             default_array_encoding = inp.get("queryArrayEncoding")
             if (default_array_encoding is not None
                     and default_array_encoding not in QUERY_ARRAY_ENCODINGS):
