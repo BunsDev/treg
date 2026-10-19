@@ -46,6 +46,7 @@ def upgrade() -> None:
         sa.Column("creation_key", sa.String(), nullable=False),
         sa.Column("creation_fingerprint", sa.String(), nullable=False),
         sa.Column("schema_version", sa.Integer(), nullable=True),
+        sa.Column("database_generation", sa.Integer(), nullable=True),
         sa.Column("metadata_revision", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("status", sa.String(), nullable=False, server_default="creating"),
         sa.Column("column_metadata", sa.JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql"), nullable=False),
@@ -74,8 +75,10 @@ def upgrade() -> None:
             "sql_name COLLATE \"C\" ~ '^[a-z_][a-z0-9_]*$'", name="ck_tabledoc_sql_name_format",
         ).ddl_if(dialect="postgresql"),
         sa.CheckConstraint("schema_version IS NULL OR schema_version > 0", name="ck_tabledoc_schema_version"),
+        sa.CheckConstraint("database_generation IS NULL OR database_generation > 0", name="ck_tabledoc_generation"),
         sa.CheckConstraint("metadata_revision > 0", name="ck_tabledoc_metadata_revision"),
         sa.CheckConstraint("status != 'ready' OR schema_version IS NOT NULL", name="ck_tabledoc_ready_schema"),
+        sa.CheckConstraint("status != 'ready' OR database_generation IS NOT NULL", name="ck_tabledoc_ready_generation"),
     )
 
 

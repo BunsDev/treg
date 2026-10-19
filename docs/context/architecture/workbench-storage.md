@@ -36,7 +36,8 @@ it is not a table schema revision.
 metadata, and schema/metadata revisions. The composite foreign key requires its database mapping
 to belong to the same Org, including on updates. Names and creation keys are unique within an Org;
 physical SQL names are unique within a database. The table starts as `creating` with no confirmed
-schema version. `ready` requires a positive schema version. Metadata revisions also stay positive.
+schema version or validated database generation. `ready` requires both to be positive.
+Metadata revisions also stay positive.
 The application writer must compare request fingerprints before resuming a duplicate creation,
 verify the physical schema before publishing readiness, and update revisions and timestamps.
 These constraints do not implement provisioning, immutable creation operations, or recovery leases.
@@ -47,6 +48,14 @@ This makes their uniqueness agree with Turso's case-insensitive identifiers; DDL
 quote identifiers. SQLite uses a built-in GLOB check with a NUL guard, PostgreSQL a C-collated regular
 expression. Column metadata uses PostgreSQL JSONB and SQLite JSON; its application schema still
 needs writer validation.
+
+`TableDoc.database_generation` records the database generation in which the physical table was last
+verified. It has no default and stays null until verification; it must not automatically follow
+`TeamDatabase.database_generation` on restore. Future data access must require both records to be
+ready and their generations to match. Restored tables become eligible only after physical identity
+and schema verification updates their recorded generation. Missing or unresolved tables keep their
+old generation and remain ineligible. These schema fields do not implement an access guard yet;
+the provisioning, restore and data-access writers/readers must enforce that contract when added.
 
 `cascade_delete_org` removes TableDoc records before their TeamDatabase mapping through the common
 `ORG_SCOPED_MODELS` list. This cleans control-plane metadata only. Remote-resource cleanup must be

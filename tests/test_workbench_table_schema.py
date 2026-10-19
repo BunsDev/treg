@@ -207,7 +207,9 @@ async def test_database_requires_identity_generation_and_ready_connection(store_
 @pytest.mark.parametrize("invalid", [
     {"schema_version": 0}, {"schema_version": -1},
     {"metadata_revision": 0}, {"metadata_revision": -1},
+    {"database_generation": 0}, {"database_generation": -1},
     {"column_metadata": None}, {"status": "ready"},
+    {"status": "ready", "database_generation": 1},
 ])
 async def test_table_revisions_and_ready_schema_are_validated(store_connection, invalid):
     table = TableDoc.__table__
@@ -218,7 +220,17 @@ async def test_table_revisions_and_ready_schema_are_validated(store_connection, 
             await store_connection.execute(table.update().values(**invalid))
     row = (await store_connection.execute(sa.select(table))).mappings().one()
     assert row["status"] == "creating" and row["schema_version"] is None
+    assert row["database_generation"] is None
     assert row["metadata_revision"] == 1 and row["column_metadata"] == _table()["column_metadata"]
+
+
+async def test_ready_table_requires_a_validated_database_generation(store_connection):
+    await store_connection.execute(TeamDatabase.__table__.insert().values(**_database()))
+    with pytest.raises(sa.exc.IntegrityError):
+        async with store_connection.begin_nested():
+            await store_connection.execute(TableDoc.__table__.insert().values(
+                **_table(status="ready", schema_version=1),
+            ))
 
 
 async def test_database_and_table_can_be_promoted_from_pending_to_ready(store_connection):
@@ -227,11 +239,14 @@ async def test_database_and_table_can_be_promoted_from_pending_to_ready(store_co
     await connection.execute(database.insert().values(**_database()))
     await connection.execute(table.insert().values(**_table()))
     await connection.execute(database.update().values(status="ready", connection_ref="test-connection", database_generation=2))
-    await connection.execute(table.update().values(status="ready", schema_version=1, metadata_revision=2))
+    await connection.execute(table.update().values(
+        status="ready", schema_version=1, metadata_revision=2, database_generation=2,
+    ))
     database_row = (await connection.execute(sa.select(database))).mappings().one()
     table_row = (await connection.execute(sa.select(table))).mappings().one()
     assert database_row["status"] == "ready" and database_row["database_generation"] == 2
     assert table_row["status"] == "ready" and table_row["schema_version"] == 1
+    assert table_row["database_generation"] == 2
     assert table_row["metadata_revision"] == 2
     assert table_row["created_at"] == table_row["updated_at"] == NOW
     assert table_row["creation_fingerprint"] == "table-fingerprint"
@@ -250,6 +265,34 @@ async def test_database_defaults_apply_without_model_insert_defaults(store_conne
     assert database_row["connection_ref"] is None
     assert table_row["status"] == "creating" and table_row["metadata_revision"] == 1
     assert table_row["schema_version"] is None
+    assert table_row["database_generation"] is None
+    assert tables[TableDoc].c.database_generation.server_default is None
+
+
+async def test_restore_requires_revalidation_before_generation_matched_selection(store_connection):
+    connection = store_connection
+    database, table = (model.__table__ for model in MODELS)
+    await connection.execute(database.insert().values(**_database(
+        status="ready", connection_ref="test-connection", database_generation=1,
+    )))
+    for name in ("leads", "companies"):
+        await connection.execute(table.insert().values(**_table(
+            name=name, status="ready", schema_version=1, database_generation=1,
+        )))
+    eligible = sa.select(table.c.id).join(database, sa.and_(
+        table.c.team_database_id == database.c.id, table.c.org_id == database.c.org_id,
+    )).where(
+        table.c.status == "ready", database.c.status == "ready",
+        table.c.database_generation == database.c.database_generation,
+    ).order_by(table.c.id)
+    assert (await connection.execute(eligible)).scalars().all() == ["tbl_1_companies", "tbl_1_leads"]
+
+    await connection.execute(database.update().where(database.c.id == 1).values(database_generation=2))
+    assert (await connection.execute(sa.select(table.c.database_generation))).scalars().all() == [1, 1]
+    assert (await connection.execute(eligible)).scalars().all() == []
+
+    await connection.execute(table.update().where(table.c.id == "tbl_1_leads").values(database_generation=2))
+    assert (await connection.execute(eligible)).scalars().all() == ["tbl_1_leads"]
 
 
 async def test_team_deletion_removes_only_its_database_and_table_metadata(store_connection):

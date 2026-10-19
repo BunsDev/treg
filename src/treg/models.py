@@ -2382,8 +2382,10 @@ class TableDoc(SQLModel, table=True):
             "sql_name COLLATE \"C\" ~ '^[a-z_][a-z0-9_]*$'", name="ck_tabledoc_sql_name_format",
         ).ddl_if(dialect="postgresql"),
         CheckConstraint("schema_version IS NULL OR schema_version > 0", name="ck_tabledoc_schema_version"),
+        CheckConstraint("database_generation IS NULL OR database_generation > 0", name="ck_tabledoc_generation"),
         CheckConstraint("metadata_revision > 0", name="ck_tabledoc_metadata_revision"),
         CheckConstraint("status != 'ready' OR schema_version IS NOT NULL", name="ck_tabledoc_ready_schema"),
+        CheckConstraint("status != 'ready' OR database_generation IS NOT NULL", name="ck_tabledoc_ready_generation"),
     )
     id: str = Field(primary_key=True)
     org_id: int
@@ -2393,6 +2395,7 @@ class TableDoc(SQLModel, table=True):
     creation_key: str
     creation_fingerprint: str
     schema_version: int | None = Field(default=None)
+    database_generation: int | None = Field(default=None)
     metadata_revision: int = Field(default=1, sa_column=Column(Integer, nullable=False, server_default="1"))
     status: str = Field(default="creating", sa_column=Column(String, nullable=False, server_default="creating"))
     column_metadata: list = Field(default_factory=list, sa_column=Column(
