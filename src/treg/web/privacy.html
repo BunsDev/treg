@@ -29,7 +29,7 @@
   <div class="eyebrow">Legal</div>
   <h1>Treg Privacy Policy</h1>
   <div class="stamp">
-    <span>Last updated: 9 October 2026</span>
+    <span>Last updated: 19 October 2026</span>
     <span>Effective: 22 July 2026</span>
   </div>
 
@@ -168,6 +168,27 @@
       revoke treg's access directly at
       <a href="https://security.google.com/settings/security/permissions" target="_blank" rel="noopener">Google security settings</a>.
       Revoking there stops all further access immediately, whatever we hold.</li>
+  </ul>
+  <h3 id="sheets">Google Sheets add-on</h3>
+  <p>The <a href="/sheets">treg for Sheets</a> add-on runs treg tools on the rows of a spreadsheet you
+  have open in Google Sheets.</p>
+  <ul>
+    <li><b>Data it reads.</b> Only the spreadsheet you have open: the cells you pick as inputs, the
+      header row, and your selection.</li>
+    <li><b>Data it writes.</b> Answers into that spreadsheet, and saved answers in that spreadsheet's
+      own add-on storage.</li>
+    <li><b>Data sent to treg.</b> The tool id and the input cell values of each row you run, to run
+      that tool. treg keeps its normal call records for those calls (tool, cost, status).</li>
+    <li><b>Sign-in.</b> Your treg sign-in token is kept in your own Google add-on storage, never in
+      the sheet. Signing out in the add-on's panel revokes it.</li>
+    <li><b>What we never do.</b> No Google user data is sold, used for advertising, or used to train
+      AI models.</li>
+    <li><b>Limited Use.</b> treg for Sheets' use and transfer of information received from Google APIs
+      adheres to the
+      <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>,
+      including the Limited Use requirements.</li>
+    <li><b>How to stop.</b> Uninstall the add-on in Google Sheets, and sign out in its panel.</li>
+    <li><b>Contact.</b> <a href="mailto:unclecode@superdesign.dev">unclecode@superdesign.dev</a></li>
   </ul>
   <p>The same commitments apply to every other provider you connect (LinkedIn, Slack, X, or an API
   you register yourself).</p>
