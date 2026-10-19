@@ -119,8 +119,26 @@ def fails_expect(endpoint_id: str, body: bytes) -> str | None:
     return _expect_failure(endpoint_id, doc)
 
 
+def _declared_miss(endpoint_id: str, status: int, body: bytes) -> bool:
+    """The endpoint's own `miss: {status, when?}` block: the error status a provider answers when
+    it looked and found nothing (limadata 404, prospeo 400 NO_MATCH). The router reads the same
+    block through the same function, so a waterfall's miss and the recorded hit agree."""
+    from .routing.contracts import declared_miss
+    from .store import load
+
+    endpoint = load().by_id.get(endpoint_id)
+    try:
+        return endpoint is not None and declared_miss(endpoint, status, body)
+    except Exception:  # noqa: BLE001 - a predicate failure is no verdict
+        return False
+
+
 def classify(endpoint_id: str, status: int, body: bytes) -> Result:
     if not 200 <= status < 300:
+        # A declared miss is an answer ("nobody has it"), not a failure: without this every miss
+        # of a provider that errors its misses stayed undecided, and its hit rate read 100%.
+        if _declared_miss(endpoint_id, status, body):
+            return Result("empty", "declared_miss")
         return Result("error", "http_error")
     if not has_result_rules(endpoint_id):
         return Result("unknown", "unsupported_endpoint")

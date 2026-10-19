@@ -92,7 +92,8 @@ served**, because a second copy of the product's most-read page is a copy that r
 `scripts/build_plugin.py` renders every plugin copy from the one source and `--check` fails if any is
 stale (`tests/test_plugin.py`). It also writes real copies of the workflow skills (`src/treg/web/skills/*`) to
 `skills/<name>/SKILL.md`, because `npx skills add superdesigndev/treg` (skills.sh) reads `skills/` and
-skips symlinks; repo-tooling skills under `.agents/skills` and `.claude/skills` carry
+skips symlinks; repo-tooling skills under `.agents/skills` (`.claude/skills` is a symlink to it, so Claude Code
+sees the same set) carry
 `metadata.internal: true` so that command offers only what a user should install. The Codex plugin is the exception: it ships an MCP connector, and OpenAI's plugin review refuses a skill
 that downloads or runs code outside the package, so it carries a short connector-only skill (`CODEX_SKILL`)
 instead of the served page, with no CLI and no `install.sh`. The other variants differ **only** in their prepended bootstrap; the Claude plugin declares **no connector in its

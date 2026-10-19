@@ -6,6 +6,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+import yaml
+
 
 async def test_skill_md_served_and_templated(clients):
     r = await clients.get("/skill.md")
@@ -119,3 +122,19 @@ async def test_recruit_landing_page_installs_the_skill(clients):
     assert r.status_code == 200 and "{BASE}" not in r.text
     assert "npx skills add superdesigndev/treg --skill recruit" in r.text
     assert "/skills/recruit/SKILL.md" in r.text
+
+
+REPO = Path(__file__).resolve().parents[1]
+PUBLISHED_SKILLS = sorted(
+    p
+    for pattern in ("src/treg/web/skill.md", "src/treg/web/skills/*/SKILL.md", "skills/*/SKILL.md",
+                    "plugin*/**/SKILL.md", "dsh/skills/*/SKILL.md")
+    for p in REPO.glob(pattern)
+)
+
+
+@pytest.mark.parametrize("path", PUBLISHED_SKILLS, ids=lambda p: str(p.relative_to(REPO)))
+def test_published_skill_frontmatter_is_valid_yaml(path):
+    """skills.sh and Claude Code parse the frontmatter as YAML and silently skip a skill that fails."""
+    fm = yaml.safe_load(path.read_text().split("---\n", 2)[1])
+    assert isinstance(fm, dict) and isinstance(fm.get("name"), str) and isinstance(fm.get("description"), str)

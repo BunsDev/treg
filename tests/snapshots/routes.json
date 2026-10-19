@@ -933,6 +933,15 @@
       "GET",
       "HEAD"
     ],
+    "name": "sheets_page",
+    "path": "/sheets"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
     "name": "agent_setup_js",
     "path": "/agent-setup.js"
   },
@@ -2500,6 +2509,15 @@
     ],
     "name": "admin_calls",
     "path": "/admin/calls"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "admin_daily",
+    "path": "/admin/daily"
   },
   {
     "kind": "APIRoute",
