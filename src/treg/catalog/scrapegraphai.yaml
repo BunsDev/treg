@@ -6,14 +6,8 @@ source:
 pricing_url: https://scrapegraphai.com/pricing
 limits: "The shared account is configured for 500 requests/minute, one concurrent crawl and one monitor. Live responses returned no usable X-RateLimit-* or Retry-After headers, so treg enforces the supplied 500 requests/minute ceiling directly. Platform extraction and search accept HTML only, and platform Crawl is fixed to one Markdown page so every hold is bounded. Monitor tools require the team's own key because scheduled ticks spend credits outside a foreground treg call."
 proposed_capabilities:
-  web.monitor.create: "Create a scheduled web-page change monitor"
-  web.monitor.list: "List scheduled web-page monitors"
-  web.monitor.get: "Read one scheduled web-page monitor"
-  web.monitor.update: "Update a scheduled web-page monitor"
   web.monitor.pause: "Pause a scheduled web-page monitor"
   web.monitor.resume: "Resume a scheduled web-page monitor"
-  web.monitor.activity: "Read a scheduled monitor's tick activity"
-  web.monitor.delete: "Delete a scheduled web-page monitor"
 async:
   id_from: id
   poll:
