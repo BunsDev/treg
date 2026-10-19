@@ -208,6 +208,13 @@ async def test_result_and_admission_telemetry(clients, cache_on, monkeypatch):
     ('findymail.search.name', 200, {}, 'unknown'),
     ('findymail.search.name', 200, {'contact': {}}, 'unknown'),
     ('findymail.search.name', 200, {'contact': None}, 'empty'),
+    # An endpoint's declared `miss: {status, when?}` is an answer, not an error (the router agrees).
+    ('limadata.people.email.find.name', 404, {}, 'empty'),
+    ('limadata.people.email.find.name', 400, {'message': 'bad request'}, 'error'),
+    ('prospeo.people.email.find', 400, {'error': True, 'error_code': 'NO_MATCH'}, 'empty'),
+    ('prospeo.people.email.find', 400, {'error': True, 'error_code': 'INVALID_DATAPOINTS'}, 'error'),
+    ('prospeo.people.email.find', 500, {'error': True, 'error_code': 'NO_MATCH'}, 'error'),
+    ('hunter.companies.emails', 404, {}, 'error'),
 ])
 def test_conservative_result_rules(ep, status, body, state):
     from treg.domain.catalog.results import classify

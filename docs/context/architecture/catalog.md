@@ -1847,10 +1847,12 @@ Five rules worth keeping:
   same). Endpoints with evidenced miss behaviour carry a `miss: {status, means}` block in their
   YAML, surfaced through `endpoint_view` — so an agent reads "404 = no match, don't retry" instead
   of treating an expected empty answer as a failure. Only annotate what the wire has demonstrated.
-  **The router and the arena read the same block through one function**
+  **The router, the arena and the hit verdict read the same block through one function**
   (`routing.contracts.declared_miss`, wrapped by `route._declared_miss` and called by
-  `arena.classify`): a child answering the declared 4xx is a MISS — the waterfall goes on and a
-  fully-missed call ends as a 200 miss, never `route_failed`. Where one status carries both a
+  `arena.classify` and `results.classify`): a child answering the declared 4xx is a MISS — the
+  waterfall goes on and a fully-missed call ends as a 200 miss, never `route_failed` — and any
+  call answering it records `CallRecord.hit = False` (state `empty`, reason `declared_miss`).
+  Without that, a provider that errors its misses recorded only its hits and read 100%. Where one status carries both a
   miss and a fault, `when:` adds a body predicate in the adapter expression language, evaluated
   only on a JSON-object body (`catalog_validate.py` rejects a `when` that is not a comparison or
   call, since a misspelt path would evaluate False forever and silently revert the endpoint to
@@ -2265,7 +2267,8 @@ to choose (`docs/CAPABILITY-ROUTING-PLAN.md`). Everything else in the catalog st
   and charge; the existing async worker owns eventual settlement. Only declared terminal misses and
   failures may continue under the normal bounded fallback rules.
 - **Hit rate** — `CallRecord.hit` (nullable, alembic `0009`, last column) is the adapter's verdict
-  for a completed result. An accepted async submission leaves it NULL; the terminal finalizer
+  for a completed result: a 2xx the adapter judges, or the endpoint's declared `miss:` status
+  (False); any other error status stays NULL. An accepted async submission leaves it NULL; the terminal finalizer
   classifies the finished body and queues an audit update for the originating row, including a
   routed child. The poll response does not wait for that best-effort write. A
   confirmed terminal failure counts as a miss; pending and timed-out jobs remain undecided. Its
