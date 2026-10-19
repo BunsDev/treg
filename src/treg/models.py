@@ -12,7 +12,7 @@ from datetime import date, datetime, timezone
 from typing import Annotated
 
 from pydantic import NaiveDatetime
-from sqlalchemy import BigInteger, Boolean, JSON, CheckConstraint, Column, ForeignKeyConstraint, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import BigInteger, Boolean, JSON, CheckConstraint, Column, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -2338,7 +2338,6 @@ class ShowcaseVote(SQLModel, table=True):
 class TeamDatabase(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("org_id", name="uq_teamdatabase_org"),
-        UniqueConstraint("id", "org_id", name="uq_teamdatabase_id_org"),
         UniqueConstraint("turso_database_ref", name="uq_teamdatabase_turso_ref"),
         UniqueConstraint("connection_ref", name="uq_teamdatabase_connection_ref"),
         CheckConstraint("length(trim(turso_database_ref)) > 0", name="ck_teamdatabase_turso_ref"),
@@ -2349,7 +2348,7 @@ class TeamDatabase(SQLModel, table=True):
         ),
     )
     id: int | None = Field(default=None, primary_key=True)
-    org_id: int = Field(foreign_key="org.id")
+    org_id: int
     turso_database_ref: str
     connection_ref: str | None = Field(default=None)
     status: str = Field(default="provisioning", sa_column=Column(String, nullable=False, server_default="provisioning"))
@@ -2363,10 +2362,6 @@ class TableDoc(SQLModel, table=True):
         UniqueConstraint("org_id", "name", name="uq_tabledoc_org_name"),
         UniqueConstraint("org_id", "creation_key", name="uq_tabledoc_creation_request"),
         UniqueConstraint("team_database_id", "sql_name", name="uq_tabledoc_database_sql_name"),
-        ForeignKeyConstraint(
-            ["team_database_id", "org_id"], ["teamdatabase.id", "teamdatabase.org_id"],
-            name="fk_tabledoc_team_database_owner",
-        ),
         CheckConstraint(
             "length(trim(id)) > 0 AND length(trim(name)) > 0 AND length(trim(sql_name)) > 0 "
             "AND length(trim(creation_key)) > 0 AND length(trim(creation_fingerprint)) > 0",

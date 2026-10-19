@@ -84,10 +84,17 @@ async def test_empty_upgrade_matches_models_and_preserves_existing_teams(store_c
     assert (await connection.execute(sa.select(Org.id, Org.balance_micro).order_by(Org.id))).all() == [(1, 123), (2, 123)]
 
 
+async def test_management_tables_have_no_foreign_keys(store_connection):
+    foreign_keys = await store_connection.run_sync(lambda sync: {
+        model.__tablename__: sa.inspect(sync).get_foreign_keys(model.__tablename__) for model in MODELS
+    })
+    assert foreign_keys == {model.__tablename__: [] for model in MODELS}
+
+
 @pytest.mark.parametrize("overrides", [
-    {"org_id": 1}, {"turso_database_ref": "test-organization/team-1"}, {"org_id": 999},
+    {"org_id": 1}, {"turso_database_ref": "test-organization/team-1"},
 ])
-async def test_database_identity_and_ownership_are_unique(store_connection, overrides):
+async def test_database_identities_are_unique(store_connection, overrides):
     table = TeamDatabase.__table__
     await store_connection.execute(table.insert().values(**_database()))
     with pytest.raises(sa.exc.IntegrityError):
@@ -166,25 +173,6 @@ async def test_column_metadata_uses_the_database_json_type(store_connection):
     columns = await store_connection.run_sync(lambda sync: sa.inspect(sync).get_columns(TableDoc.__tablename__))
     column_type = next(column["type"] for column in columns if column["name"] == "column_metadata")
     assert isinstance(column_type, JSONB if store_connection.dialect.name == "postgresql" else sa.JSON)
-
-
-@pytest.mark.parametrize("update", [False, True])
-@pytest.mark.parametrize("owner", [{"org_id": 2}, {"team_database_id": 2}])
-async def test_table_cannot_reference_another_teams_database(store_connection, update, owner):
-    table = TableDoc.__table__
-    for org_id in (1, 2):
-        await store_connection.execute(TeamDatabase.__table__.insert().values(**_database(org_id)))
-    if update:
-        await store_connection.execute(table.insert().values(**_table()))
-        statement = table.update().where(table.c.id == _table()["id"]).values(**owner)
-    else:
-        statement = table.insert().values(**{**_table(), **owner})
-    with pytest.raises(sa.exc.IntegrityError):
-        async with store_connection.begin_nested():
-            await store_connection.execute(statement)
-    if not update:
-        await store_connection.execute(table.insert().values(**_table()))
-    assert (await store_connection.execute(sa.select(table.c.org_id, table.c.team_database_id))).one() == (1, 1)
 
 
 @pytest.mark.parametrize("invalid", [
@@ -320,3 +308,35 @@ async def test_downgrade_preserves_teams_and_allows_a_fresh_upgrade(store_connec
     await connection.run_sync(lambda sync: _apply(sync, "upgrade"))
     for model in MODELS:
         assert (await connection.execute(sa.select(sa.func.count()).select_from(model))).scalar_one() == 0
+
+
+async def test_postgres_upgrade_does_not_lock_org_while_balance_writer_is_open():
+    if db._engine.dialect.name != "postgresql":
+        pytest.skip("requires PostgreSQL relation locks")
+    await db.reset_db()
+    async with db._engine.begin() as connection:
+        for model in reversed(MODELS):
+            await connection.run_sync(model.__table__.drop)
+        await connection.execute(Org.__table__.insert().values(
+            id=1, name="Workbench migration lock test", slug="workbench-lock-test", balance_micro=123,
+        ))
+    try:
+        async with db._engine.connect() as writer:
+            transaction = await writer.begin()
+            try:
+                await writer.execute(sa.update(Org).where(Org.id == 1).values(balance_micro=124))
+                async with db._engine.begin() as connection:
+                    await connection.execute(sa.text("SET LOCAL lock_timeout = '1s'"))
+                    await connection.execute(sa.text("SET LOCAL statement_timeout = '5s'"))
+                    await connection.run_sync(lambda sync: _apply(sync, "upgrade"))
+                    assert (await connection.execute(sa.text(
+                        "SELECT count(*) FROM pg_locks "
+                        "WHERE pid = pg_backend_pid() AND relation = 'org'::regclass"
+                    ))).scalar_one() == 0
+                    for model in MODELS:
+                        assert await connection.run_sync(
+                            lambda sync: sa.inspect(sync).has_table(model.__tablename__))
+            finally:
+                await transaction.rollback()
+    finally:
+        await db.reset_db()

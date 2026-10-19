@@ -18,7 +18,7 @@ def upgrade() -> None:
     op.create_table(
         "teamdatabase",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("org_id", sa.Integer(), sa.ForeignKey("org.id"), nullable=False),
+        sa.Column("org_id", sa.Integer(), nullable=False),
         sa.Column("turso_database_ref", sa.String(), nullable=False),
         sa.Column("connection_ref", sa.String(), nullable=True),
         sa.Column("status", sa.String(), nullable=False, server_default="provisioning"),
@@ -26,7 +26,6 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.UniqueConstraint("org_id", name="uq_teamdatabase_org"),
-        sa.UniqueConstraint("id", "org_id", name="uq_teamdatabase_id_org"),
         sa.UniqueConstraint("turso_database_ref", name="uq_teamdatabase_turso_ref"),
         sa.UniqueConstraint("connection_ref", name="uq_teamdatabase_connection_ref"),
         sa.CheckConstraint("length(trim(turso_database_ref)) > 0", name="ck_teamdatabase_turso_ref"),
@@ -56,10 +55,6 @@ def upgrade() -> None:
         sa.UniqueConstraint("org_id", "name", name="uq_tabledoc_org_name"),
         sa.UniqueConstraint("org_id", "creation_key", name="uq_tabledoc_creation_request"),
         sa.UniqueConstraint("team_database_id", "sql_name", name="uq_tabledoc_database_sql_name"),
-        sa.ForeignKeyConstraint(
-            ["team_database_id", "org_id"], ["teamdatabase.id", "teamdatabase.org_id"],
-            name="fk_tabledoc_team_database_owner",
-        ),
         sa.CheckConstraint(
             "length(trim(id)) > 0 AND length(trim(name)) > 0 AND length(trim(sql_name)) > 0 "
             "AND length(trim(creation_key)) > 0 AND length(trim(creation_fingerprint)) > 0",

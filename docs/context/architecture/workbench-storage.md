@@ -32,9 +32,15 @@ nonempty reference; verifying the remote resource and its access remains the wri
 `database_generation` starts at one and must stay positive. It fences a replaced/restored database;
 it is not a table schema revision.
 
+`TeamDatabase.org_id` and `TableDoc`'s ownership references deliberately have no database foreign
+keys. Creating these tables must not acquire foreign-key locks on the existing Org table.
+Referential integrity belongs to the application: future management writers must verify that the
+Org exists and that a table's database mapping belongs to that Org, including on reassignment.
+Data access must resolve both records within the authenticated team's scope; an unchecked database
+ID is not authorization. This schema-only change does not implement those writers or access guards.
+
 `TableDoc` keeps a stable Table ID, display and SQL names, creation key and fingerprint, column
-metadata, and schema/metadata revisions. The composite foreign key requires its database mapping
-to belong to the same Org, including on updates. Names and creation keys are unique within an Org;
+metadata, and schema/metadata revisions. Names and creation keys are unique within an Org;
 physical SQL names are unique within a database. The table starts as `creating` with no confirmed
 schema version or validated database generation. `ready` requires both to be positive.
 Metadata revisions also stay positive.
@@ -58,7 +64,8 @@ old generation and remain ineligible. These schema fields do not implement an ac
 the provisioning, restore and data-access writers/readers must enforce that contract when added.
 
 `cascade_delete_org` removes TableDoc records before their TeamDatabase mapping through the common
-`ORG_SCOPED_MODELS` list. This cleans control-plane metadata only. Remote-resource cleanup must be
+`ORG_SCOPED_MODELS` list, without relying on database cascades. Direct deletes outside this path can
+leave orphaned metadata. This cleans control-plane metadata only. Remote-resource cleanup must be
 connected before provisioning is enabled. An application rollback retains these additive tables;
 an explicit schema downgrade drops their metadata and does not delete any remote resource.
 
@@ -125,8 +132,10 @@ padding. Invalid Base64 still fails as `invalid_response`.
 
 ## Verification boundary
 
-`test_workbench_table_schema.py` exercises constraints, pending/ready transitions, team deletion,
-and upgrade/downgrade behavior against both model-created and migrated schemas. PostgreSQL CI runs
+`test_workbench_table_schema.py` exercises constraints, the absence of foreign keys, pending/ready
+transitions, team deletion, and upgrade/downgrade behavior against both model-created and migrated
+schemas. A PostgreSQL regression holds an Org update open while upgrading the Workbench schema,
+so adding a foreign key that blocks the migration fails the test. PostgreSQL CI runs
 the same tests; the full Alembic drift check also compares the deployed schema with the models.
 
 `test_workbench_store.py` and `test_workbench_store_lifecycle.py` run the same storage contract against
