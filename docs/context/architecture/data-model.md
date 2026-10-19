@@ -93,6 +93,10 @@ related:
 
 # Data model
 
+Revision `0077` adds the empty `TeamDatabase` and `TableDoc` control-plane tables for
+[Workbench table storage](workbench-storage.md#management-metadata). It does not provision remote
+databases or business rows. Existing tables and data are unchanged by the migration.
+
 Migration `0043` adds `ProviderResource`, the durable organization-owned counterpart to the existing
 async ownership rows. It stores provider, resource kind, upstream id, display name, creator, source
 call, lifecycle state and timestamps. `(provider, resource_kind, upstream_id)` is globally unique so
