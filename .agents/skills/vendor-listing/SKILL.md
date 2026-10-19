@@ -19,7 +19,7 @@ A listing has **three parts**, and all three ship in the same PR:
    provider, and how treg verifies that credential is real.
 2. **Core catalog file** (`src/treg/catalog/<service>.yaml`) — what an agent can *do*: 8–15
    curated endpoints with capability mapping, inputs, cost + provenance, and verified examples.
-3. **Platform-key slot** (`config.py` + `render.yaml` + `fx.yaml`) — so treg can serve the
+3. **Platform-key slot** (`config.py` + `fx.yaml`) — so treg can serve the
    endpoints on its own key (tier 4). **Always aim for this.** A listing that is BYOK-only is the
    exception and needs a stated reason (no self-serve pricing, `own_account` data, sales-gated).
 
@@ -86,7 +86,6 @@ The tier-4 wiring is part of the listing, not a follow-up:
 
 - `src/treg/config.py`: `platform_key_<service>: str = ""` with a one-line comment (auth shape,
   what a top-up buys). Pairs (key+secret) use `platform_extra_setting`; see Tomba.
-- `render.yaml`: `- key: TREG_PLATFORM_KEY_<SERVICE>` + `sync: false` + a comment. **No value.**
 - `src/treg/catalog/fx.yaml` `credit_rates_usd`: the USD-per-credit treg actually pays, with
   `basis` naming the real top-up/receipt (not the pricing page's headline tier), `source`, `checked`.
 - A test asserting `cat.platform_eligible(ep)` for every endpoint in the file (see
@@ -95,8 +94,8 @@ The tier-4 wiring is part of the listing, not a follow-up:
 - If the platform key also needs a constant header, `_platform_bindings` must carry it — assert
   the tier-4 binding list equals BYOK's (see `test_crustdata_platform_key_keeps_the_required_version_header`).
 - Hand the **env value** to Jason out-of-band (a file, never the PR, never chat if avoidable) with
-  the `TREG_PLATFORM_PROVIDERS` allow-list entry. Setting it in Render is his ops decision; the PR
-  just makes it possible.
+  the `TREG_PLATFORM_PROVIDERS` allow-list entry. Enabling it in production is treg's ops decision;
+  the PR just makes it possible.
 
 Modal pricing (preview/rescrape/email riders, bulk-per-record) that one scalar can't express: keep
 the numbers in the YAML cost block (`note` today; a `modifiers` block if you add one) and read
@@ -274,11 +273,11 @@ under the real charge (#141, GitHub→LinkedIn: claimed 1 credit, metered 5). Th
 - Every find/enrich endpoint with a routing adapter has its miss shape observed and, when the
   miss is a 4xx, declared in `miss:`; the ledger row for the deliberate-miss probe shows the
   status, body and latency
-- Platform-key slot shipped: `config.py` setting, `render.yaml` key (no value), `fx.yaml` rate
-  from a real top-up, `platform_eligible` test for the whole file; env value handed to Jason
-  out-of-band with the `TREG_PLATFORM_PROVIDERS` entry. Enabling in Render is his call, not
-  automatic — but the PR must make it a one-line ops change.
+- Platform-key slot shipped: `config.py` setting, `fx.yaml` rate from a real top-up,
+  `platform_eligible` test for the whole file; env value handed to Jason out-of-band with the
+  `TREG_PLATFORM_PROVIDERS` entry. Enabling in production is treg's call, not automatic, but the
+  PR must make it a one-line ops change.
 - Any settle-below-reserve logic is backed by a multi-row balance delta, and no provider credit
   arithmetic is hardcoded in `api.py` that the YAML doesn't also state
-- Docs synced: run `bash .claude/skills/tools-registry-context/scripts/drift.sh`, update touched
+- Docs synced: run `bash .agents/skills/tools-registry-context/scripts/drift.sh`, update touched
   fragments in the same commit

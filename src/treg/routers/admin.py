@@ -337,6 +337,41 @@ _ERROR_EVIDENCE_TTL_DAYS = evidence_retention.ERROR_EVIDENCE_TTL_DAYS
 _ERROR_EVIDENCE_EXPIRED = evidence_retention.ERROR_EVIDENCE_EXPIRED
 
 
+@app.get("/admin/daily")
+async def admin_daily(
+    days: int = 7, provider: str = "", jobs: str = "web.extract,web.search,google.serp.organic",
+    _: str = Depends(require_superadmin), db: AsyncSession = Depends(get_admin_read_session),
+) -> dict:
+    """Day by day (UTC, newest first, at most 60 days): every provider call (routed attempts
+    included, routed parents not), one `provider`'s calls, and for each capability in `jobs` the
+    answered calls of every provider and of that `provider`. Read from `endpointdaystat`, so it
+    is cheap at any traffic; `/admin/share` is the exact per-answer view for the last hours."""
+    from ..domain.catalog import store as catalog_store
+    days = max(1, min(days, 60))
+    since = (_utcnow_naive() - timedelta(days=days - 1)).date().isoformat()
+    wanted = [j for j in (s.strip() for s in jobs.split(",")) if j]
+    rows = (await db.execute(
+        select(EndpointDayStat.day, EndpointDayStat.endpoint_id, func.sum(EndpointDayStat.n), func.sum(EndpointDayStat.ok))
+        .where(EndpointDayStat.day >= since, ~EndpointDayStat.endpoint_id.like("treg.%"))
+        .group_by(EndpointDayStat.day, EndpointDayStat.endpoint_id))).all()
+    by_id = catalog_store.load().by_id
+    out: dict[str, dict] = {}
+    for day, endpoint_id, n, n_ok in rows:
+        entry = by_id.get(endpoint_id) or {}
+        mine = (entry.get("provider") or endpoint_id.split(".", 1)[0]) == provider
+        d = out.setdefault(day, {"day": day, "calls": 0, "provider_calls": 0,
+                                 "jobs": {j: {"answered": 0, "provider_answered": 0} for j in wanted}})
+        d["calls"] += int(n or 0)
+        if mine:
+            d["provider_calls"] += int(n or 0)
+        job = d["jobs"].get(entry.get("capability") or "")
+        if job is not None:
+            job["answered"] += int(n_ok or 0)
+            if mine:
+                job["provider_answered"] += int(n_ok or 0)
+    return {"provider": provider, "days": sorted(out.values(), key=lambda d: d["day"], reverse=True)}
+
+
 @app.get("/admin/errors")
 async def admin_errors(
     days: int = 7, limit: int = 100, provider: str | None = None, status: int | None = None,

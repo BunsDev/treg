@@ -520,9 +520,8 @@ its page. `tests/test_agent_pages.py` asserts the route source contains no job-s
 
 **`voices`** is the section that cannot be regenerated: real questions from Reddit and X, quoted
 verbatim with a link, each followed by what the page can honestly do about it (including "no
-comparison table can answer this"). The `.agents/skills/treg-page` skill runs that research with
-`agent-reach` before any page is written, and documents how to spot the vendor astroturf that
-dominates these searches. It is not decoration: on the YouTube pass roughly half the corpus was
+comparison table can answer this"). That research runs with `agent-reach` before any page is
+written, and has to spot the vendor astroturf that dominates these searches. It is not decoration: on the YouTube pass roughly half the corpus was
 vendor-written, thirteen distinguishable clusters, one posting the same body to three subreddits
 seven seconds apart. `voices` renders in HTML and in the `.md` mirror, and is optional in the spec
 (two of the first seven pages ship without it), so `test_no_use_case_page_ships_with_an_empty_section`
