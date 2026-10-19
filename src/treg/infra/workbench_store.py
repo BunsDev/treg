@@ -107,30 +107,31 @@ def _statement_error(code: str) -> StoreError:
 
 
 class TursoStore:
-    def __init__(self, url: str, auth_token: str, *,
+    def __init__(self, url: str, auth_token: str, *, read_auth_token: str,
                  transport: httpx.AsyncBaseTransport | None = None,
                  transaction_timeout: float = 4.0):
         self._url = _http_url(url)
-        if not auth_token or not _COMMIT_WINDOW < transaction_timeout < 5:
+        if (not auth_token or not read_auth_token or read_auth_token == auth_token
+                or not _COMMIT_WINDOW < transaction_timeout < 5):
             raise StoreError("invalid_configuration")
         self._auth_token = auth_token
+        self._read_auth_token = read_auth_token
         self._transport = transport
         self._transaction_timeout = transaction_timeout
 
-    def _client(self) -> httpx.AsyncClient:
+    def _client(self, *, read_only: bool = False) -> httpx.AsyncClient:
         return httpx.AsyncClient(
-            headers={"Authorization": f"Bearer {self._auth_token}"},
+            headers={"Authorization": f"Bearer {self._read_auth_token if read_only else self._auth_token}"},
             transport=self._transport, follow_redirects=False, trust_env=False,
         )
 
     async def read(self, sql: str, params: Sequence[SqlValue] = ()) -> StoreResult:
-        async with self._client() as client:
+        async with self._client(read_only=True) as client:
             tx = _TursoTransaction(client, self._url, self._transaction_timeout)
             responses = await tx._request([
-                _statement("PRAGMA query_only = ON", ()),
                 _statement(sql, params), {"type": "close"},
             ], closing=True)
-            return _result(responses[1])
+            return _result(responses[0])
 
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[_TursoTransaction]:

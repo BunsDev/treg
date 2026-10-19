@@ -24,9 +24,15 @@ authorize teams, validate user table definitions or provision databases. Bind va
 positional parameters. Database credentials and these adapters belong on the Treg server, not
 inside user scripts. Do not hold a PostgreSQL connection while awaiting remote storage.
 
-`read` enables SQLite's query-only mode. `SQLiteStore.read` also opens the file with `mode=ro`,
-so reading a missing database fails without creating an empty file. Read and write connections
-use the configured SQLite busy timeout. A transaction owns its connection and commits only on
+`TursoStore` requires separate database-scoped credentials for reads and writes. Provision
+`read_auth_token` with Turso's `--read-only` permission; the service enforces the read boundary.
+The caller must supply tokens for the same database and rotate them before expiry. Reads never
+fall back to the write token. Do not rely on `PRAGMA query_only = ON` for remote reads: Turso Cloud
+can reject that statement, and a pipeline can still execute subsequent statements after an error.
+
+`SQLiteStore.read` enables query-only mode and opens the file with `mode=ro`, so reading a missing
+database fails without creating an empty file. Read and write connections use the configured
+SQLite busy timeout. A transaction owns its connection and commits only on
 successful context exit. Errors and cancellation before COMMIT cause rollback; catching a
 statement error inside the context does not make the transaction committable again. A failed
 rollback preserves the original error.
@@ -69,6 +75,6 @@ file-backed SQLite and an HTTP protocol fixture backed by real SQLite transactio
 atomic rollback, parameter
 binding, conditional writes, cancellation and lost COMMIT responses. These tests do not replace
 integration testing against a configured Turso Cloud database. Before business integration, verify
-`PRAGMA query_only = ON` on the selected cloud engine: a SELECT must succeed and a mutation through
-`read` must fail without changing data. If the pragma is unsupported, keep reads disabled until
-a verified read-only mechanism replaces it; do not silently remove the guard.
+the provisioned read-only token on the selected cloud engine: a SELECT must succeed and a mutation
+through `read` must fail without changing data. Also verify transaction rollback and explicit
+COMMIT errors. Test credentials must stay outside repository files and logs.

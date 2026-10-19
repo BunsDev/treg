@@ -14,7 +14,7 @@ from treg.infra.workbench_store import SQLiteStore, StoreError, TursoStore
 def make_store(kind, path, handler=None):
     if kind == "sqlite":
         return SQLiteStore(path)
-    return TursoStore("https://team.example", "private-token",
+    return TursoStore("https://team.example", "private-token", read_auth_token="readonly-token",
                       transport=httpx.MockTransport(handler or PipelineServer(path).handle))
 
 
@@ -31,7 +31,8 @@ def test_transaction_timeout_must_leave_commit_window(tmp_path, kind, timeout):
         if kind == "sqlite":
             SQLiteStore(tmp_path / "team.db", transaction_timeout=timeout)
         else:
-            TursoStore("https://team.example", "private-token", transaction_timeout=timeout)
+            TursoStore("https://team.example", "private-token", read_auth_token="readonly-token",
+                       transaction_timeout=timeout)
 
 
 @pytest.mark.parametrize("kind", ["sqlite", "http"])
@@ -214,7 +215,11 @@ async def test_read_cannot_disable_next_reads_write_protection(tmp_path, kind):
     path = tmp_path / "team.db"
     prepare_leads(path)
     store = make_store(kind, path)
-    await store.read("PRAGMA query_only = OFF")
+    if kind == "sqlite":
+        await store.read("PRAGMA query_only = OFF")
+    else:
+        with pytest.raises(StoreError):
+            await store.read("PRAGMA query_only = OFF")
     with pytest.raises(StoreError):
         await store.read("UPDATE leads SET revision = revision + 1 WHERE id = 1")
     assert (await store.read("SELECT revision FROM leads")).rows == [{"revision": 1}]
@@ -235,7 +240,8 @@ async def test_read_connection_uses_configured_busy_timeout(tmp_path):
 async def test_equivalent_server_origin_is_accepted(tmp_path, configured, returned):
     server = PipelineServer(tmp_path / "team.db")
     server.base_url = returned
-    store = TursoStore(configured, "private-token", transport=httpx.MockTransport(server.handle))
+    store = TursoStore(configured, "private-token", read_auth_token="readonly-token",
+                       transport=httpx.MockTransport(server.handle))
     try:
         async with store.transaction() as tx:
             await tx.execute("CREATE TABLE leads (id INTEGER PRIMARY KEY)")

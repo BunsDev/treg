@@ -14,6 +14,7 @@ class PipelineServer:
         self.path = path
         self.streams = {}
         self.calls = []
+        self.authorizations = []
         self.sequence = 0
         self.commit_fault = None
         self.base_url = None
@@ -21,11 +22,16 @@ class PipelineServer:
     def handle(self, request):
         body = json.loads(request.content)
         self.calls.append(body)
+        authorization = request.headers["Authorization"]
+        self.authorizations.append(authorization)
         assert request.url == "https://team.example/v2/pipeline"
-        assert request.headers["Authorization"] == "Bearer private-token"
+        if authorization not in {"Bearer private-token", "Bearer readonly-token"}:
+            return httpx.Response(401)
         baton = body["baton"]
         if baton is None:
-            connection = sqlite3.connect(self.path, isolation_level=None)
+            read_only = authorization == "Bearer readonly-token"
+            path = self.path.as_uri() + "?mode=ro" if read_only else self.path
+            connection = sqlite3.connect(path, uri=read_only, isolation_level=None)
         else:
             connection = self.streams.pop(baton)
         results = []
@@ -38,6 +44,9 @@ class PipelineServer:
                 results.append({"type": "ok", "response": {"type": "close"}})
                 continue
             statement = operation["stmt"]
+            if statement["sql"].strip().upper().startswith("PRAGMA QUERY_ONLY") and "=" in statement["sql"]:
+                results.append({"type": "error", "error": {"code": "SQL_PARSE_ERROR"}})
+                continue
             params = []
             for value in statement["args"]:
                 match value["type"]:
@@ -99,7 +108,7 @@ def store(request, tmp_path):
     if request.param == "sqlite":
         return SQLiteStore(path)
     server = PipelineServer(path)
-    return TursoStore("libsql://team.example", "private-token",
+    return TursoStore("libsql://team.example", "private-token", read_auth_token="readonly-token",
                       transport=httpx.MockTransport(server.handle))
 
 
@@ -190,7 +199,7 @@ async def test_expired_transaction_rolls_back_without_committing(store):
 async def test_commit_response_loss_is_unknown_and_never_retried(tmp_path, fault):
     path = tmp_path / "team.db"
     server = PipelineServer(path)
-    store = TursoStore("https://team.example", "private-token",
+    store = TursoStore("https://team.example", "private-token", read_auth_token="readonly-token",
                        transport=httpx.MockTransport(server.handle))
     async with store.transaction() as tx:
         await tx.execute("CREATE TABLE leads (id INTEGER PRIMARY KEY, revision INTEGER)")
@@ -222,7 +231,8 @@ async def test_suppressed_malformed_response_cannot_commit_partial_batch(tmp_pat
             return httpx.Response(200, json=payload)
         return response
 
-    store = TursoStore("https://team.example", "private-token", transport=httpx.MockTransport(respond))
+    store = TursoStore("https://team.example", "private-token", read_auth_token="readonly-token",
+                       transport=httpx.MockTransport(respond))
     async with store.transaction() as tx:
         await tx.execute("CREATE TABLE leads (id INTEGER PRIMARY KEY)")
     with pytest.raises(StoreError, match="transaction_failed"):
@@ -243,13 +253,13 @@ async def test_suppressed_malformed_response_cannot_commit_partial_batch(tmp_pat
 ])
 def test_rejects_unsafe_configured_url(url):
     with pytest.raises(StoreError, match="invalid_configuration"):
-        TursoStore(url, "private-token")
+        TursoStore(url, "private-token", read_auth_token="readonly-token")
 
 
 async def test_server_cannot_redirect_credentials(tmp_path):
     server = PipelineServer(tmp_path / "team.db")
     server.base_url = "https://other.example"
-    store = TursoStore("https://team.example", "private-token",
+    store = TursoStore("https://team.example", "private-token", read_auth_token="readonly-token",
                        transport=httpx.MockTransport(server.handle))
     with pytest.raises(StoreError, match="invalid_response"):
         async with store.transaction():
@@ -266,7 +276,59 @@ async def test_http_redirect_is_not_followed():
         calls.append(request)
         return httpx.Response(307, headers={"Location": "https://other.example/v2/pipeline"})
 
-    store = TursoStore("https://team.example", "private-token", transport=httpx.MockTransport(redirect))
+    store = TursoStore("https://team.example", "private-token", read_auth_token="readonly-token",
+                       transport=httpx.MockTransport(redirect))
     with pytest.raises(StoreError, match="unavailable"):
         await store.read("SELECT 1")
     assert len(calls) == 1
+
+
+async def test_turso_read_credentials_are_isolated_from_write_transactions(tmp_path):
+    server = PipelineServer(tmp_path / "team.db")
+    store = TursoStore("https://team.example", "private-token", read_auth_token="readonly-token",
+                       transport=httpx.MockTransport(server.handle))
+    async with store.transaction() as tx:
+        await tx.execute("CREATE TABLE leads (id INTEGER PRIMARY KEY, revision INTEGER)")
+        await tx.execute("INSERT INTO leads VALUES (1, 1)")
+    assert set(server.authorizations) == {"Bearer private-token"}
+    server.authorizations.clear()
+
+    assert (await store.read("SELECT revision FROM leads")).rows == [{"revision": 1}]
+    with pytest.raises(StoreError):
+        await store.read("UPDATE leads SET revision = 2 WHERE id = 1")
+    assert (await store.read("SELECT revision FROM leads")).rows == [{"revision": 1}]
+    assert server.authorizations == ["Bearer readonly-token"] * 3
+    server.authorizations.clear()
+
+    async with store.transaction() as tx:
+        await tx.execute("UPDATE leads SET revision = 2 WHERE id = 1")
+    assert set(server.authorizations) == {"Bearer private-token"}
+    assert (await store.read("SELECT revision FROM leads")).rows == [{"revision": 2}]
+
+
+async def test_rejected_read_token_never_falls_back_to_write_token(tmp_path):
+    server = PipelineServer(tmp_path / "team.db")
+    store = TursoStore("https://team.example", "private-token", read_auth_token="revoked-token",
+                       transport=httpx.MockTransport(server.handle))
+    with pytest.raises(StoreError, match="^unavailable$"):
+        await store.read("SELECT 1")
+    assert server.authorizations == ["Bearer revoked-token"]
+    assert not server.path.exists()
+
+
+@pytest.mark.parametrize("auth_token, read_auth_token", [
+    ("private-token", ""), ("private-token", "private-token"), ("", "readonly-token"),
+])
+def test_turso_requires_distinct_nonempty_credentials(tmp_path, auth_token, read_auth_token):
+    server = PipelineServer(tmp_path / "team.db")
+    with pytest.raises(StoreError, match="^invalid_configuration$"):
+        TursoStore("https://team.example", auth_token, read_auth_token=read_auth_token,
+                   transport=httpx.MockTransport(server.handle))
+    assert server.calls == []
+
+
+def test_turso_requires_explicit_read_token(tmp_path):
+    server = PipelineServer(tmp_path / "team.db")
+    with pytest.raises(TypeError, match="read_auth_token"):
+        TursoStore("https://team.example", "private-token", transport=httpx.MockTransport(server.handle))
+    assert server.calls == []
