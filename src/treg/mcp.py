@@ -61,6 +61,7 @@ from .application import catalog_find as find_app
 from .application import catalog_search as search_app
 from .application import search_experiment
 from .domain.catalog import store as catalog_store
+from .capacity_notice import account_out_notice, is_balance_refusal
 from .config import get_settings
 from .feedback_contract import FeedbackCategory, FEEDBACK_DESCRIPTION, ReviewUsefulness, REVIEW_DESCRIPTION
 from .domain.catalog.stats import EndpointObservationReader
@@ -1583,7 +1584,17 @@ async def _call_impl(endpoint_id: str, params: dict | list | None = None,
         out["suggestion"] = (f"{routed} does this job: treg picks the provider, falls back when one "
                              "fails or misses, and charges only the answer. Prefer it next time unless "
                              "you need options only this provider has.")
-    if r.status_code == 402:
+    if r.status_code >= 400:
+        # Whose fault it was matters to an agent deciding whether to retry elsewhere.
+        out["whose_error"] = "treg" if r.headers.get("X-Treg-Error") else "provider"
+    if notice := account_out_notice(r.headers):
+        # treg's own account for this tool is out: not the caller's balance, not theirs to fix. The
+        # provider's words would name its wallet and top-up page, so they are left out; the call id
+        # stays for support.
+        out.pop("body", None)
+        out["whose_error"] = "treg"
+        out["hint"] = notice
+    elif r.status_code == 402:
         # States the fact and stops. No link, and `topup_url` is stripped from the relayed body, so
         # nothing on this path points a user at a payment page.
         #
@@ -1596,11 +1607,8 @@ async def _call_impl(endpoint_id: str, params: dict | list | None = None,
         # Scoped to the MCP path deliberately. `/call/`'s 402 still carries `topup_url` for the CLI
         # and the dashboard, where no such policy applies and the shortcut is genuinely useful.
         out["body"] = _without_purchase_pointers(out.get("body"))
-        if not out.get("replayed"):
+        if is_balance_refusal(r.headers, out.get("body")):
             out["hint"] = "the team's prepaid balance is not enough for this call"
-    elif r.status_code >= 400:
-        # Whose fault it was matters to an agent deciding whether to retry elsewhere.
-        out["whose_error"] = "treg" if r.headers.get("X-Treg-Error") else "provider"
     return out
 
 

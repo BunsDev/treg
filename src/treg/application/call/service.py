@@ -17,6 +17,7 @@ from ...application import hub as hub_app
 from ...application.hub import runner as hub_runner
 from ...application.hub import limits as hub_limits
 from ... import sandbox as demo_sandbox
+from ...capacity_notice import CAPACITY_HEADER, EXHAUSTED
 from ...client_identity import _norm_client
 from ...config import get_settings
 from ...domain.catalog import results as catalog_results
@@ -1781,6 +1782,10 @@ async def _execute_call(request: _ApplicationRequest, upstream_client: httpx.Asy
             # DataForSEO task status other than 20000). The body is relayed untouched and the
             # charge is what the provider reported; this header is how the caller learns it.
             _set_response_header(response, "X-Treg-Upstream-Failed", upstream_failed)
+        if not served_via and capacity_signal in capacity_signatures.EXHAUSTING_KINDS:
+            # treg's own account is out. The body stays the provider's; this header lets every
+            # surface tell the caller it is not their balance and not theirs to fix.
+            _set_response_header(response, CAPACITY_HEADER, EXHAUSTED)
         if smoothed:
             _set_response_header(response, "X-Treg-Smoothed", " ".join(smoothed))
         return response

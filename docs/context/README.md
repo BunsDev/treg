@@ -68,7 +68,7 @@ covers (frontmatter `sources:`). Regenerate this index with
 
 | Fragment | Status | Covers |
 |---|---|---|
-| [Provider capacity — knowing what treg's own vendor accounts have left](ops/capacity.md) | shipped | __init__.py, collectors.py, policy.py, sweep.py, … |
+| [Provider capacity — knowing what treg's own vendor accounts have left](ops/capacity.md) | shipped | __init__.py, capacity_notice.py, test_capacity_notice.py, collectors.py, … |
 | [Running & deploying the server](ops/deploy.md) | shipped | pyproject.toml, hatch_build.py, build-dashboard.sh, build-web.sh, … |
 
 ## Reference

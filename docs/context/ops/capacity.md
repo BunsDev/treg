@@ -3,6 +3,8 @@ title: Provider capacity — knowing what treg's own vendor accounts have left
 status: shipped
 sources:
   - src/treg/domain/capacity/__init__.py
+  - src/treg/capacity_notice.py
+  - tests/test_capacity_notice.py
   - src/treg/domain/capacity/collectors.py
   - src/treg/domain/capacity/policy.py
   - src/treg/domain/capacity/sweep.py
@@ -558,6 +560,10 @@ The call path reads the view and runs the breaker (`marks.py`); the mechanics an
 `interface/api.md`. In one line: locked provider or endpoint → 503 before any hold, with
 alternatives named, one probe a minute excepted; two balance/quota signatures in a row on treg's
 key → lock; the probe's 2xx → open, whether the lock or the sweep's reading refused it. Burst 429s are smoothed (D′). Tiers 1/2 untouched.
+
+A signature the call could not avoid (the strike itself, a probe through a lock, a free route) is
+relayed as the provider answered, with `X-Treg-Capacity: exhausted` so the caller is told it is
+treg's account, not its balance (`interface/api.md`).
 
 The breaker is deliberately slow to open and quick to close: a false lock costs every caller a
 503 (or, with an overflow route, the aggregator's price) for as long as it lasts, while a missed

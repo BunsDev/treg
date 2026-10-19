@@ -214,7 +214,10 @@ def _quota_reset(provider: str, kind: str, headers, now: datetime) -> datetime |
     return None  # billing-period quotas: the sweep's account call carries the real reset date
 
 
+EXHAUSTING_KINDS = ("balance", "quota")
+
+
 def is_exhausting(signal: Signal | None) -> bool:
     """Does this signal mark the account exhausted? Only confirmed balance/quota signatures do;
     burst, unknown, edge_block and unrecorded never refuse a call (plan §4.1)."""
-    return signal is not None and signal.kind in ("balance", "quota")
+    return signal is not None and signal.kind in EXHAUSTING_KINDS
