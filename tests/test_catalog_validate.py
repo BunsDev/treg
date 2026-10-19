@@ -682,6 +682,20 @@ def test_team_label_names_declared_text_fields(rule, valid):
     assert (not errors) is valid
 
 
+@pytest.mark.parametrize('rule,valid', [
+    (['body.notify.email'], True),
+    (['body.notify'], False),            # an object, not an address
+    (['pathParams.label'], False),
+    (['body.nope'], False),
+    ([], False),
+])
+def test_caller_email_names_declared_text_fields(rule, valid):
+    errors = []
+    validator.check_caller_email(rule, {**_LABEL_INPUT, 'body': {**_LABEL_INPUT['body'], 'notify': {
+        'type': 'object', 'properties': {'email': {'type': 'string'}}}}}, 'test', errors)
+    assert (not errors) is valid
+
+
 _QTY = {'type': 'per_success', 'value': 1, 'currency': 'credit', 'per': 1, 'unit': 'credit',
         'quantity': {'field': 'body.credits', 'max': 100000}, 'settle': 'quantity'}
 

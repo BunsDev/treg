@@ -745,6 +745,9 @@ def _normalize(raw: dict, provider: str, directory: Path) -> dict:
         # Request fields that must carry the calling team's own label on treg's shared key, so
         # objects a provider keeps per label (monitors, schedules, feeds) stay one team's.
         "team_label": raw.get("team_label") or None,
+        # Request fields that, when sent, may only name the caller's own verified email on treg's
+        # shared key (an alert address), so a shared account never mails a stranger.
+        "caller_email": raw.get("caller_email") or None,
         # How treg serves the catalog fallback after the team's own tool/credential ladder misses.
         # Absent means the provider credential is required. `anonymous` means the verified public
         # upstream route is called with no injected credential; catalog validation limits that

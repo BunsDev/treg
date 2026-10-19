@@ -530,8 +530,9 @@ def _request_value(path: str, body: bytes, headers, query) -> list[str]:
         return _request_header_values(headers, name.lower())
     if where in ("queryParams", "pathParams"):
         return [str(v) for k, v in query.multi_items() if k == name] if query is not None else []
-    document = _json_object(body) if body else {}
-    value = document.get(name) if isinstance(document, dict) else None
+    value: object = _json_object(body) if body else {}
+    for part in name.split("."):  # body paths may be nested: `notify.email`
+        value = value.get(part) if isinstance(value, dict) else None
     return [] if value is None else [value if isinstance(value, str) else json.dumps(value)]
 
 
@@ -548,6 +549,24 @@ def _enforce_team_label(ep: dict, org_id: int, body: bytes, headers=None, query=
                     "parameter": path, "expected": expected,
                     "message": f"{ep['id']} on treg's key requires {path} = {expected}, "
                                "your team's label: send it exactly",
+                },
+            )
+
+
+def _enforce_caller_email(ep: dict, email: str, body: bytes, headers=None, query=None) -> None:
+    """On treg's shared key, a `caller_email` field the caller sends may only be its own verified
+    email, so a shared provider account never sends mail to someone else. Absent is fine; the
+    caller sends it, so the relay stays faithful."""
+    own = (email or "").strip().lower()
+    for path in ep.get("caller_email") or ():
+        values = _request_value(path, body, headers, query)
+        if values and [str(v).strip().lower() for v in values] != [own]:
+            raise ResolutionFailed(
+                "catalog_parameter_invalid", status_code=400, detail={
+                    "error": "catalog_parameter_invalid", "endpoint_id": ep["id"],
+                    "parameter": path, "expected": email,
+                    "message": f"{ep['id']} on treg's key sends {path} only to your own email, "
+                               f"{email}; leave it out to get no email",
                 },
             )
 
@@ -2334,6 +2353,7 @@ async def _resolve_marketplace_call(
     if cost is not None:
         _enforce_platform_request(ep, body, request_headers, query)
         _enforce_team_label(ep, caller.org_id, body, request_headers, query)
+        _enforce_caller_email(ep, caller.email, body, request_headers, query)
         _enforce_request_quantity(ep, cost, body, query)
         if service == "sumble":
             from . import sumble
