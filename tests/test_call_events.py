@@ -92,6 +92,15 @@ async def test_a_failing_builder_still_sends_the_generic_columns(events_on):
     assert sink.counters["build_failed"] == 1
 
 
+async def test_a_serialized_batch_carries_no_nulls(events_on):
+    # A null in a `json` column is stored as the string 'null'; an omitted one reads as NULL.
+    sink.emit({"call_ref": "x", "hit": None, "answer_values": None},
+              lambda: {"input_meta": None, "verdict": "valid"})
+    batch = sink._next_batch()
+    assert [json.loads(line) for line in batch] == [{"call_ref": "x", "verdict": "valid"}]
+    assert all(b"null" not in line for line in batch)
+
+
 async def test_a_failed_post_drops_the_batch_and_never_raises(monkeypatch):
     monkeypatch.setenv("TREG_CALL_EVENTS_URL", "https://stream.example.invalid")
     monkeypatch.setenv("TREG_CALL_EVENTS_HMAC_SECRET", SECRET)
@@ -209,10 +218,11 @@ async def test_find_then_verify_join_on_the_email_hash(clients: AsyncClient, enr
 
     by_ref = {e["call_ref"]: e for e in events}
     parent, child = by_ref[parent_ref], by_ref[f"{parent_ref}:r0"]
-    assert set(parent) == set(ev.COLUMNS)
+    assert set(parent) <= set(ev.COLUMNS) and None not in parent.values()
+    assert {"schema_version", "event_id", "event_time", "event_kind"} <= set(parent)
     assert parent["endpoint_id"] == ROUTED and parent["credential_tier"] == "routed"
     assert parent["served_by"] == "tomba.people.email.find" and parent["tried_count"] == 1
-    assert parent["hit"] is True and parent["step"] is None
+    assert parent["hit"] is True and parent.get("step") is None
     assert child["parent_ref"] == parent_ref and child["step"] == "r0"
     assert child["waterfall_position"] == 0 and child["hit"] is True
     assert child["verdict"] == "unverified" and child["capability"] == "people.email.find"
@@ -233,7 +243,7 @@ async def test_find_then_verify_join_on_the_email_hash(clients: AsyncClient, enr
     assert verify["input_type"] == "email"
     assert verify["input_meta"] == {"domain_class": "company", "tld": "example"}
     assert verify["answer_values"] == {"valid": "false", "status": "accept_all", "score": "50"}
-    assert verify["verdict"] == "catch_all" and verify["answer_keys"] is None
+    assert verify["verdict"] == "catch_all" and verify.get("answer_keys") is None
 
 
 async def test_an_opted_out_team_sends_no_answer(clients: AsyncClient, enrichment_on, events_on,
@@ -249,7 +259,7 @@ async def test_an_opted_out_team_sends_no_answer(clients: AsyncClient, enrichmen
     assert len(events) == 2
     for e in events:
         assert e["input_id"] and e["hit"] is True
-        assert e["answer_keys"] is None and e["answer_values"] is None and e["answer_flags"] is None
+        assert not {"answer_keys", "answer_values", "answer_flags"} & set(e)
 
 
 async def test_a_refused_catalog_call_is_one_event(clients: AsyncClient, events_on):
@@ -257,7 +267,7 @@ async def test_a_refused_catalog_call_is_one_event(clients: AsyncClient, events_
     assert r.status_code >= 400
     [e] = await _flushed(events_on)
     assert e["endpoint_id"] == "tomba.people.email.verify" and e["refused_by"]
-    assert e["status_code"] == r.status_code and e["input_id"] is None
+    assert e["status_code"] == r.status_code and e.get("input_id") is None
 
 
 # ---- asynchronous endpoints --------------------------------------------------------------------------
@@ -273,14 +283,14 @@ async def test_a_polled_answer_is_one_terminal_event_on_the_submission_ref(
     mine = [e for e in events if e["call_ref"] == call_ref]
     assert [e["event_kind"] for e in mine] == ["async_submit", "async_terminal"]
     submit, terminal = mine
-    assert submit["hit"] is None and submit["answer_values"] is None
+    assert submit.get("hit") is None and submit.get("answer_values") is None
     assert submit["input_keys"] == {"email": ev.keyed(EMAIL.lower())}
     assert terminal["hit"] is True and terminal["verdict"] == "valid"
     assert terminal["async_outcome"] == "success" and terminal["endpoint_id"] == VERIFY
     assert terminal["answer_values"]["status"] == "deliverable"
     [task] = await _tasks()
     assert terminal["cost_charged_micro"] == task.settled_micro > 0
-    assert submit["cost_charged_micro"] is None   # the submission's charge is not settled yet
+    assert submit.get("cost_charged_micro") is None   # the submission's charge is not settled yet
     # The polls are calls of their own, never a second terminal event.
     assert sum(e["event_kind"] == "async_terminal" for e in events) == 1
     _no_pii(events, EMAIL)
@@ -314,8 +324,8 @@ async def test_the_worker_emits_the_terminal_event_of_a_routed_child(
     assert terminal["parent_ref"] == parent_ref and terminal["hit"] is True
     assert terminal["answer_values"]["status"] == "deliverable"
     [parent] = [e for e in events if e["call_ref"] == parent_ref]
-    assert parent["status_code"] == 202 and parent["hit"] is None
-    assert parent["served_by"] == VERIFY and parent["cost_charged_micro"] is None
+    assert parent["status_code"] == 202 and parent.get("hit") is None
+    assert parent["served_by"] == VERIFY and parent.get("cost_charged_micro") is None
     submit = next(e for e in events if e["call_ref"] == task.call_id and e["event_kind"] == "async_submit")
     assert submit["input_id"] == parent["input_id"]
 
@@ -331,7 +341,7 @@ async def test_a_routed_identity_counts_against_the_body_budget(
     assert sink.counters["unbuilt"] >= 1
     events = await _flushed(events_on)
     [parent] = [e for e in events if e["call_ref"] == r.headers["x-treg-call-id"]]
-    assert "input_id" not in parent or parent["input_id"] is None   # generic columns only
+    assert "input_id" not in parent   # generic columns only
     assert parent["served_by"] == "tomba.people.email.find"
 
 
@@ -377,4 +387,4 @@ async def test_an_unreadable_opt_out_never_stops_a_release(
     events = await _flushed(events_on)
     [terminal] = [e for e in events if e["event_kind"] == "async_terminal"]
     assert terminal["call_ref"] == call_ref and terminal["async_outcome"] == "timed_out"
-    assert terminal["cost_charged_micro"] == 0 and terminal["answer_values"] is None
+    assert terminal["cost_charged_micro"] == 0 and terminal.get("answer_values") is None
