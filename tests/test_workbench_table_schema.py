@@ -6,6 +6,7 @@ import sqlalchemy as sa
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import SQLModel
 
@@ -107,6 +108,64 @@ async def test_table_identities_are_unique_within_their_team(store_connection, d
             await store_connection.execute(TableDoc.__table__.insert().values(**candidate))
     await store_connection.execute(TableDoc.__table__.insert().values(**_table(name="other")))
     assert (await store_connection.execute(sa.select(sa.func.count()).select_from(TableDoc))).scalar_one() == 3
+
+
+@pytest.mark.parametrize("sql_name", [
+    "", " ", "\t", "Leads", "lead-list", "lead.list", "lead\n", "\nlead", "naïve",
+    "\x00", "lead\x00list", "1lead", "sqlite_leads", "sqlite_",
+])
+async def test_table_sql_name_rejects_noncanonical_or_reserved_names(store_connection, sql_name):
+    connection = store_connection
+    await connection.execute(TeamDatabase.__table__.insert().values(**_database()))
+    expected = sa.exc.IntegrityError
+    if "\x00" in sql_name and connection.dialect.name == "postgresql":
+        expected = sa.exc.DBAPIError
+    with pytest.raises(expected):
+        async with connection.begin_nested():
+            await connection.execute(TableDoc.__table__.insert().values(**_table(sql_name=sql_name)))
+    assert (await connection.execute(sa.select(sa.func.count()).select_from(TableDoc))).scalar_one() == 0
+
+
+@pytest.mark.parametrize("sql_name", ["a", "_", "_0", "a0_", "lead_2", "sqlite", "sqlitex"])
+async def test_table_sql_name_accepts_canonical_identifiers(store_connection, sql_name):
+    await store_connection.execute(TeamDatabase.__table__.insert().values(**_database()))
+    await store_connection.execute(TableDoc.__table__.insert().values(**_table(sql_name=sql_name)))
+    assert (await store_connection.execute(sa.select(TableDoc.sql_name))).scalar_one() == sql_name
+
+
+async def test_database_connection_reference_is_unique_when_present(store_connection):
+    connection = store_connection
+    table = TeamDatabase.__table__
+    for org_id in (1, 2):
+        await connection.execute(table.insert().values(**_database(org_id)))
+    assert (await connection.execute(sa.select(table.c.connection_ref))).scalars().all() == [None, None]
+    await connection.execute(table.update().where(table.c.id == 1).values(connection_ref="test-connection"))
+    with pytest.raises(sa.exc.IntegrityError):
+        async with connection.begin_nested():
+            await connection.execute(table.update().where(table.c.id == 2).values(connection_ref="test-connection"))
+    await connection.execute(table.update().where(table.c.id == 2).values(connection_ref="another-connection"))
+    assert (await connection.execute(sa.select(table.c.connection_ref).order_by(table.c.id))).scalars().all() == [
+        "test-connection", "another-connection",
+    ]
+
+
+@pytest.mark.parametrize("field", ["id", "name", "sql_name", "creation_key", "creation_fingerprint"])
+@pytest.mark.parametrize("blank", ["", " "])
+async def test_table_identity_fields_cannot_be_blank(store_connection, field, blank):
+    table = TableDoc.__table__
+    await store_connection.execute(TeamDatabase.__table__.insert().values(**_database()))
+    await store_connection.execute(table.insert().values(**_table()))
+    with pytest.raises(sa.exc.IntegrityError):
+        async with store_connection.begin_nested():
+            await store_connection.execute(table.update().values(**{field: blank}))
+    row = (await store_connection.execute(sa.select(table))).mappings().one()
+    assert row[field] == _table()[field]
+
+
+async def test_column_metadata_uses_the_database_json_type(store_connection):
+    columns = await store_connection.run_sync(lambda sync: sa.inspect(sync).get_columns(TableDoc.__tablename__))
+    column_type = next(column["type"] for column in columns if column["name"] == "column_metadata")
+    assert isinstance(column_type, JSONB if store_connection.dialect.name == "postgresql" else sa.JSON)
 
 
 @pytest.mark.parametrize("update", [False, True])

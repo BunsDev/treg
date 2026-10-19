@@ -25,6 +25,8 @@ and no table API or runtime is enabled. Business rows belong in team storage, no
 the fixed target including its provider organization, not just a display name or a bare database
 name shared by several accounts. `connection_ref` is an opaque reference to trusted connection
 configuration, including separate read-only and read-write credentials; never store tokens here.
+Non-null connection references are unique across teams. The resolver must still verify the target
+and credential scope: different references could otherwise point to the same remote database.
 The mapping starts as `provisioning` with a nullable connection reference. `ready` requires a
 nonempty reference; verifying the remote resource and its access remains the writer's responsibility.
 `database_generation` starts at one and must stay positive. It fences a replaced/restored database;
@@ -38,6 +40,13 @@ schema version. `ready` requires a positive schema version. Metadata revisions a
 The application writer must compare request fingerprints before resuming a duplicate creation,
 verify the physical schema before publishing readiness, and update revisions and timestamps.
 These constraints do not implement provisioning, immutable creation operations, or recovery leases.
+
+Table IDs, names and creation identities cannot be empty or space-only. Physical names must match
+the lowercase ASCII form `[a-z_][a-z0-9_]*` and cannot start with SQLite's reserved `sqlite_` prefix.
+This makes their uniqueness agree with Turso's case-insensitive identifiers; DDL writers must still
+quote identifiers. SQLite uses a built-in GLOB check with a NUL guard, PostgreSQL a C-collated regular
+expression. Column metadata uses PostgreSQL JSONB and SQLite JSON; its application schema still
+needs writer validation.
 
 `cascade_delete_org` removes TableDoc records before their TeamDatabase mapping through the common
 `ORG_SCOPED_MODELS` list. This cleans control-plane metadata only. Remote-resource cleanup must be

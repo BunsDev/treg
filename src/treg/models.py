@@ -2340,6 +2340,7 @@ class TeamDatabase(SQLModel, table=True):
         UniqueConstraint("org_id", name="uq_teamdatabase_org"),
         UniqueConstraint("id", "org_id", name="uq_teamdatabase_id_org"),
         UniqueConstraint("turso_database_ref", name="uq_teamdatabase_turso_ref"),
+        UniqueConstraint("connection_ref", name="uq_teamdatabase_connection_ref"),
         CheckConstraint("length(trim(turso_database_ref)) > 0", name="ck_teamdatabase_turso_ref"),
         CheckConstraint("database_generation > 0", name="ck_teamdatabase_generation"),
         CheckConstraint(
@@ -2366,6 +2367,20 @@ class TableDoc(SQLModel, table=True):
             ["team_database_id", "org_id"], ["teamdatabase.id", "teamdatabase.org_id"],
             name="fk_tabledoc_team_database_owner",
         ),
+        CheckConstraint(
+            "length(trim(id)) > 0 AND length(trim(name)) > 0 AND length(trim(sql_name)) > 0 "
+            "AND length(trim(creation_key)) > 0 AND length(trim(creation_fingerprint)) > 0",
+            name="ck_tabledoc_identity",
+        ),
+        CheckConstraint("substr(sql_name, 1, 7) != 'sqlite_'", name="ck_tabledoc_sql_name_reserved"),
+        CheckConstraint(
+            "sql_name GLOB '[a-z_]*' AND sql_name NOT GLOB '*[^a-z0-9_]*' "
+            "AND length(CAST(sql_name AS BLOB)) = length(sql_name)",
+            name="ck_tabledoc_sql_name_format",
+        ).ddl_if(dialect="sqlite"),
+        CheckConstraint(
+            "sql_name COLLATE \"C\" ~ '^[a-z_][a-z0-9_]*$'", name="ck_tabledoc_sql_name_format",
+        ).ddl_if(dialect="postgresql"),
         CheckConstraint("schema_version IS NULL OR schema_version > 0", name="ck_tabledoc_schema_version"),
         CheckConstraint("metadata_revision > 0", name="ck_tabledoc_metadata_revision"),
         CheckConstraint("status != 'ready' OR schema_version IS NOT NULL", name="ck_tabledoc_ready_schema"),
@@ -2380,7 +2395,9 @@ class TableDoc(SQLModel, table=True):
     schema_version: int | None = Field(default=None)
     metadata_revision: int = Field(default=1, sa_column=Column(Integer, nullable=False, server_default="1"))
     status: str = Field(default="creating", sa_column=Column(String, nullable=False, server_default="creating"))
-    column_metadata: list = Field(default_factory=list, sa_column=Column(JSON(none_as_null=True), nullable=False))
+    column_metadata: list = Field(default_factory=list, sa_column=Column(
+        JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql"), nullable=False,
+    ))
     created_by: str
     created_at: NaiveUTC = Field(default_factory=_now)
     updated_at: NaiveUTC = Field(default_factory=_now)
