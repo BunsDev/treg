@@ -393,8 +393,7 @@ class Settings(BaseSettings):
     jev_treg_token: str = ""
     ai_gateway_api_key: str = ""
     platform_key_openrouter: str = ""  # Bearer key for asynchronous routed generation
-    # Read only by the capacity sweep: OpenRouter's credit balance needs a management key, which
-    # cannot make inference calls. Not another platform-provider slot.
+    # Capacity sweep only (ops/deploy.md); not another platform-provider slot.
     platform_openrouter_management_key: str = ""
     platform_key_replicate: str = ""  # Bearer token for official asynchronous models
     platform_key_reapi: str = ""      # Bearer key; prepaid credits at $0.001, Seedance 2.5 + image models

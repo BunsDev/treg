@@ -33,14 +33,11 @@ def _finite(raw):
     return raw if type(raw) in (int, float) and math.isfinite(raw) else None
 
 
-def _overdrawn(value, unit: str, note: str) -> dict:
-    """A negative balance on an account whose vendor keeps serving and bills the overage. Reading it
-    as exact would put it below `EMPTY_BELOW` and refuse calls the account still answers, so it is
-    informational: the number reaches the snapshot and the admin board, never the call path. The
-    vendor's own refusal, when it comes, is a signature (`signatures.py`), which marks it then."""
-    return {"value": value, "unit": unit, "informational": True,
+def _overdrawn(row: dict) -> dict:
+    """An `OVERDRAFT_SERVED` reading below zero: informational, so it never refuses calls."""
+    return {**row, "informational": True, "overdrawn": True,
             "note": "; ".join(filter(None, (
-                note, "informational: overdrawn, the vendor still serves and bills the overage")))}
+                row.get("note"), "informational: overdrawn, the vendor still serves and bills the overage")))}
 
 
 async def _dataforseo(c, key):
@@ -199,11 +196,8 @@ async def _firecrawl(c, key):
     remaining = _finite(data.get("remainingCredits")) if isinstance(data, dict) else None
     if not isinstance(d, dict) or d.get("success") is not True or remaining is None:
         raise ValueError("Firecrawl returned no valid remaining-credit balance")
-    note = f"billing period ends {data.get('billingPeriodEnd') or 'unknown'}"
-    # Firecrawl keeps serving past zero within the billing period.
-    if remaining < 0:
-        return _overdrawn(remaining, "credits", note)
-    return {"value": remaining, "unit": "credits", "note": note}
+    return {"value": remaining, "unit": "credits",
+            "note": f"billing period ends {data.get('billingPeriodEnd') or 'unknown'}"}
 
 
 async def _spidercloud(c, key):
@@ -360,8 +354,7 @@ async def _moltsets(c, key):
 async def _openmart(c, key):
     d = await _get(c, "https://api.openmart.ai/api/v2/credit-balance",
                    headers={"Authorization": f"Bearer {key}"})
-    # A negative balance is a real one: Openmart refuses with 402 once the period's credits are
-    # spent, so it reads exact and exhausts the account like zero does.
+    # Negative is real: Openmart refuses with 402 once spent, so it exhausts like zero.
     balance = _finite(d.get("balance")) if isinstance(d, dict) else None
     period_end = d.get("period_end") if isinstance(d, dict) else None
     return {"value": balance, "unit": "credits",
@@ -561,12 +554,13 @@ async def _contactout(c, key):
         left.append((quota if remaining is None else remaining, label))
         pools.append(f"{label}: used={count}, quota={quota}" +
                      (f", remaining={remaining}" if remaining is not None else ""))
-    # Three non-interchangeable pools cannot become one provider-wide exhaustion number, so the
-    # smallest pool is shown (the one to top up first) and stays informational: an empty search pool
-    # must not refuse email finds. The account manager monitors usage and arranges top-ups.
+    # Three non-interchangeable pools cannot become one provider-wide exhaustion number: the
+    # smallest (the one to top up first) is shown, informational, so an empty search pool never
+    # refuses email finds. The account manager monitors usage and arranges top-ups.
     value, smallest = min(left)
-    return {"value": value, "unit": f"credits ({smallest} pool, the smallest)", "informational": True,
-            "note": "; ".join(pools) + "; informational: independent pools; account-manager-managed top-ups"}
+    return {"value": value, "unit": "credits", "informational": True,
+            "note": "; ".join(pools) + f"; informational: smallest pool {smallest}, independent pools; "
+                    "account-manager-managed top-ups"}
 
 
 async def _millionverifier(c, key):
@@ -761,10 +755,6 @@ async def _hlrlookup(c, key):
         balance = None
     if balance is None or not balance.is_finite():
         raise ValueError("HLR Lookup balance returned an invalid credit count")
-    # The balance reads negative while calls are still answered; HLR Lookup's refusal is a
-    # per-result INSUFFICIENT_CREDIT (a signature), not a zero balance.
-    if balance < 0:
-        return _overdrawn(float(balance), "credits", "")
     return {"value": float(balance), "unit": "credits", "note": ""}
 
 
@@ -863,11 +853,11 @@ async def _spyfu(c, key):
         raise ValueError("SpyFu returned no valid monthly usage")
     note = (f"{used}/{base} used, {d.get('requestCount')} requests, "
             f"overage ${d.get('finalCost', 0)} ({d.get('serviceLevelName')})")
+    row = {"value": base - used, "unit": "units left this month", "note": note}
     if used >= base:
-        # The number past the allowance (zero or negative) is shown, never acted on.
-        return {"value": base - used, "unit": "units left this month", "informational": True,
+        row |= {"informational": True,
                 "note": note + "; informational: allowance spent, further units bill as overage"}
-    return {"value": base - used, "unit": "units left this month", "note": note}
+    return row
 
 
 async def _icypeas(c, key):
@@ -941,10 +931,11 @@ async def _akta(c, key):
             "note": f"tier {tier}{enterprise}, lifetime {d.get('lifetime_consumed_credits', 0)} used"}
 
 
-def _balance(raw, vendor: str):
-    if type(raw) not in (int, float) or not math.isfinite(raw) or raw < 0:
+def _balance(raw, vendor: str, *, signed: bool = False):
+    value = _finite(raw)
+    if value is None or (value < 0 and not signed):
         raise ValueError(f"{vendor} returned no valid balance")
-    return raw
+    return value
 
 
 async def _openrouter(c, key):
@@ -956,11 +947,9 @@ async def _openrouter(c, key):
                 "note": "no OpenRouter management credential configured; account credits are in the dashboard"}
     d = await _get(c, "https://openrouter.ai/api/v1/credits",
                    headers={"Authorization": f"Bearer {management}"})
-    data = d.get("data") if isinstance(d, dict) else None
-    total = _finite(data.get("total_credits")) if isinstance(data, dict) else None
-    used = _finite(data.get("total_usage")) if isinstance(data, dict) else None
-    if total is None or used is None or total < 0 or used < 0:
-        raise ValueError("OpenRouter returned no valid credit totals")
+    data = d.get("data") if isinstance(d, dict) and isinstance(d.get("data"), dict) else {}
+    total = _balance(data.get("total_credits"), "OpenRouter")
+    used = _balance(data.get("total_usage"), "OpenRouter")
     return {"value": total - used, "unit": "USD", "note": f"{used:g} used of {total:g} purchased"}
 
 
@@ -972,16 +961,9 @@ async def _anyapi(c, key):
 
 async def _cloro(c, key):
     # GET /v1/credits charges 0 credits (cloro.dev/docs/api-reference/endpoint/get-credits).
-    # `remaining` goes negative while cloro keeps answering calls; it refuses with a 403
-    # INSUFFICIENT_CREDITS (a signature), not at zero.
     d = await _get(c, "https://api.cloro.dev/v1/credits", headers={"Authorization": f"Bearer {key}"})
-    remaining = _finite(d.get("remaining"))
-    if remaining is None:
-        raise ValueError("cloro returned no valid balance")
-    note = f"{d.get('perCycle')} per cycle; cycle resets {(d.get('cycleResetsAt') or '?')[:10]}"
-    if remaining < 0:
-        return _overdrawn(remaining, "credits", note)
-    return {"value": remaining, "unit": "credits", "note": note}
+    return {"value": _balance(d.get("remaining"), "cloro", signed=True), "unit": "credits",
+            "note": f"{d.get('perCycle')} per cycle; cycle resets {(d.get('cycleResetsAt') or '?')[:10]}"}
 
 
 async def _crawl4ai(c, key):
@@ -1141,6 +1123,12 @@ NO_BALANCE_API = {
 # their own (see OAuthProvider.platform_extra_setting) — they must not become report rows.
 AUX_SLOTS = {"tomba_secret", "hlrlookup_secret"}
 
+# Vendors that keep answering calls past a zero balance and bill the overage. A reading below zero
+# from one of them is `_overdrawn`, never exact: below `EMPTY_BELOW` it would refuse calls the
+# account still serves. Each needs a balance or quota signature for its eventual refusal
+# (`test_every_overdraft_vendor_has_a_refusal_signature`). Every other collector's negative is exact.
+OVERDRAFT_SERVED = frozenset({"cloro", "firecrawl", "hlrlookup"})
+
 
 def all_platform_providers() -> list[str]:
     """Every provider with a platform-key slot in Settings — the population a sweep is about."""
@@ -1178,4 +1166,7 @@ async def provider_balance(provider: str, client: httpx.AsyncClient | None = Non
     except Exception as exc:  # noqa: BLE001 — a sweep must report, not crash
         return {"provider": provider, "value": None, "unit": "",
                 "note": f"{type(exc).__name__}: {exc}"}
+    value = row.get("value")
+    if provider in OVERDRAFT_SERVED and isinstance(value, (int, float)) and value < 0:
+        row = _overdrawn(row)
     return {"provider": provider, **row}

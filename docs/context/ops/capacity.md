@@ -54,12 +54,11 @@ Every platform-key slot is either on `BALANCE_ROUTES` (a free collector reads it
 reading below `EMPTY_BELOW` refuses the provider's shared-key calls, so a collector reports a meter
 that bills overage rather than refusing (SpyFu's monthly allowance) as informational once spent,
 and sums every pool that can pay for a call (Fiber AI's trial and paid pools). An informational
-reading still carries its number, negative included, so the operator board shows how far past zero
-the account is; only `latest_state` ignores it. A negative balance is never a malformed one: on a
-vendor that keeps answering past zero (cloro, Firecrawl, HLR Lookup) the collector reports it
-through `_overdrawn` as informational, and that vendor's refusal signature marks the account when
-it finally refuses; on a vendor that refuses once spent (Openmart's 402) it is exact and exhausts
-the account like zero.
+reading still carries its number, so the operator board shows it; only `latest_state` ignores it.
+`OVERDRAFT_SERVED` lists the vendors that keep answering past zero and bill the overage; their
+negative balance is informational and `overdrawn`, and each must have a refusal signature, which is
+what marks the account when the vendor finally refuses. Elsewhere a negative balance is exact and
+exhausts like zero (Openmart), or the collector still rejects it as unknown.
 
 Octen's PAYG balance has no account balance or usage endpoint in its published OpenAPI, so
 `NO_BALANCE_API` reports it as dashboard-only. `_KNOWN` classifies the account as manually funded
@@ -179,9 +178,9 @@ auto recharge, manually verified as enabled in the portal, and a documented 10 r
 shared-key pace. treg does not read or change the vendor's auto-top-up setting.
 
 HLR Lookup's collector posts the platform key and secret to the free `/apiv2/balance` route and
-accepts only `Status: OK` with a finite `Credits` (negative is overdrawn, see above), which can be fractional because
-cache hits and portability lookups cost half a credit. The policy is `credits / manual / api`:
-bundles are bought by hand and expire 18 months after purchase. The vendor caps concurrency at 210
+accepts only `Status: OK` with a finite `Credits` (negative is overdrawn, see above), which can be
+fractional because cache hits and portability lookups cost half a credit. The policy is
+`credits / manual / api`: bundles are bought by hand and expire 18 months after purchase. The vendor caps concurrency at 210
 requests and throttles per telephone network, so shared-key smoothing uses a conservative 50
 requests per second. An empty balance arrives as a per-result `INSUFFICIENT_CREDIT` inside HTTP 200,
 not a 4xx. The signature table reads it as an empty balance (a strike, as for Icypeas below); the
