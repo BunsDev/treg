@@ -68,7 +68,7 @@ class PipelineServer:
                         if value is None:
                             values.append({"type": "null"})
                         elif isinstance(value, bytes):
-                            values.append({"type": "blob", "base64": base64.b64encode(value).decode()})
+                            values.append({"type": "blob", "base64": base64.b64encode(value).decode().rstrip("=")})
                         elif isinstance(value, int):
                             values.append({"type": "integer", "value": str(value)})
                         elif isinstance(value, float):
@@ -332,3 +332,30 @@ def test_turso_requires_explicit_read_token(tmp_path):
     with pytest.raises(TypeError, match="read_auth_token"):
         TursoStore("https://team.example", "private-token", transport=httpx.MockTransport(server.handle))
     assert server.calls == []
+
+
+@pytest.mark.parametrize("encoded, expected", [
+    ("", b""), ("YWJj", b"abc"),
+    ("YWI=", b"ab"), ("YWI", b"ab"),
+    ("YQ==", b"a"), ("YQ", b"a"),
+    ("AHNtb2tl/w", b"\x00smoke\xff"),
+    ("A", None), ("AAAAA", None), ("YW@j", None), ("YW Jj", None),
+])
+async def test_turso_blob_response_decoding(encoded, expected):
+    def respond(request):
+        assert request.headers["Authorization"] == "Bearer readonly-token"
+        return httpx.Response(200, json={"baton": None, "results": [
+            {"type": "ok", "response": {"type": "execute", "result": {
+                "cols": [{"name": "data"}],
+                "rows": [[{"type": "blob", "base64": encoded}]], "affected_row_count": 0,
+            }}},
+            {"type": "ok", "response": {"type": "close"}},
+        ]})
+
+    store = TursoStore("https://team.example", "private-token", read_auth_token="readonly-token",
+                       transport=httpx.MockTransport(respond))
+    if expected is None:
+        with pytest.raises(StoreError, match="^invalid_response$"):
+            await store.read("SELECT data FROM leads")
+    else:
+        assert (await store.read("SELECT data FROM leads")).rows == [{"data": expected}]

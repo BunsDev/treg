@@ -78,7 +78,8 @@ def _decode(value: dict) -> SqlValue:
         case "text":
             return str(value["value"])
         case "blob":
-            return base64.b64decode(value["base64"], validate=True)
+            encoded = value["base64"]
+            return base64.b64decode(encoded + "=" * (-len(encoded) % 4), validate=True)
         case _:
             raise ValueError
 

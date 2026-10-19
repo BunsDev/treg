@@ -67,6 +67,8 @@ cross-origin routing need an explicit trusted routing policy before use.
 
 Each read or transaction owns one HTTP client; requests within a transaction reuse that client.
 Cross-operation pooling is deferred until bootstrap owns client creation and shutdown.
+Remote BLOB results accept both padded and unpadded standard Base64: Turso Cloud can omit the
+padding. Invalid Base64 still fails as `invalid_response`.
 
 ## Verification boundary
 
