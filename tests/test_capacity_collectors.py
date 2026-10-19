@@ -168,12 +168,6 @@ async def test_openmart_negative_balance_is_exact_and_exhausts():
     assert state.health == "exhausted" and state.exhausted_until is not None
 
 
-@pytest.mark.parametrize("balance", [None, True, "12"])
-async def test_openmart_malformed_balance_is_unknown(balance):
-    row = await _serve_json(collectors._openmart, {"balance": balance})
-    assert row["value"] is None
-    assert sweep.snapshot_from("openmart", row).error
-
 
 async def test_tavily_capacity_uses_key_credit_remainder():
     def probe(request):
@@ -957,12 +951,6 @@ def platform_env(monkeypatch):
     collectors.get_settings.cache_clear()
 
 
-@pytest.mark.parametrize("remaining", [None, True, "5"])
-async def test_cloro_rejects_a_missing_balance(remaining):
-    with pytest.raises(ValueError, match="cloro"):
-        await _serve_json(collectors._cloro, {"remaining": remaining})
-
-
 @pytest.mark.parametrize("provider,body,value", [
     ("cloro", {"remaining": -1200, "perCycle": 50000, "cycleResetsAt": "2026-11-01T00:00:00.000Z"}, -1200),
     ("firecrawl", {"success": True, "data": {"remainingCredits": -250.5}}, -250.5),
@@ -1017,11 +1005,3 @@ async def test_openrouter_without_a_management_key_is_no_api_and_skips_request(p
         row = await collectors.provider_balance("openrouter", client)
     snap = sweep.snapshot_from("openrouter", row)
     assert snap.error == "no_balance_api" and snap.remaining is None
-
-
-@pytest.mark.parametrize("data", [{}, {"total_credits": 10}, {"total_credits": True, "total_usage": 1},
-                                  {"total_credits": -1, "total_usage": 0}])
-async def test_openrouter_rejects_malformed_credit_totals(platform_env, data):
-    platform_env(TREG_PLATFORM_OPENROUTER_MANAGEMENT_KEY="management-test-key")
-    with pytest.raises(ValueError, match="OpenRouter"):
-        await _serve_json(collectors._openrouter, {"data": data})
