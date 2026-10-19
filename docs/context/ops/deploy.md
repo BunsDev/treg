@@ -42,6 +42,14 @@ Fish Audio shared-key capacity monitoring requires both `TREG_PLATFORM_KEY_FISHA
 free API-credit probe; without it, capacity remains unknown rather than reading the unrelated
 personal wallet.
 
+## Call events
+
+Call events ([call-events.md](../architecture/call-events.md)) are off until
+`TREG_CALL_EVENTS_URL` and `TREG_CALL_EVENTS_HMAC_SECRET` are set on every process that serves
+calls or settles async tasks (web and the async worker); `TREG_CALL_EVENTS_TOKEN` is the stream's
+bearer when it requires one. Keep the secret stable: changing it breaks every join across the
+change.
+
 ## Additional public domains
 
 `TREG_PUBLIC_HOST_ALIASES` is a JSON array of bare hostnames accepted for same-host social-login
