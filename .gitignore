@@ -43,8 +43,9 @@ docs/hn-launch-post.md
 .agents/skills/talking-head-recut/
 .agents/skills/video-craft/
 .agents/skills/figma/
-# Machine-local symlinks into .agents/skills — they resolve only on the machine that made them.
-/.claude/
+!/.claude/
+/.claude/*
+!/.claude/skills
 skills-lock.json
 
 # Local planning / handoffs — private, never committed.
