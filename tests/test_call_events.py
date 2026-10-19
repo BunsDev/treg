@@ -278,6 +278,9 @@ async def test_a_polled_answer_is_one_terminal_event_on_the_submission_ref(
     assert terminal["hit"] is True and terminal["verdict"] == "valid"
     assert terminal["async_outcome"] == "success" and terminal["endpoint_id"] == VERIFY
     assert terminal["answer_values"]["status"] == "deliverable"
+    [task] = await _tasks()
+    assert terminal["cost_charged_micro"] == task.settled_micro > 0
+    assert submit["cost_charged_micro"] is None   # the submission's charge is not settled yet
     # The polls are calls of their own, never a second terminal event.
     assert sum(e["event_kind"] == "async_terminal" for e in events) == 1
     _no_pii(events, EMAIL)
@@ -315,3 +318,63 @@ async def test_the_worker_emits_the_terminal_event_of_a_routed_child(
     assert parent["served_by"] == VERIFY and parent["cost_charged_micro"] is None
     submit = next(e for e in events if e["call_ref"] == task.call_id and e["event_kind"] == "async_submit")
     assert submit["input_id"] == parent["input_id"]
+
+
+async def test_a_routed_identity_counts_against_the_body_budget(
+        clients: AsyncClient, enrichment_on, events_on, monkeypatch):
+    monkeypatch.setattr(sink, "_MAX_RETAINED_BYTES", 1024)
+    monkeypatch.setattr(call_service, "relay", _relay_by_provider(
+        {"tomba": [(200, {"data": {"email": "a@sample.example", "score": 96}})]}, []))
+    r = await clients.post(f"/call/{ROUTED}", json={"full_name": "A Person", "domain": "sample.example",
+                                                    "padding": "x" * 8192})
+    assert r.status_code == 200, r.text
+    assert sink.counters["unbuilt"] >= 1
+    events = await _flushed(events_on)
+    [parent] = [e for e in events if e["call_ref"] == r.headers["x-treg-call-id"]]
+    assert "input_id" not in parent or parent["input_id"] is None   # generic columns only
+    assert parent["served_by"] == "tomba.people.email.find"
+
+
+async def test_first_and_last_name_sent_directly_join_the_full_name_question(
+        clients: AsyncClient, enrichment_on, events_on, monkeypatch):
+    monkeypatch.setattr(call_service, "relay", _relay_by_provider(
+        {"tomba": [(200, {"data": {"email": "a@sample.example", "score": 96}}),
+                   (200, {"data": {"email": "a@sample.example", "score": 96}})]}, []))
+    split = await clients.get("/call/tomba.people.email.find",
+                              params={"first_name": "A", "last_name": "Person", "domain": "sample.example"})
+    joined = await clients.get("/call/tomba.people.email.find",
+                               params={"full_name": "a person", "domain": "Sample.example"})
+    assert split.status_code == joined.status_code == 200
+    events = {e["call_ref"]: e for e in await _flushed(events_on)}
+    a, b = events[split.headers["x-treg-call-id"]], events[joined.headers["x-treg-call-id"]]
+    assert a["input_id"] and a["input_id"] == b["input_id"]
+    assert a["input_type"] == "domain+full_name"
+
+
+async def test_an_unreadable_opt_out_never_stops_a_release(
+        clients: AsyncClient, monkeypatch, bounceban_on, events_on, caplog):
+    from datetime import timedelta
+    from treg.infra.db import session_maker
+    from treg.models import AsyncTaskRecord
+    monkeypatch.setattr(call_service, "relay", Upstream(VERIFYING))
+    submitted = await clients.get(f"/call/{VERIFY}", params={"email": EMAIL})
+    call_ref = submitted.headers["x-treg-call-id"]
+    async with session_maker() as db:   # past its window: the worker's next look releases it
+        row = await db.get(AsyncTaskRecord, call_ref)
+        row.created_at = row.created_at - timedelta(days=2)
+        row.next_check_at = row.created_at
+        await db.commit()
+
+    # The opt-out read itself fails: the event loses its answers, the release still runs.
+    class _Unmapped:
+        pass
+    monkeypatch.setattr(async_task_app, "Org", _Unmapped)   # db.get on an unmapped class raises
+    with caplog.at_level("WARNING", logger="treg.asynctasks"):
+        await async_task_app.settle_due()
+    assert "could not read the archive opt-out" in caplog.text
+    [task] = await _tasks()
+    assert task.status == "timed_out" and task.settled_micro == 0
+    events = await _flushed(events_on)
+    [terminal] = [e for e in events if e["event_kind"] == "async_terminal"]
+    assert terminal["call_ref"] == call_ref and terminal["async_outcome"] == "timed_out"
+    assert terminal["cost_charged_micro"] == 0 and terminal["answer_values"] is None

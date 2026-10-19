@@ -460,7 +460,7 @@ async def _run_routed(parent: CallContext, ep: dict, body_bytes: bytes, get_head
         raise ResolutionFailed("catalog_parameter_invalid", status_code=400, detail=f"{ep['id']} expects a JSON object body")
     if not isinstance(given, dict):
         raise ResolutionFailed("catalog_parameter_invalid", status_code=400, detail=f"{ep['id']} expects a JSON object body")
-    parent.route_summary = {"identity": given}
+    parent.route_summary = {"identity": given, "size": len(body_bytes or b"")}
     contract = catalog_store.load().contracts.get(ep["capability"])
     options = RouteOptions.from_headers(
         get_header, int(round(contract.default_max_cost_usd * 1_000_000)) if contract and contract.default_max_cost_usd else None)

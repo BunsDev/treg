@@ -339,7 +339,10 @@ async def _poll(row: AsyncTaskRecord, client: httpx.AsyncClient) -> tuple[int, b
 
 async def _finish(call_id: str, outcome: str, document: object | None, now, *,
                   require_usage: bool = False, expected_attempt: int | None = None,
-                  terminal_hit: bool | None = None, terminal_verdict: str | None = None) -> str:
+                  terminal_hit: bool | None = None, terminal_verdict: str | None = None,
+                  settled: dict | None = None) -> str:
+    """`settled`, when given, receives the amount the task closed at (`micro`), for the call
+    event; only a transition out of PENDING fills it."""
     async with money_session(session_maker()) as db:
         row = await db.get(AsyncTaskRecord, call_id, with_for_update=True)
         if row is None or row.status != asynctasks.PENDING:
@@ -359,6 +362,8 @@ async def _finish(call_id: str, outcome: str, document: object | None, now, *,
             row.error = "hold was already closed before the terminal state"
             row.completed_at = now
             await db.commit()
+            if settled is not None:
+                settled["micro"] = 0
             log.warning("async task %s reached %s but its hold was already closed", call_id, outcome)
             return "closed_hold"
         if outcome in ("success", "billed_failure"):
@@ -435,6 +440,8 @@ async def _finish(call_id: str, outcome: str, document: object | None, now, *,
             return "backed_off"
         row.completed_at = now
         await db.commit()
+        if settled is not None:
+            settled["micro"] = row.settled_micro
         return row.status
 
 
@@ -449,7 +456,7 @@ async def _finish_balance(org_id: int | None, operation: str, call_id: str, outc
 def _terminal_event(snapshot: AsyncTaskRecord, result: str, outcome: str, *,
                     status_code: int | None = None, body: bytes | None = None,
                     hit: bool | None = None, verdict_word: str | None = None,
-                    answers_allowed: bool = False) -> None:
+                    answers_allowed: bool = False, charged_micro: int | None = None) -> None:
     """The task's `async_terminal` call event, linked to its `async_submit` by `call_ref`.
 
     Called with what `_finish` returned, and only a transition out of PENDING emits: `_finish`
@@ -463,6 +470,7 @@ def _terminal_event(snapshot: AsyncTaskRecord, result: str, outcome: str, *,
         answer_body=body if outcome == "success" else None, answers_allowed=answers_allowed,
         provider=snapshot.provider, credential_tier="platform", status_code=status_code,
         hit=hit, verdict=verdict_word, served_by=snapshot.endpoint_id,
+        cost_charged_micro=charged_micro,
         async_outcome="closed_hold" if result == "closed_hold" else outcome)
 
 
@@ -471,7 +479,12 @@ async def _answers_allowed(db, org_id: int | None) -> bool:
     session the caller already holds, before any network I/O, and only when events are on."""
     if not event_sink.enabled() or org_id is None:
         return False
-    org = await db.get(Org, org_id)
+    try:
+        org = await db.get(Org, org_id)
+    except Exception:  # noqa: BLE001 - an optional event column never stops a settle or release
+        log.warning("could not read the archive opt-out of org %s; event sent without answers",
+                    org_id, exc_info=True)
+        return False
     return org is not None and org.archive_opt_out_at is None
 
 
@@ -496,8 +509,10 @@ async def _finish_terminal(snapshot: AsyncTaskRecord, outcome: str, document: ob
                          snapshot.settlement_basis, {"terminal": document}) is None)
     expired = asynctasks.expired(snapshot.created_at, now)
     retains_hold = (usage_missing and outcome in ("success", "billed_failure") and not expired)
+    settled: dict = {}
     finish_args = dict(require_usage=require_usage, expected_attempt=expected_attempt,
-                       terminal_hit=terminal_hit, terminal_verdict=terminal_verdict)
+                       terminal_hit=terminal_hit, terminal_verdict=terminal_verdict,
+                       settled=settled)
     if retains_hold:
         # Task-row update only: the hold stays, and the balance row is not touched.
         result = await _finish(snapshot.call_id, outcome, document, now, **finish_args)
@@ -512,7 +527,7 @@ async def _finish_terminal(snapshot: AsyncTaskRecord, outcome: str, document: ob
                     status_code=status_code, body=body,
                     hit=terminal_hit if result == expected else None,
                     verdict_word=terminal_verdict if result == expected else None,
-                    answers_allowed=answers_allowed)
+                    answers_allowed=answers_allowed, charged_micro=settled.get("micro"))
     if result == expected:
         if terminal_hit is not None:
             audit.record_async_call_hit(
@@ -540,9 +555,11 @@ async def _process(call_id: str, client: httpx.AsyncClient, attempt: int) -> str
         snapshot = row.model_copy()
         answers_allowed = await _answers_allowed(db, snapshot.org_id)
     if asynctasks.expired(snapshot.created_at, now, snapshot.descriptor):
+        settled: dict = {}
         result = await _finish_balance(
-            snapshot.org_id, "release", call_id, "timed_out", None, now, expected_attempt=attempt)
-        _terminal_event(snapshot, result, "timed_out")
+            snapshot.org_id, "release", call_id, "timed_out", None, now, expected_attempt=attempt,
+            settled=settled)
+        _terminal_event(snapshot, result, "timed_out", charged_micro=settled.get("micro"))
         return result
     try:
         async with asyncio.timeout(POLL_TIMEOUT_S):
@@ -573,9 +590,11 @@ async def _process(call_id: str, client: httpx.AsyncClient, attempt: int) -> str
         log.warning("async poll failed for call %s: %s: %s", call_id, type(exc).__name__, exc)
         return await _finish(call_id, "poll_error", None, utcnow_naive(), expected_attempt=attempt)
     try:
+        settled: dict = {}
         result = await _finish_balance(snapshot.org_id, "release", call_id, "account_retired",
-                                       None, utcnow_naive(), expected_attempt=attempt)
-        _terminal_event(snapshot, result, "account_retired")
+                                       None, utcnow_naive(), expected_attempt=attempt,
+                                       settled=settled)
+        _terminal_event(snapshot, result, "account_retired", charged_micro=settled.get("micro"))
         return result
     except money_admission.AdmissionRefused:
         raise

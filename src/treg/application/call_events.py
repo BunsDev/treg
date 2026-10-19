@@ -177,6 +177,16 @@ def vendor_identity(adapter: Adapter, contract: Contract, query_items: Iterable[
             v = v[0]
         if v not in (None, ""):
             given[field_name] = v
+    # A provider often takes more shapes than the adapter sends: the router sends `full_name`,
+    # while a direct caller of the same finder may send `first_name` + `last_name`. A request
+    # parameter named exactly like an identity field means that field; derivation then joins
+    # the shapes, so both direct calls get the routed call's `input_id`.
+    for field_name in contract.identity_types:
+        if field_name in given:
+            continue
+        v = doc_body.get(field_name, query.get(field_name))
+        if isinstance(v, (str, int)) and not isinstance(v, bool) and v not in ("",):
+            given[field_name] = v
     return given
 
 
@@ -251,12 +261,15 @@ def emit(kind: str, *, org_id: int | None, endpoint_id: str | None, call_ref: st
          capability: str | None = None, query_items: Iterable[tuple[str, str]] = (),
          request_body: bytes | None = None, identity: dict | None = None,
          answer_status: int | None = None, answer_body: bytes | None = None,
-         output: dict | None = None, answers_allowed: bool = True, **columns: Any) -> None:
+         output: dict | None = None, answers_allowed: bool = True, retained_extra: int = 0,
+         **columns: Any) -> None:
     """Queue one event. Cheap and never raising: the bodies are read later, in the flusher.
 
     `identity` (a routed parent's caller fields) or `query_items` + `request_body` (a direct
     call's vendor request) say what was asked; `output` (a routed parent's core) or
-    `answer_status` + `answer_body` (a vendor answer) what came back."""
+    `answer_status` + `answer_body` (a vendor answer) what came back. Everything the builder
+    keeps alive counts against the sink's byte budget: the bodies, the query, and
+    `retained_extra` (the serialized size of `identity` and `output`, which the caller knows)."""
     try:
         if not sink.enabled():
             return
@@ -272,7 +285,8 @@ def emit(kind: str, *, org_id: int | None, endpoint_id: str | None, call_ref: st
             call_ref=call_ref, parent_ref=parent_ref, step=step, waterfall_position=position,
             is_eval=is_eval(org_id))
         query = tuple(query_items)
-        retained = len(request_body or b"") + len(answer_body or b"")
+        retained = (len(request_body or b"") + len(answer_body or b"") + max(0, retained_extra)
+                    + sum(len(k) + len(v) for k, v in query))
 
         def build() -> dict:
             return _derived(endpoint_id, capability, query, request_body, identity,

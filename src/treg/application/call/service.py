@@ -809,7 +809,8 @@ async def _execute_call(request: _ApplicationRequest, upstream_client: httpx.Asy
         request.state.call_audited = True
         routed_pending = response.status == 202 and routed._header(response, "X-Treg-Route-Outcome") == "pending"
         request.state.call_cost_micro = None if routed_pending else charged
-        _routed_event(request, ep, response.status, charged=None if routed_pending else charged)
+        _routed_event(request, ep, response.status, charged=None if routed_pending else charged,
+                      response=response)
         if idem_key:
             try:
                 await _store_idempotent(idem_key, caller, status_code=response.status,
@@ -1822,10 +1823,17 @@ async def _execute_call(request: _ApplicationRequest, upstream_client: httpx.Asy
 
 
 def _routed_event(request: _ApplicationRequest, ep: dict, status: int, *,
-                  refused_by: str | None = None, charged: int | None) -> None:
+                  refused_by: str | None = None, charged: int | None,
+                  response: UpstreamResponse | None = None) -> None:
     """The routed parent's one call event. The router left what it decided on the context
     (`route_summary`); a refusal before planning leaves none, and the event says only that."""
     summary = request.context.route_summary or {}
+    # What the builder keeps alive: the caller's body (the identity) and the assembled answer
+    # (the output), measured by sizes already known, never by walking the objects here.
+    try:
+        answer_size = int(routed._header(response, "content-length") or 0) if response else 0
+    except ValueError:
+        answer_size = 0
     call_event_app.emit(
         "call", org_id=request.caller.org_id, endpoint_id=ep["id"], capability=ep.get("capability"),
         call_ref=request.context.call_ref, identity=summary.get("identity"),
@@ -1835,7 +1843,8 @@ def _routed_event(request: _ApplicationRequest, ep: dict, status: int, *,
         status_code=status, refused_by=refused_by, hit=summary.get("hit"),
         verdict=summary.get("verdict"), cost_charged_micro=charged,
         served_by=summary.get("served_by"), tried_count=summary.get("tried_count"),
-        check_verdict=summary.get("check_verdict"))
+        check_verdict=summary.get("check_verdict"),
+        retained_extra=int(summary.get("size") or 0) + answer_size)
 
 
 def _finished_on_submission(mk, body: bytes) -> bool:

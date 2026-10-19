@@ -28,7 +28,8 @@ query on the call path.
   raises. It queues a small dict of columns already in hand plus a builder; the builder (which
   parses request and answer bodies and hashes identifiers) runs in the one flusher task per
   process. Same shape as `audit.py` and `analytics.py`: bounded queue (`_MAX_PENDING`), a bound on
-  the body bytes waiting builders keep alive (`_MAX_RETAINED_BYTES`, past which the event goes out
+  what waiting builders keep alive (`_MAX_RETAINED_BYTES`: bodies, query strings, and a routed
+  parent's caller body and assembled answer by their known sizes; past it the event goes out
   without input/answer columns), batched POSTs, drop-and-count on overflow, failure or a raising
   builder (`call_events.counters`, logged at ERROR on the first drop and every thousandth).
   Losing an event costs a sample, never money, a response or a hold.
@@ -61,7 +62,8 @@ through unbuffered has no answer columns, as it has no `hit` in `callrecord`.
 (`:rN` waterfall attempt N, `:v` the check, `:pN` a routed poll, `:sN` a hub step); events carry
 `parent_ref`, `step` and `waterfall_position` parsed from it. An async task's submission
 (`async_submit`) and its outcome (`async_terminal`) share the submission's `call_ref`; the terminal
-event carries `hit`, `verdict`, `async_outcome` (`success`, `failure`, `billed_failure`,
+event carries `hit`, `verdict`, `cost_charged_micro` (what the task settled at; the submission's
+is null), `async_outcome` (`success`, `failure`, `billed_failure`,
 `timed_out`, `account_retired`, `closed_hold`) and the answer columns. Its input lives on the
 submission event. `_finish` moves a task out of `pending` once, under the task row's lock,
 whichever of the caller's poll (`observe_owned_poll`) and the worker sees the answer first, and
@@ -83,7 +85,10 @@ The stream has no map type; they travel as JSON objects (`json` columns):
 
 - `input_type` names the contract identity variant the question is expressed in, `input_id` is
   the HMAC of that variant's normalized values. It is computed from the contract identity after
-  derivation (`canonical_identity`), never from the vendor request: a caller's
+  derivation (`canonical_identity`), never from the vendor request's shape. A direct call is read
+  back through its adapter's `in` map plus any request parameter named exactly like an identity
+  field (a finder whose adapter sends `full_name` may be called with `first_name` +
+  `last_name`). A caller's
   `first_name`+`last_name` derives `full_name`, so `{full_name, domain}` and
   `{first_name, last_name, domain}` asked of a direct finder, a routed child or the routed parent
   give one `input_id`.
