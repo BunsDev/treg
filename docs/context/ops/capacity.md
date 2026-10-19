@@ -56,7 +56,7 @@ that bills overage rather than refusing (SpyFu's monthly allowance) as informati
 and sums every pool that can pay for a call (Fiber AI's trial and paid pools). An informational
 reading still carries its number, so the operator board shows it; only `latest_state` ignores it.
 `OVERDRAFT_SERVED` lists the vendors that keep answering past zero and bill the overage; their
-negative balance is informational and `overdrawn`, and each must have a refusal signature, which is
+balance below `EMPTY_BELOW` is informational and `overdrawn`, and each must have a refusal signature, which is
 what marks the account when the vendor finally refuses. Elsewhere a negative balance is exact and
 exhausts like zero (Openmart), or the collector still rejects it as unknown.
 
@@ -178,9 +178,9 @@ auto recharge, manually verified as enabled in the portal, and a documented 10 r
 shared-key pace. treg does not read or change the vendor's auto-top-up setting.
 
 HLR Lookup's collector posts the platform key and secret to the free `/apiv2/balance` route and
-accepts only `Status: OK` with a finite `Credits` (negative is overdrawn, see above), which can be
-fractional because cache hits and portability lookups cost half a credit. The policy is
-`credits / manual / api`: bundles are bought by hand and expire 18 months after purchase. The vendor caps concurrency at 210
+accepts only `Status: OK` with a finite `Credits`. Credits can be fractional because cache hits and
+portability lookups cost half a credit, and a negative balance is overdrawn (see above). The policy
+is `credits / manual / api`: bundles are bought by hand and expire 18 months after purchase. The vendor caps concurrency at 210
 requests and throttles per telephone network, so shared-key smoothing uses a conservative 50
 requests per second. An empty balance arrives as a per-result `INSUFFICIENT_CREDIT` inside HTTP 200,
 not a 4xx. The signature table reads it as an empty balance (a strike, as for Icypeas below); the
@@ -689,9 +689,8 @@ results varied, so no numeric free-plan concurrency/rate limit is configured.
 
 ## ContactOut independent pools
 
-`collectors._contactout` exposes the three raw credit pools through an informational observation.
-Its number is the smallest pool's remainder, the one to top up first, never a provider-wide
-balance. `snapshot_from` and `latest_state` preserve it without marking the provider
+`collectors._contactout` exposes the three raw credit pools through an informational observation,
+not a scalar balance. `snapshot_from` and `latest_state` preserve it without marking the provider
 exhausted. Prepaid quotas are already remaining credits. The pools are independent and require
 separate operator monitoring and top-ups. Stats freshness remains unconfirmed; treg
 keeps the existing sweep cadence and does not assume behavior at zero credits.

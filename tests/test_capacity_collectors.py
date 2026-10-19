@@ -837,9 +837,7 @@ async def test_contactout_pool_stats_are_informational_even_when_empty(contactou
         ) as c:
             row = await collectors.provider_balance("contactout", c)
         snap = sweep.snapshot_from("contactout", row)
-        # The smallest pool: email's quota 0 in the first case, email's remaining -5 in the second.
-        assert not snap.error and snap.remaining == (0 if not extra else -5)
-        assert snap.unit == "credits" and "smallest pool email" in snap.note
+        assert not snap.error and snap.remaining is None
         assert "email: used=10, quota=0" in snap.note
         state = policy.latest_state(
             policy.default_policy("contactout", has_key=True), snap
@@ -969,6 +967,7 @@ async def test_cloro_rejects_a_missing_balance(remaining):
     ("cloro", {"remaining": -1200, "perCycle": 50000, "cycleResetsAt": "2026-11-01T00:00:00.000Z"}, -1200),
     ("firecrawl", {"success": True, "data": {"remainingCredits": -250.5}}, -250.5),
     ("hlrlookup", {"Status": "OK", "Credits": "-3.5"}, -3.5),
+    ("firecrawl", {"success": True, "data": {"remainingCredits": 0}}, 0),
 ])
 async def test_overdraft_vendors_read_negative_without_refusing_calls(platform_env, provider, body, value):
     platform_env(**{f"TREG_PLATFORM_KEY_{provider.upper()}": "test-key"})
