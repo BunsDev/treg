@@ -386,3 +386,46 @@ async def test_default_json_comparison_preserves_call_bytes(clients, cache_on, m
     for raw in (first, reordered):
         result = await archive.resolve_result(k.key_hash, archive.content_hash(raw))
         assert result['response']['body_text'] == raw.decode()
+
+
+async def test_declared_miss_status_is_a_miss_but_never_cached(clients, monkeypatch):
+    # A declared miss (limadata answers 404 for "no email") now classifies as `empty`, so the
+    # recorded hit is False. Cache admission must still require a 2xx: the 404 is never archived,
+    # and a repeat goes upstream again rather than being served "nobody has it" from the archive.
+    from treg.models import CallRecord
+    ep = 'limadata.people.email.find.name'
+    monkeypatch.setenv('TREG_PLATFORM_PROVIDERS', 'limadata')
+    monkeypatch.setenv('TREG_PLATFORM_KEY_LIMADATA', 'test-platform-key')
+    get_settings.cache_clear()
+    s = get_settings()
+    monkeypatch.setattr(s, 'archive_mode', 'serve')
+    monkeypatch.setattr(s, 'archive_serve_endpoints', ep)
+    monkeypatch.setattr(s, 'archive_serve_percent', 100)
+    upstream = []
+
+    def relay(status, raw):
+        inner = _fake_relay(status, raw)
+
+        async def counted(*a, **kw):
+            upstream.append(status)
+            return await inner(*a, **kw)
+        return counted
+
+    body = {'full_name': 'Example Person', 'company_domain': 'example.com'}
+    monkeypatch.setattr(service, 'relay', relay(404, b''))
+    for _ in range(2):
+        r = await clients.post('/call/' + ep, json=body)
+        assert r.status_code == 404 and 'x-treg-cache' not in r.headers
+        await archive.drain()
+    assert upstream == [404, 404]
+    async with session_maker() as db:
+        assert (await db.execute(select(ArchiveKey))).scalars().all() == []
+        hits = (await db.execute(select(CallRecord.hit).where(CallRecord.endpoint_id == ep))).scalars().all()
+    assert hits == [False, False]
+    # Control: the same question answered with a hit IS archived and then served.
+    monkeypatch.setattr(service, 'relay', relay(200, b'{"email":"person@example.com"}'))
+    await clients.post('/call/' + ep, json=body)
+    await archive.drain()
+    r = await clients.post('/call/' + ep, json=body)
+    assert r.headers.get('x-treg-cache') == 'hit' and upstream == [404, 404, 200]
+    get_settings.cache_clear()
