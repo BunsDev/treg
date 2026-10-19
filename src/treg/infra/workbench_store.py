@@ -15,6 +15,7 @@ import aiosqlite
 import httpx
 
 SqlValue = None | bool | int | float | str | bytes
+_COMMIT_WINDOW = 0.5
 
 
 @dataclass(frozen=True)
@@ -43,7 +44,9 @@ def _http_url(url: str) -> str:
             or parts.path not in {"", "/"}
         ):
             raise ValueError
-        return urlunsplit(("https", parts.netloc, "", "", ""))
+        host = parts.hostname.encode("idna").decode("ascii").lower()
+        netloc = f"[{host}]" if ":" in host else host
+        return urlunsplit(("https", netloc, "", "", ""))
     except ValueError:
         raise StoreError("invalid_configuration") from None
 
@@ -98,7 +101,7 @@ def _statement_error(code: str) -> StoreError:
         return StoreError("constraint_violation")
     if code in {"TRANSACTION_TIMEOUT", "TRANSACTION_CLOSED", "STREAM_EXPIRED"}:
         return StoreError("transaction_expired")
-    if code in {"SQLITE_BUSY", "SQLITE_LOCKED"}:
+    if code in {"SQLITE_BUSY", "SQLITE_LOCKED", "SQLITE_CANTOPEN"}:
         return StoreError("unavailable")
     return StoreError("transaction_failed")
 
@@ -108,7 +111,7 @@ class TursoStore:
                  transport: httpx.AsyncBaseTransport | None = None,
                  transaction_timeout: float = 4.0):
         self._url = _http_url(url)
-        if not auth_token or not 0 < transaction_timeout < 5:
+        if not auth_token or not _COMMIT_WINDOW < transaction_timeout < 5:
             raise StoreError("invalid_configuration")
         self._auth_token = auth_token
         self._transport = transport
@@ -155,6 +158,7 @@ class _TursoTransaction:
         self.deadline = time.monotonic() + timeout
         self.closed = False
         self.failed = False
+        self.outcome_unknown = False
         self.lock = asyncio.Lock()
 
     async def execute(self, sql: str, params: Sequence[SqlValue] = ()) -> StoreResult:
@@ -174,9 +178,10 @@ class _TursoTransaction:
         if not cleanup and (self.closed or self.failed):
             raise StoreError("transaction_failed")
         remaining = self.deadline - time.monotonic()
-        if not cleanup and remaining <= 0:
+        if not cleanup and (remaining <= 0 or committing and remaining < _COMMIT_WINDOW):
             self.failed = True
             raise StoreError("transaction_expired")
+        statement_error = None
         try:
             async with asyncio.timeout(1.0 if cleanup else remaining):
                 response = await self.client.post(
@@ -194,25 +199,30 @@ class _TursoTransaction:
             if not closing and (not isinstance(self.baton, str) or not self.baton):
                 raise StoreError("transaction_expired")
             results = payload["results"]
-            if len(results) != len(requests):
+            expected = requests[:1] if committing else requests
+            if committing:
+                # COMMIT's result is authoritative; close is best-effort cleanup.
+                results = results[:1]
+            if len(results) != len(expected):
                 raise StoreError("invalid_response")
             responses = []
-            for result, request in zip(results, requests, strict=True):
+            for result, request in zip(results, expected, strict=True):
                 if result["type"] == "error":
-                    raise _statement_error(str(result["error"].get("code", "")))
+                    statement_error = _statement_error(str(result["error"].get("code", "")))
+                    break
                 item = result["response"]
                 if result["type"] != "ok" or item["type"] != request["type"]:
                     raise StoreError("invalid_response")
                 if item["type"] == "execute":
                     _result(item)
                 responses.append(item)
-            self.closed = closing
-            return responses
+            self.closed = closing and self.baton is None
         except (httpx.HTTPError, TimeoutError, StoreError, KeyError, TypeError,
                 ValueError, AttributeError, OverflowError) as exc:
             self.failed = True
             if committing:
                 self.baton = None
+                self.outcome_unknown = True
                 raise StoreError("outcome_unknown") from None
             if isinstance(exc, StoreError):
                 raise
@@ -222,8 +232,12 @@ class _TursoTransaction:
             self.failed = True
             if committing:
                 self.baton = None
-                raise StoreError("outcome_unknown") from None
+                self.outcome_unknown = True
             raise
+        if statement_error is not None:
+            self.failed = True
+            raise statement_error
+        return responses
 
     async def rollback(self) -> None:
         if self.baton is not None and not self.closed:
@@ -234,21 +248,30 @@ class _TursoTransaction:
 
 class SQLiteStore:
     def __init__(self, path: str | Path, *, transaction_timeout: float = 4.0):
-        if not 0 < transaction_timeout < 5:
+        if not _COMMIT_WINDOW < transaction_timeout < 5:
             raise StoreError("invalid_configuration")
         self._path = str(path)
         self._transaction_timeout = transaction_timeout
 
+    @asynccontextmanager
+    async def _connection(self, *, read_only: bool = False) -> AsyncIterator[aiosqlite.Connection]:
+        path = Path(self._path).absolute().as_uri() + "?mode=ro" if read_only else self._path
+        try:
+            async with aiosqlite.connect(path, uri=read_only, isolation_level=None,
+                                        timeout=self._transaction_timeout) as connection:
+                yield connection
+        except sqlite3.Error as exc:
+            raise _statement_error(getattr(exc, "sqlite_errorname", "")) from None
+
     async def read(self, sql: str, params: Sequence[SqlValue] = ()) -> StoreResult:
-        async with aiosqlite.connect(self._path) as connection:
+        async with self._connection(read_only=True) as connection:
             await connection.execute("PRAGMA query_only = ON")
             tx = _SQLiteTransaction(connection, self._transaction_timeout)
             return await tx.execute(sql, params)
 
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[_SQLiteTransaction]:
-        async with aiosqlite.connect(self._path, isolation_level=None,
-                                    timeout=self._transaction_timeout) as connection:
+        async with self._connection() as connection:
             tx = _SQLiteTransaction(connection, self._transaction_timeout)
             try:
                 await tx.execute("BEGIN IMMEDIATE")
@@ -257,7 +280,8 @@ class SQLiteStore:
                     raise StoreError("transaction_failed")
                 await tx.execute("COMMIT", _committing=True)
             except BaseException:
-                await connection.rollback()
+                with suppress(sqlite3.Error):
+                    await connection.rollback()
                 raise
             finally:
                 tx.closed = True
@@ -269,13 +293,14 @@ class _SQLiteTransaction:
         self.deadline = time.monotonic() + timeout
         self.closed = False
         self.failed = False
+        self.outcome_unknown = False
 
     async def execute(self, sql: str, params: Sequence[SqlValue] = (), *,
                       _committing: bool = False) -> StoreResult:
         if self.closed or self.failed:
             raise StoreError("transaction_failed")
         remaining = self.deadline - time.monotonic()
-        if remaining <= 0:
+        if remaining <= 0 or _committing and remaining < _COMMIT_WINDOW:
             self.failed = True
             raise StoreError("transaction_expired")
         try:
@@ -295,7 +320,7 @@ class _SQLiteTransaction:
         except (TimeoutError, asyncio.CancelledError) as exc:
             self.failed = True
             if _committing:
-                raise StoreError("outcome_unknown") from None
+                self.outcome_unknown = True
             if isinstance(exc, TimeoutError):
-                raise StoreError("transaction_expired") from None
+                raise StoreError("outcome_unknown" if _committing else "transaction_expired") from None
             raise

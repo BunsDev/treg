@@ -4,6 +4,7 @@ status: foundational
 sources:
   - src/treg/infra/workbench_store.py
   - tests/test_workbench_store.py
+  - tests/test_workbench_store_lifecycle.py
 related:
   - architecture/import-boundaries.md
 ---
@@ -23,9 +24,12 @@ authorize teams, validate user table definitions or provision databases. Bind va
 positional parameters. Database credentials and these adapters belong on the Treg server, not
 inside user scripts. Do not hold a PostgreSQL connection while awaiting remote storage.
 
-`read` enables SQLite's query-only mode. A transaction owns its connection and commits only on
-successful context exit. Application errors, cancellation and failed statements cause rollback;
-catching a statement error inside the context does not make the transaction committable again.
+`read` enables SQLite's query-only mode. `SQLiteStore.read` also opens the file with `mode=ro`,
+so reading a missing database fails without creating an empty file. Read and write connections
+use the configured SQLite busy timeout. A transaction owns its connection and commits only on
+successful context exit. Errors and cancellation before COMMIT cause rollback; catching a
+statement error inside the context does not make the transaction committable again. A failed
+rollback preserves the original error.
 Await all operations before leaving the context. The context owns BEGIN, COMMIT and ROLLBACK;
 callers must not issue transaction-control statements themselves.
 
@@ -33,23 +37,38 @@ callers must not issue transaction-control statements themselves.
 
 `TursoStore` uses the [Turso HTTP protocol](https://docs.turso.tech/sdk/http/reference), rotating
 the connection baton after each response and closing the stream after use. Transaction deadlines
-default to four seconds, below the provider's documented five-second window. Keep batches short
-and do not perform unrelated I/O inside a transaction. The local adapter checks the same deadline,
+default to four seconds, below the provider's documented five-second window. The timeout must be
+greater than 0.5 seconds and less than five. Both adapters refuse to send COMMIT with less than
+0.5 seconds remaining, returning `transaction_expired` and rolling back. This reserve reduces
+avoidable uncertainty; it does not guarantee COMMIT will finish before the deadline. Keep batches
+short and do not perform unrelated I/O inside a transaction. The local adapter checks the same deadline,
 but cancellation does not immediately stop work already queued on SQLite's background thread.
 
-There are no automatic retries. A lost, malformed or cancelled COMMIT response raises
-`StoreError("outcome_unknown")`: the write may already be durable. The caller must resolve that
-uncertainty before replaying a write; durable write receipts are outside this module. Other errors
-expose stable codes, not SQL values, database tokens or remote error bodies.
+There are no automatic retries. A transport failure or unreadable COMMIT result raises
+`StoreError("outcome_unknown")` and sets `tx.outcome_unknown`: the write may already be durable.
+Cancellation during COMMIT sets the same flag but propagates `CancelledError`, preserving
+`asyncio.timeout` and `TaskGroup` behavior. The caller must resolve that uncertainty before replaying
+a write; durable write receipts are outside this module. An explicit COMMIT statement error keeps
+its stable error code (for example, `constraint_violation` for a deferred foreign key failure).
+An acknowledged COMMIT result is not changed by a subsequent close error. Other errors expose
+stable codes, not SQL values, database tokens or remote error bodies.
 
 Configured remote URLs must use HTTPS (including normalized `libsql://` and `turso://` URLs).
 HTTP redirects are disabled and response `base_url` values must match the configured origin;
+hostnames are normalized and the default HTTPS port is omitted before comparison. Database
 credentials are never forwarded to a server-selected different host. Deployments requiring
 cross-origin routing need an explicit trusted routing policy before use.
 
+Each read or transaction owns one HTTP client; requests within a transaction reuse that client.
+Cross-operation pooling is deferred until bootstrap owns client creation and shutdown.
+
 ## Verification boundary
 
-`test_workbench_store.py` runs the same storage contract against file-backed SQLite and an HTTP
-protocol fixture backed by real SQLite transactions. It exercises atomic rollback, parameter
+`test_workbench_store.py` and `test_workbench_store_lifecycle.py` run the same storage contract against
+file-backed SQLite and an HTTP protocol fixture backed by real SQLite transactions. They exercise
+atomic rollback, parameter
 binding, conditional writes, cancellation and lost COMMIT responses. These tests do not replace
-integration testing against a configured Turso Cloud database.
+integration testing against a configured Turso Cloud database. Before business integration, verify
+`PRAGMA query_only = ON` on the selected cloud engine: a SELECT must succeed and a mutation through
+`read` must fail without changing data. If the pragma is unsupported, keep reads disabled until
+a verified read-only mechanism replaces it; do not silently remove the guard.

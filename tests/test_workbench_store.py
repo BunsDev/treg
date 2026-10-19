@@ -82,8 +82,6 @@ class PipelineServer:
             self.streams[next_baton] = connection
         if committed and self.commit_fault == "timeout":
             raise httpx.ReadTimeout("private SQL value private-token", request=request)
-        if committed and self.commit_fault == "cancel":
-            raise asyncio.CancelledError
         if committed and self.commit_fault == "http_error":
             return httpx.Response(502, text="private SQL value private-token")
         if committed and self.commit_fault == "malformed":
@@ -160,10 +158,13 @@ async def test_cancellation_before_commit_rolls_back_transaction(store):
         async with store.transaction() as tx:
             await tx.execute("CREATE TABLE leads (id INTEGER PRIMARY KEY)")
             raise asyncio.CancelledError
+    assert tx.outcome_unknown is False
     assert (await store.read("SELECT name FROM sqlite_master WHERE name = ?", ("leads",))).rows == []
 
 
 async def test_parameter_types_roundtrip(store):
+    async with store.transaction() as tx:
+        await tx.execute("CREATE TABLE parameters (value)")
     result = await store.read("SELECT ? AS a, ? AS b, ? AS c, ? AS d, ? AS e",
                               (None, True, False, -(2**63), 1.5))
     assert result.rows == [{"a": None, "b": 1, "c": 0, "d": -(2**63), "e": 1.5}]
@@ -185,7 +186,7 @@ async def test_expired_transaction_rolls_back_without_committing(store):
     assert (await store.read("SELECT name FROM sqlite_master WHERE name = ?", ("leads",))).rows == []
 
 
-@pytest.mark.parametrize("fault", ["timeout", "cancel", "http_error", "malformed", "malformed_error"])
+@pytest.mark.parametrize("fault", ["timeout", "http_error", "malformed", "malformed_error"])
 async def test_commit_response_loss_is_unknown_and_never_retried(tmp_path, fault):
     path = tmp_path / "team.db"
     server = PipelineServer(path)
@@ -200,6 +201,7 @@ async def test_commit_response_loss_is_unknown_and_never_retried(tmp_path, fault
         async with store.transaction() as tx:
             await tx.execute("UPDATE leads SET revision = revision + 1 WHERE id = ?", (1,))
     assert caught.value.code == "outcome_unknown"
+    assert tx.outcome_unknown is True
     assert str(caught.value) == "outcome_unknown"
     assert [call["requests"][0]["stmt"]["sql"] for call in server.calls] == [
         "BEGIN IMMEDIATE", "UPDATE leads SET revision = revision + 1 WHERE id = ?", "COMMIT",
