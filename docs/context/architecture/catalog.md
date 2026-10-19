@@ -238,6 +238,22 @@ assigned to any organization is never sent through the public lookup. BYOK never
 policy. Fish remains deployment-disabled until live management-price, shared-account permission,
 and commercial checks pass.
 
+`team_label` covers provider objects that outlive a call and are kept per label (monitors,
+schedules, feeds) on treg's one shared account. It lists request fields (body, header, query or
+path) that must carry the calling team's own label, `resolve.team_label(org_id)`: stable, one per
+team. `_enforce_team_label` checks it on the shared key only, before reserve; the caller sends it,
+so the relay stays faithful, and a missing or other team's label is a 400 naming the expected
+value. A team's own key never applies it.
+
+`cost.quantity` prices a call by a whole number the caller chooses (a budget of provider credits):
+`{field, max}` names a declared integer body or query field and its ceiling. A missing or
+out-of-range value is a 400 before reserve, the hold is `quantity x price`, and `settle: quantity`
+settles exactly that on success, ignoring any provider-reported charge (adding room is often free on
+the provider's side and reported as 0). An optional `applied` JSON path names the answer field that
+says the units were added; when it is not `true` (a retry the provider recognised by its purchase
+id) the call settles at 0. The validator requires it on a `per_success` price with no
+`reported_charge`. Together they let a team buy a budget for background work under its own label.
+
 ## Authorization metadata
 
 An endpoint can declare `authorization_method`, ordered `authorization_methods`, method-specific

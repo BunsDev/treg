@@ -84,7 +84,7 @@ COST_UNITS = ("call", "result", "row", "record", "keyword", "page", "character",
               "section", "employee", "GB", "ad", "month", "line", "target", "domain", "item",
               "post", "user",
               "api_unit", "analysis_unit", "retrieval_unit", "index_item_unit", "quota_row",
-              "verifier_credit", "step")
+              "verifier_credit", "step", "credit")
 # A platform key spends OUR money on a caller's behalf, so it is allowed only where the price is
 # machine-computable and provenanced. `account`-kind routes are the provider's own bookkeeping —
 # never worth spending on — and `own_account` scope needs the caller's own credential by definition.
@@ -742,6 +742,9 @@ def _normalize(raw: dict, provider: str, directory: Path) -> dict:
         # keys its usage terms read (application/call/settle.py `_spool_response`).
         "spooled_response": raw.get("spooled_response") is True,
         "platform_request": raw.get("platform_request") or None,
+        # Request fields that must carry the calling team's own label on treg's shared key, so
+        # objects a provider keeps per label (monitors, schedules, feeds) stay one team's.
+        "team_label": raw.get("team_label") or None,
         # How treg serves the catalog fallback after the team's own tool/credential ladder misses.
         # Absent means the provider credential is required. `anonymous` means the verified public
         # upstream route is called with no injected credential; catalog validation limits that
