@@ -281,6 +281,9 @@ class CallContext:
     provider: str | None = None
     credential_tier: str | None = None
     refused_by: str | None = None
+    # A routed parent's outcome for its call event (route.py `_summarize`): identity, output,
+    # served_by, tried_count, hit, verdict, check_verdict. Never read by money or relay.
+    route_summary: dict | None = None
 
 
 @dataclass(frozen=True)

@@ -21,7 +21,7 @@ from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.routing import BaseRoute, Mount
 
-from . import adsconv, analytics, archive, audit
+from . import adsconv, analytics, archive, audit, call_events
 from .application.call import route as routed_call
 from .application import arena, find_index
 from .application.onboard import first_run
@@ -797,6 +797,7 @@ def _lifespan(role: AppRole):
                     # left those events queued behind a cancelled flusher.
                     await audit.drain()
                     await archive.drain()
+                    await call_events.drain()
                     if gauge_task is not None:
                         _emit_money_timings()
                     await stop_money_trace(trace_runner)
