@@ -414,10 +414,14 @@ Money notes for agents:
   so metered calls lose the repeat price. An idempotency replay is different
   (`X-Treg-Idempotent-Replay: true`). Empty results are the provider's own semantics — treg does
   not normalise "no data" vs "no coverage" vs "unsupported target".
-- Out of balance → HTTP **402** with a machine-actionable body: `balance_micro`,
+- Out of balance → HTTP **402** `error: insufficient_balance` with a machine-actionable body: `balance_micro`,
   `estimated_cost_micro`, `topup_url`. Recovery: `treg balance` (ledger), top up in the
   dashboard (Team → Billing), or connect the org's own key for that provider - own keys
   are never billed to the balance.
+- `X-Treg-Capacity: exhausted` on a relayed answer → treg's OWN account for that tool just
+  refused for want of credit (any status; the body is the provider's). Not your balance; nothing
+  charged when `X-Treg-Cost-Micro` is `0`. Over MCP: `whose_error: treg`, no body, and a hint.
+  Try another tool meanwhile; treg is notified.
 - HTTP **503** with `error: provider_capacity_unavailable` → treg's OWN account for that
   provider is out right now (not your balance, nothing charged). The body names `resets_at`
   when known and `alternatives` — other providers for the same capability; pick one, or use

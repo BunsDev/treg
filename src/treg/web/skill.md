@@ -101,12 +101,16 @@ Notes:
   limits with a fuzzy niche, run both and merge: e.g. creators = `influencersclub.creators.search`
   (filters) ∪ `exa.creators.search` (description, pinned to the platform domain); people = a
   `people.search` provider ∪ `exa.people.search`; who-holds-a-role questions = `exa.web.answer`.
-- HTTP **402** = out of balance, with a machine-actionable body (`balance_micro`,
+- HTTP **402** `error: insufficient_balance` = out of balance, with a machine-actionable body (`balance_micro`,
   `estimated_cost_micro`, `topup_url`). Recovery: `treg balance` → top up in the dashboard
   (Team → Billing) → or store the org's own key for that provider (own keys are never billed
   to the balance — they take priority automatically). A 402 with `error: route_max_cost` is
   different: YOUR `X-Treg-Route-Max-Cost` header refused the call before anything was charged —
   ask for fewer rows/targets or raise the ceiling.
+- `X-Treg-Capacity: exhausted` = treg's OWN account for that tool is out of credit (whatever the
+  status). Not your balance and not yours to fix; nothing is charged when `X-Treg-Cost-Micro` is
+  `0`. Over MCP the result has `whose_error: treg`, no body, and a hint saying so. Try another tool
+  meanwhile, or come back later.
 - **Body from a file:** `treg call <id> --data @body.json` (`@-` reads stdin). On Windows
   PowerShell prefer it to inline JSON, whose inner quotes PowerShell strips.
 - **Scripting many calls:** use `treg --json call …`. Stdout is one line,

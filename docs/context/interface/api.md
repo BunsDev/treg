@@ -276,6 +276,23 @@ line, and `treg --json call` puts it in `_treg.upstream_failed`. A routed child 
 is a `miss` whose `detail` names the failed value. Absent on an overflow answer, an idempotent
 replay, and every unmetered call.
 
+## `X-Treg-Capacity` - treg's own account for this tool is out
+
+`exhausted` on a platform-tier answer the capacity signature table reads as a balance or quota
+signature (`ops/capacity.md`), whatever the status: a 402, Apollo's 422, an out-of-credit 2xx.
+The body is relayed untouched; the header is how a caller learns the refusal is treg's account,
+not its balance and not its key. It is absent on a team's own key, on treg's own refusals
+(`X-Treg-Error`), on an overflow answer, on an idempotent replay and on an owned free poll. It is
+set from the same signal that strikes the capacity breaker (`_note_capacity_signal`), so the
+capacity events that alert are always behind it; a free route on treg's key carries it too. The MCP `call` result omits the provider's body, sets `whose_error: treg` and
+gives one notice as `hint` (`src/treg/capacity_notice.py`): the tool is temporarily unavailable on
+treg's side, the team has been notified (the capacity events alert), the caller was not charged
+when `X-Treg-Cost-Micro` is `0`, and another tool can serve meanwhile. `treg call` prints the same
+notice on stderr and `treg --json call` sets `_treg.capacity`. Only treg's own
+`error: insufficient_balance` (with `X-Treg-Error`, not a replay) is called the team's balance, by
+MCP's hint and `treg call`'s top-up line; a provider's 402 on the team's own key is marked
+`whose_error: provider`, and `route_max_cost` is the caller's ceiling.
+
 ## `X-Treg-Smoothed` - the call waited for treg's own rate limit
 
 On platform calls, including owned free polling: `wait=<ms>` when the call was spaced behind other callers on the

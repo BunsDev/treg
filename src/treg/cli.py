@@ -44,6 +44,7 @@ import httpx
 
 from . import agents as _agents
 from . import jsontext
+from .capacity_notice import CAPACITY_HEADER, EXHAUSTED, account_out_notice, is_balance_refusal
 from .feedback_contract import FEEDBACK_CATEGORIES, FEEDBACK_DESCRIPTION, REVIEW_USEFULNESS, REVIEW_DESCRIPTION
 # One source of truth for the proxy's default port (help text below). Importing the module is cheap —
 # it pulls only stdlib plus httpx, which the CLI already has; `cryptography` stays lazy inside it.
@@ -331,9 +332,10 @@ def _show(resp: httpx.Response) -> None:
         _show_hint_line(resp)
     if resp.status_code >= 400:
         _show_failure_diagnostics(resp)
-        # 402 = the team balance can't cover a call on treg's key. The JSON above already carries the
-        # numbers an agent needs; a human gets the two commands that fix it.
-        if resp.status_code == 402 and isinstance(body, dict) and isinstance(body.get("detail"), dict):
+        # The team balance can't cover a call on treg's key. The JSON above already carries the
+        # numbers an agent needs; a human gets the two commands that fix it. Any other 402 (a
+        # provider's, a route ceiling) is not about the balance.
+        if resp.status_code == 402 and is_balance_refusal(resp.headers, body):
             print("(check the balance with `treg balance`, add funds with `treg topup`)", file=sys.stderr)
         # The server's org-picking 400 names its header, not the caller's mistake. Say which
         # org value was sent and where it came from (`--org` beats the saved active org).
@@ -367,7 +369,9 @@ def _show_charge_line(resp: httpx.Response) -> None:
     if call_id := headers.get("X-Treg-Call-Id"):
         line += f" · call id {call_id}"
     print(line, file=sys.stderr)
-    if upstream_failed := headers.get("X-Treg-Upstream-Failed"):
+    if notice := account_out_notice(headers):
+        print(f"treg: {notice}", file=sys.stderr)
+    elif upstream_failed := headers.get("X-Treg-Upstream-Failed"):
         print(f"treg: the provider reported this request as failed ({upstream_failed}); "
               "the body carries no result", file=sys.stderr)
 
@@ -431,12 +435,15 @@ def _show_failure_diagnostics(resp: httpx.Response) -> None:
         wait = headers.get("Retry-After")
         whose = ("treg is overloaded, not the provider; retry "
                  + (f"in {wait}s" if wait else "in a moment"))
-    line = f"treg: HTTP {resp.status_code} — {whose}"
+    notice = account_out_notice(headers) if relayed else None
+    line = f"treg: HTTP {resp.status_code}" + ("" if notice else f" — {whose}")
     if call_id := headers.get("X-Treg-Call-Id"):
         line += f"; call id {call_id} (quote it to support; `treg calls` shows the record)"
-    if cost := headers.get("X-Treg-Cost-Micro"):
+    if (cost := headers.get("X-Treg-Cost-Micro")) and not notice:  # the notice says what it cost
         line += f"; charged ${int(cost) / 1_000_000:g}"
     print(line, file=sys.stderr)
+    if notice:
+        print(f"treg: {notice}", file=sys.stderr)
 
 
 def _as_list(resp: httpx.Response) -> list[dict]:
@@ -2574,6 +2581,8 @@ def _call_envelope(response: httpx.Response, content_type: str) -> dict:
         meta["replay"] = True
     if upstream_failed := headers.get("X-Treg-Upstream-Failed"):
         meta["upstream_failed"] = upstream_failed
+    if headers.get(CAPACITY_HEADER) == EXHAUSTED:
+        meta["capacity"] = EXHAUSTED
     if headers.get("X-Treg-Async"):
         meta["async"] = True
     if kind := headers.get("X-Treg-Hint"):

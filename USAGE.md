@@ -225,7 +225,7 @@ treg balance --json          # integer micro-USD (1e-6 USD) — the unit the led
 treg topup
 ```
 
-Out of balance is an HTTP **402** carrying `balance_micro`, `estimated_cost_micro` and a `topup_url`,
+Out of balance is an HTTP **402** `error: insufficient_balance` carrying `balance_micro`, `estimated_cost_micro` and a `topup_url`,
 so an agent can act on it without reading prose. There is also a per-day ceiling on spend against
 treg's keys, so a runaway agent has a bounded blast radius.
 
@@ -233,7 +233,10 @@ If treg's **own** account for a provider is out, a metered call is refused with 
 `provider_capacity_unavailable` before anything is reserved — nothing is charged, the body names
 `resets_at` when known and `alternatives` (other providers for the same capability). Your own key
 for the provider is never affected, and treg does not switch providers on your behalf. treg
-re-checks the provider about once a minute, so a retry after a minute can succeed.
+re-checks the provider about once a minute, so a retry after a minute can succeed. A call that
+reaches the provider just as treg's account runs out is relayed as the provider answered, with
+`X-Treg-Capacity: exhausted`; `treg call` then prints a notice that the tool is unavailable on
+treg's side instead of naming the provider's wallet.
 
 Where the deployment has the overflow relay on, treg may instead serve the **same endpoint** through a
 treg-owned aggregator account — same request, same response shape, the relay's real price (0% markup),
