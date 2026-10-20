@@ -326,6 +326,7 @@ class EnterpriseSSOIdentity(SQLModel, table=True):
     connection_id: str
     directory_user_id: str | None = Field(default=None, index=True)
     active: bool = Field(default=True)
+    manually_blocked: bool = Field(default=False)
     created_at: NaiveUTC = Field(default_factory=_now)
 
 
@@ -334,6 +335,19 @@ class EnterpriseSSOEvent(SQLModel, table=True):
 
     id: str = Field(primary_key=True)
     created_at: NaiveUTC = Field(default_factory=_now)
+
+
+class EnterpriseSSOAudit(SQLModel, table=True):
+    """Durable team access evidence without emails or IdP profile data."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    org_id: int = Field(foreign_key="org.id", index=True)
+    event: str
+    actor_user_id: int | None = None
+    subject_user_id: int | None = None
+    from_role: str | None = None
+    to_role: str | None = None
+    created_at: NaiveUTC = Field(default_factory=_now, index=True)
 
 
 class EnterpriseDirectoryUser(SQLModel, table=True):

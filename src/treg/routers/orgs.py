@@ -5,7 +5,7 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import case, func
 from sqlalchemy.exc import IntegrityError
@@ -16,6 +16,7 @@ from .. import analytics, crypto, email as email_sender, health, localrun
 from .. import oauth_providers
 from .. import providers as _providers
 from ..application import key_spend
+from ..application import enterprise_sso
 from ..application import images
 from ..application.onboard import demo as demo_seed
 from ..application import archive_erasure
@@ -409,7 +410,11 @@ async def register_user(body: UserIn, request: Request, response: Response) -> d
 async def create_org(
     body: OrgIn, request: Request, response: Response,
     user: User = Depends(require_identity),
+    treg_session: str = Cookie(default=""),
+    x_treg_token: str = Header(default=""),
 ) -> dict:
+    if not x_treg_token and (identity_session.read_session_claims(treg_session) or {}).get("sso_org_id") is not None:
+        raise HTTPException(403, "sign in normally to create another team")
     require_managed_cli(request, team_change=True)
     try:
         result = await signup_use_cases.create_org(
@@ -436,6 +441,7 @@ async def list_orgs(
     user: User = Depends(require_identity),
     x_treg_token: str = Header(default=""),
     x_treg_org: str = Header(default=""),
+    treg_session: str = Cookie(default=""),
     db: AsyncSession = Depends(get_session),
 ) -> list[dict]:
     orgs = await teams.list_user_orgs(
@@ -444,6 +450,10 @@ async def list_orgs(
         x_treg_org=x_treg_org,
         db=db,
     )
+    sso_org_id = ((identity_session.read_identity_claims(x_treg_token) or {}).get("sso_org_id")
+                  if x_treg_token else (identity_session.read_session_claims(treg_session) or {}).get("sso_org_id"))
+    if sso_org_id is not None:
+        orgs = [org for org in orgs if org["org_id"] == sso_org_id]
     for o in orgs:  # the team's picture as a URL (None = initials); the key stays internal
         o["avatar_url"] = images.public_url(o.pop("avatar_key", None))
     return orgs
@@ -830,6 +840,7 @@ async def remove_member(
         raise HTTPException(status_code=404, detail="not a member of this org")
     if membership.role == "owner":  # only an owner manages owners; an admin cannot remove one
         raise HTTPException(status_code=403, detail="owners cannot be removed")
+    await enterprise_sso.block_removed_member(db, org_id, user_id, caller.user.id)
     await teams.delete_membership(db, membership, actor_email=caller.email)
     await db.commit()
     return {"removed": user_id}
@@ -863,6 +874,8 @@ async def set_member_role(
             raise _owned_team_limit_error() from exc
     if membership.role == "owner" and body.role != "owner" and await _count_owners(org_id, db) <= 1:
         raise HTTPException(status_code=409, detail="cannot demote the last owner — promote another owner first")
+    await enterprise_sso.record_role_change(db, org_id, actor=caller.user.id,
+        subject=user_id, from_role=membership.role, to_role=body.role)
     membership.role = body.role
     await db.commit()
     return {"user_id": user_id, "role": body.role, "org_id": org_id}

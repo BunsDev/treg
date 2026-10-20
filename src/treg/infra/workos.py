@@ -46,6 +46,74 @@ async def create_organization(client: httpx.AsyncClient, *, key: str, name: str,
     return value
 
 
+async def _list(client: httpx.AsyncClient, path: str, *, key: str, params: dict,
+                max_pages: int = 5) -> list[dict]:
+    rows: list[dict] = []
+    after: str | None = None
+    for _ in range(max_pages):
+        query = {**params, "limit": 100}
+        if after:
+            query["after"] = after
+        try:
+            response = await client.get(BASE_URL + path, params=query,
+                headers={"Authorization": f"Bearer {key}", "Accept": "application/json"}, timeout=10)
+            response.raise_for_status()
+            payload = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise WorkOSError("WorkOS request failed") from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+            raise WorkOSError("invalid WorkOS response")
+        rows.extend(item for item in payload["data"] if isinstance(item, dict))
+        next_after = (payload.get("list_metadata") or {}).get("after")
+        if not next_after:
+            return rows
+        if next_after == after:
+            raise WorkOSError("WorkOS pagination stalled")
+        after = next_after
+    raise WorkOSError("WorkOS sign-in lookup exceeds page limit")
+
+
+async def verified_organizations_for_domain(client: httpx.AsyncClient, *, key: str, domain: str) -> list[dict]:
+    """Return routing hints for verified WorkOS domains; sign-in still proves membership."""
+    organizations = await _list(client, "/organizations", key=key, params={"domains[]": domain})
+    found: list[dict] = []
+    for org in organizations:
+        domains = org.get("domains") or []
+        verified = any(isinstance(item, dict) and item.get("state") == "verified"
+            and isinstance(item.get("domain"), str) and item["domain"].lower() == domain
+            for item in domains)
+        if verified and isinstance(org.get("id"), str):
+            found.append(org)
+    return found
+
+
+async def directory_users(client: httpx.AsyncClient, *, key: str, directory: str) -> list[dict]:
+    """Fetch a complete roster before a caller makes any revocation decision."""
+    users: list[dict] = []
+    after: str | None = None
+    for _ in range(1000):
+        params = {"directory": directory, "limit": 100}
+        if after:
+            params["after"] = after
+        try:
+            response = await client.get(BASE_URL + "/directory_users", params=params,
+                headers={"Authorization": f"Bearer {key}", "Accept": "application/json"}, timeout=20)
+            response.raise_for_status()
+            payload = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise WorkOSError("WorkOS directory request failed") from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+            raise WorkOSError("invalid WorkOS directory response")
+        users.extend(payload["data"])
+        next_after = (payload.get("list_metadata") or {}).get("after")
+        if not next_after:
+            return users
+        if next_after == after:
+            raise WorkOSError("WorkOS directory pagination stalled")
+        after = next_after
+    raise WorkOSError("WorkOS directory exceeds reconciliation bound")
+
+
 async def portal_link(client: httpx.AsyncClient, *, key: str, organization: str, intent: str,
                       return_url: str | None = None) -> str:
     if intent not in {"sso", "dsync"}:
@@ -59,6 +127,30 @@ async def portal_link(client: httpx.AsyncClient, *, key: str, organization: str,
     if parsed is None or parsed.scheme != "https" or parsed.netloc != "setup.workos.com" or parsed.path not in ("", "/", "/init"):
         raise WorkOSError("WorkOS portal link missing")
     return value
+
+
+async def invite_it_contact(client: httpx.AsyncClient, *, key: str, organization: str,
+                            email: str, directory_sync: bool) -> None:
+    """WorkOS emails its long-lived setup invitation; treg never emails a five-minute portal URL."""
+    path = f"/organizations/{organization}/it_contacts"
+    listing = await _list(client, path, key=key, params={}, max_pages=10)
+    contacts = [item for item in listing if isinstance(item, dict)
+                and isinstance(item.get("email"), str) and item["email"].lower() == email]
+    if contacts:
+        contact_id = contacts[0].get("id")
+    else:
+        contact = await _post(client, path, key, {"email": email})
+        contact_id = contact.get("id")
+    if not isinstance(contact_id, str) or not contact_id.startswith("it_contact_"):
+        raise WorkOSError("WorkOS IT contact missing")
+    intents = ["sso"] + (["directory_sync"] if directory_sync else [])
+    try:
+        response = await client.post(BASE_URL + f"{path}/{contact_id}/invite",
+            json={"intents": intents},
+            headers={"Authorization": f"Bearer {key}", "Accept": "application/json"}, timeout=15)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise WorkOSError("WorkOS invitation failed") from exc
 
 
 async def exchange_code(client: httpx.AsyncClient, *, key: str, client_id: str, code: str) -> dict:

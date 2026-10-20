@@ -25,6 +25,10 @@ sources:
   - src/treg/domain/identity/api_keys.py
   - src/treg/domain/identity/session.py
   - src/treg/application/enterprise_sso.py
+  - src/treg/alembic/versions/0078_enterprise_sso.py
+  - src/treg/alembic/versions/0079_enterprise_sso_audit.py
+  - src/treg/alembic/versions/0080_sso_manual_block.py
+  - src/treg/worker.py
   - src/treg/routers/enterprise_sso.py
   - src/treg/infra/workos.py
   - tests/test_enterprise_sso.py
@@ -64,7 +68,8 @@ its connection is the same one previously used. A new human joins the existing t
 an owner changes roles through the normal Members controls. Email domain alone never grants access.
 
 The owner may require SSO after one successful test sign-in. `require_member` then requires a signed
-browser session carrying this team ID for non-owners. Regular email or social login still identifies
+browser session carrying this team ID for non-owners. An SSO browser session or derived CLI identity
+token can access only that team, even when the user belongs to several. Regular email or social login still identifies
 the global user but does not open that team. The owner retains a regular-login recovery path. API
 keys are separate credentials, and a regular browser session cannot mint a new Default key for an
 enforced team. A WorkOS profile is linked by stable profile and IdP IDs, with account email checked
@@ -76,7 +81,12 @@ including people who have not yet signed in. Once a directory is connected, SSO 
 matching active IdP user in that roster. Inactive/deleted users lose their team membership and keys;
 deleting the directory removes all linked non-owner memberships. Owner recovery remains available.
 WorkOS event IDs make redelivery harmless. The SSO-only plan does not promise automatic offboarding.
-Provisioning never maps external groups into treg roles.
+Provisioning never maps external groups into treg roles. A worker can reconcile the complete
+WorkOS roster to repair missed webhook deliveries. A manual team removal takes precedence over
+active directory records until the owner restores access. Durable, minimal `EnterpriseSSOAudit`
+rows record SSO sign-ins and failures, setup actions, role changes, enforcement switches, directory
+removals, manual team removals, and owner restores. Access changes and their audit rows commit together; setup actions are recorded after
+WorkOS responds. A retention worker deletes expired rows under the deployment's chosen policy.
 
 The registry is **tenant-isolated**: an **Org** owns resources, a **User** is a global identity, and a
 **Membership** links them with a role and IS where the caller's token lives. A token = a `(user, org)`

@@ -102,12 +102,14 @@ def make_identity(
     ttl: int | None = None,
     key_generation: int | None = None,
     scope: str | None = None,
+    sso_org_id: int | None = None,
 ) -> str:
     """Mint a bearer credential. Copied API keys use the no-expiry default; the MCP OAuth bridge
     passes a short TTL for its internal exchange token. Both remain revocable through ``tv``."""
     return _make(
         user_id, audience=IDENTITY_AUDIENCE, ttl=ttl,
         token_version=token_version, org=org, key_generation=key_generation, scope=scope,
+        sso_org_id=sso_org_id,
     )
 
 

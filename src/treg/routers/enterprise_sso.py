@@ -12,14 +12,14 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlmodel import select
 
-from .. import crypto
+from .. import client_ip, crypto, ratestore
 from ..application import enterprise_billing, enterprise_sso
 from ..config import get_settings
 from ..domain.identity import session as identity_session
 from ..domain.identity.access import Caller, require_member
 from ..infra import workos
 from ..infra.db import session_maker
-from ..models import Org
+from ..models import EnterpriseSSO, Org
 from .auth_helpers import _is_https, _same_origin
 from .billing import _return_base
 
@@ -46,6 +46,14 @@ class EnforceIn(BaseModel):
     enabled: bool
 
 
+class DiscoverIn(BaseModel):
+    email: str
+
+
+class ITContactIn(BaseModel):
+    email: str
+
+
 def _owner(caller: Caller, org_id: int) -> None:
     if caller.org_id != org_id or caller.role != "owner":
         raise HTTPException(403, "team owner required")
@@ -56,6 +64,25 @@ async def sso_status(org_id: int, caller: Caller = Depends(require_member)) -> d
     if caller.org_id != org_id:
         raise HTTPException(403, "team membership required")
     return await enterprise_billing.status(org_id)
+
+
+@router.get("/orgs/{org_id}/sso/blocked")
+async def sso_blocked_members(org_id: int, caller: Caller = Depends(require_member)) -> dict:
+    _owner(caller, org_id)
+    return {"members": await enterprise_sso.blocked_members(org_id)}
+
+
+@router.post("/orgs/{org_id}/sso/blocked/{user_id}/restore")
+async def sso_restore_member(org_id: int, user_id: int, request: Request,
+                             caller: Caller = Depends(require_member)) -> dict:
+    _owner(caller, org_id)
+    if not _same_origin(request):
+        raise HTTPException(403, "cross-origin request rejected")
+    try:
+        await enterprise_sso.unblock_member(org_id, user_id, caller.user.id)
+    except enterprise_sso.EnterpriseSSOError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"restored": user_id}
 
 
 @router.post("/orgs/{org_id}/sso/checkout")
@@ -93,9 +120,56 @@ async def sso_setup(org_id: int, intent: str, request: Request,
             link = await workos.portal_link(client, key=settings.workos_api_key,
                 organization=workos_org_id, intent=intent,
                 return_url=settings.public_url.rstrip("/") + "/app#sso")
+        await enterprise_sso.record_action(org_id, "sso.setup_link_generated", actor=caller.user.id)
         return {"url": link}
     except (enterprise_sso.EnterpriseSSOError, workos.WorkOSError) as exc:
         raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/orgs/{org_id}/sso/invite-it")
+async def sso_invite_it(org_id: int, body: ITContactIn, request: Request,
+                        caller: Caller = Depends(require_member)) -> dict:
+    _owner(caller, org_id)
+    if not _same_origin(request):
+        raise HTTPException(403, "cross-origin request rejected")
+    email = body.email.strip().lower()
+    if len(email) > 254 or email.count("@") != 1 or not email.split("@", 1)[0] or "." not in email.rsplit("@", 1)[1]:
+        raise HTTPException(422, "enter the IT admin's email")
+    settings = get_settings()
+    if not settings.workos_api_key:
+        raise HTTPException(503, "WorkOS is not configured")
+    try:
+        org, config = await enterprise_sso.configured_team(org_id)
+        workos_org_id = config.workos_org_id
+        async with httpx.AsyncClient() as client:
+            if not workos_org_id:
+                workos_org_id = await workos.create_organization(client,
+                    key=settings.workos_api_key, name=org.name, org_id=org_id)
+                await enterprise_sso.bind_workos_org(org_id, workos_org_id)
+            await workos.invite_it_contact(client, key=settings.workos_api_key,
+                organization=workos_org_id, email=email,
+                directory_sync=config.plan == "sso_directory")
+        await enterprise_sso.record_action(org_id, "sso.it_contact_invited", actor=caller.user.id)
+        return {"invited": True}
+    except (enterprise_sso.EnterpriseSSOError, workos.WorkOSError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.get("/auth/sso/idp/start")
+async def sso_idp_start(request: Request, connection_id: str = ""):
+    """An Okta app tile supplies a connection hint, then starts our normal checked flow."""
+    if not connection_id or len(connection_id) > 100:
+        raise HTTPException(404, "company sign-in not found")
+    async with session_maker() as db:
+        config = (await db.execute(select(EnterpriseSSO).where(
+            EnterpriseSSO.connection_id == connection_id,
+            EnterpriseSSO.subscription_status.in_(("active", "trialing")),
+        ))).scalar_one_or_none()
+        org = await db.get(Org, config.org_id) if config else None
+        if org is None or org.suspended:
+            raise HTTPException(404, "company sign-in not found")
+        slug = org.slug
+    return await sso_start(slug, request)
 
 
 @router.get("/auth/sso/{org_slug}/start")
@@ -127,6 +201,45 @@ async def sso_start(org_slug: str, request: Request):
     return response
 
 
+@router.post("/auth/sso/discover")
+async def sso_discover(body: DiscoverIn, request: Request) -> dict:
+    """Email routes a visitor to a connection; only the WorkOS callback can grant access."""
+    email = body.email.strip().lower()
+    if len(email) > 254 or email.count("@") != 1 or not email.split("@", 1)[0]:
+        raise HTTPException(422, "enter a valid work email")
+    domain = email.rsplit("@", 1)[1].strip(".")
+    if not domain or "." not in domain or len(domain) > 253:
+        raise HTTPException(422, "enter a valid work email")
+    async with session_maker() as db:
+        await ratestore.sweep(db, "sso_discover")
+        allowed = await ratestore.rate_check(db, "sso_discover",
+            [(f"ip:{client_ip.of(request)}", 30)], 900)
+        await db.commit()
+    if not allowed:
+        raise HTTPException(429, "too many sign-in lookups; try again later")
+    settings = get_settings()
+    if not settings.workos_api_key:
+        raise HTTPException(503, "company sign-in is unavailable")
+    try:
+        async with httpx.AsyncClient() as client:
+            organizations = await workos.verified_organizations_for_domain(client,
+                key=settings.workos_api_key, domain=domain)
+    except workos.WorkOSError as exc:
+        raise HTTPException(503, "company sign-in is temporarily unavailable") from exc
+    organization_ids = {item.get("id") for item in organizations}
+    if not organization_ids:
+        return {"teams": []}
+    async with session_maker() as db:
+        matches = (await db.execute(select(Org, EnterpriseSSO).join(
+            EnterpriseSSO, EnterpriseSSO.org_id == Org.id).where(
+                EnterpriseSSO.workos_org_id.in_(organization_ids),
+                EnterpriseSSO.subscription_status.in_(("active", "trialing")),
+                Org.suspended.is_(False),
+        ))).all()
+    return {"teams": sorted(({"name": org.name, "slug": org.slug}
+        for org, _ in matches), key=lambda team: (team["name"].lower(), team["slug"]))}
+
+
 @router.get("/auth/sso/callback")
 async def sso_callback(request: Request, code: str = "", state: str = "", error: str = ""):
     cookie = request.cookies.get(STATE_COOKIE, "")
@@ -140,6 +253,7 @@ async def sso_callback(request: Request, code: str = "", state: str = "", error:
     except (InvalidToken, ValueError, TypeError, KeyError, json.JSONDecodeError):
         return _signin_failure("expired")
     if not code:
+        await enterprise_sso.record_action(org_id, "sso.signin_failed")
         return _signin_failure(
             "domain" if error == "profile_not_allowed_outside_organization" else "failed",
             saved.get("slug", ""),
@@ -151,6 +265,7 @@ async def sso_callback(request: Request, code: str = "", state: str = "", error:
                                                  client_id=settings.workos_client_id, code=code)
         result = await enterprise_sso.finish_signin(org_id, profile)
     except (workos.WorkOSError, enterprise_sso.EnterpriseSSOError):
+        await enterprise_sso.record_action(org_id, "sso.signin_failed")
         return _signin_failure("failed", saved.get("slug", ""))
     response = RedirectResponse("/app?sso=success", status_code=303)
     response.delete_cookie(STATE_COOKIE)
@@ -170,7 +285,7 @@ async def sso_enforce(org_id: int, body: EnforceIn, request: Request,
     if not _same_origin(request):
         raise HTTPException(403, "cross-origin request rejected")
     try:
-        return {"enforced": await enterprise_sso.set_enforced(org_id, body.enabled)}
+        return {"enforced": await enterprise_sso.set_enforced(org_id, body.enabled, caller.user.id)}
     except enterprise_sso.EnterpriseSSOError as exc:
         raise HTTPException(422, str(exc)) from exc
 

@@ -131,6 +131,7 @@ async def _resolve_org(ref: str, db: AsyncSession) -> Org | None:
 
 
 async def require_identity(
+    request: Request,
     x_treg_token: str = Header(default=""),
     x_treg_org: str = Header(default=""),
     treg_session: str = Cookie(default=""),
@@ -151,6 +152,9 @@ async def require_identity(
                 "but cannot act as a user"))
         if user is not None and not user.suspended:
             claims = sess.read_identity_claims(x_treg_token)
+            sso_org_id = (claims or {}).get("sso_org_id")
+            if sso_org_id is not None and not _sso_scope_allows(request, sso_org_id):
+                raise HTTPException(status_code=403, detail="sign in normally for account-wide actions")
             oauth_bridge = bool(
                 claims
                 and claims.get("aud") == sess.IDENTITY_AUDIENCE
@@ -186,9 +190,20 @@ async def require_identity(
         raise HTTPException(status_code=401, detail="invalid token")
     user = await _user_from_session(treg_session, db)
     if user is not None:
+        sso_org_id = (sess.read_session_claims(treg_session) or {}).get("sso_org_id")
+        if sso_org_id is not None and not _sso_scope_allows(request, sso_org_id):
+            raise HTTPException(status_code=403, detail="sign in normally for account-wide actions")
         await db.commit()
         return user
     raise HTTPException(status_code=401, detail="not authenticated")
+
+
+def _sso_scope_allows(request: Request, org_id: int) -> bool:
+    path = request.url.path.split("/")
+    scoped_team_path = len(path) > 2 and path[1] == "orgs" and path[2] == str(org_id)
+    scoped_entry = request.url.path == "/orgs" and request.method == "GET"
+    scoped_key = request.url.path == "/auth/cli-token"
+    return scoped_team_path or scoped_entry or scoped_key
 
 
 async def _user_from_identity_token(token: str, db: AsyncSession) -> User | None:
@@ -310,13 +325,21 @@ async def require_member(
         raise HTTPException(status_code=403, detail="account suspended")
     if org.suspended:
         raise HTTPException(status_code=403, detail="org suspended")
+    token_sso_org_id = (sess.read_identity_claims(x_treg_token) or {}).get("sso_org_id") if x_treg_token else None
+    if token_sso_org_id is not None and token_sso_org_id != org.id:
+        raise HTTPException(status_code=403, detail="this key belongs to another team")
+    # A company SSO cookie proves identity for that company only, even when the same
+    # global User belongs to another team whose own SSO policy is not enforced.
+    if not x_treg_token:
+        sso_claims = sess.read_session_claims(treg_session) or {}
+        if sso_claims.get("sso_org_id") is not None and sso_claims["sso_org_id"] != org.id:
+            raise HTTPException(status_code=403, detail="sign in separately for this team")
     # A regular email/GitHub/Google browser session may still identify this person globally,
     # but it is not proof of this team's corporate IdP. Bearer keys are separate machine/CLI
     # credentials; Directory Sync revokes those by removing the membership.
     if not x_treg_token and membership.role != "owner":
         enterprise = await db.get(EnterpriseSSO, org.id)
         if enterprise is not None and enterprise.enforced:
-            sso_claims = sess.read_session_claims(treg_session) or {}
             if sso_claims.get("sso_org_id") != org.id:
                 raise HTTPException(status_code=403, detail="sign in through this team's SSO")
     # Public-demo lockdown: the published token (non-admin roles) may ONLY call tools and read.
@@ -348,9 +371,13 @@ async def require_superadmin(
         return "env-admin"
     user: User | None = None
     if x_treg_token:
+        if (sess.read_identity_claims(x_treg_token) or {}).get("sso_org_id") is not None:
+            raise HTTPException(status_code=403, detail="sign in normally for platform administration")
         m, _ = await _membership_and_key_by_token(x_treg_token, db)
         user = await db.get(User, m.user_id) if m else await _user_from_identity_token(x_treg_token, db)
     else:
+        if (sess.read_session_claims(treg_session) or {}).get("sso_org_id") is not None:
+            raise HTTPException(status_code=403, detail="sign in normally for platform administration")
         user = await _user_from_session(treg_session, db)
     if user is not None and user.is_superadmin and not user.suspended:
         await db.commit()

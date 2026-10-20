@@ -10,7 +10,7 @@ from ..domain.governance import teams
 from ..domain.identity import api_keys as managed_keys
 from ..domain.identity.access import _is_machine_email, _norm_email
 from ..infra.db import session_maker
-from ..models import (EnterpriseDirectoryUser, EnterpriseSSO, EnterpriseSSOEvent,
+from ..models import (EnterpriseDirectoryUser, EnterpriseSSO, EnterpriseSSOAudit, EnterpriseSSOEvent,
                       EnterpriseSSOIdentity, Membership, Org, User)
 from . import signup
 
@@ -28,6 +28,32 @@ class SigninResult:
     token_version: int
     org_id: int
     org_slug: str
+
+
+def _audit(db, org_id: int, event: str, *, actor: int | None = None,
+           subject: int | None = None, from_role: str | None = None,
+           to_role: str | None = None) -> None:
+    db.add(EnterpriseSSOAudit(org_id=org_id, event=event,
+        actor_user_id=actor, subject_user_id=subject,
+        from_role=from_role, to_role=to_role))
+
+
+async def record_action(org_id: int, event: str, *, actor: int | None = None) -> None:
+    if event not in {"sso.setup_link_generated", "sso.it_contact_invited", "sso.signin_failed"}:
+        raise ValueError("invalid enterprise SSO audit action")
+    async with session_maker() as db:
+        if await db.get(EnterpriseSSO, org_id) is None:
+            return
+        _audit(db, org_id, event, actor=actor)
+        await db.commit()
+
+
+async def record_role_change(db, org_id: int, *, actor: int, subject: int,
+                             from_role: str, to_role: str) -> None:
+    """Join the existing membership transaction; one writer owns the audit table."""
+    if from_role != to_role and await db.get(EnterpriseSSO, org_id) is not None:
+        _audit(db, org_id, "sso.role_changed", actor=actor, subject=subject,
+               from_role=from_role, to_role=to_role)
 
 
 async def configured_team(org_id: int) -> tuple[Org, EnterpriseSSO]:
@@ -48,6 +74,7 @@ async def bind_workos_org(org_id: int, workos_org_id: str) -> None:
             raise EnterpriseSSOError("team already linked to another SSO organization")
         config.workos_org_id = workos_org_id
         db.add(config)
+        _audit(db, org_id, "sso.workos_org_bound")
         await db.commit()
 
 
@@ -87,7 +114,7 @@ async def finish_signin(org_id: int, profile: dict) -> SigninResult:
             EnterpriseSSOIdentity.org_id == org_id,
             EnterpriseSSOIdentity.profile_id == profile_id,
         ))).scalar_one_or_none()
-        if identity is not None and not identity.active:
+        if identity is not None and (not identity.active or identity.manually_blocked):
             raise EnterpriseSSOError("this team has deactivated the identity")
         if identity is not None:
             user = await db.get(User, identity.user_id)
@@ -130,11 +157,12 @@ async def finish_signin(org_id: int, profile: dict) -> SigninResult:
         if not config.connection_id:
             config.connection_id = connection
             db.add(config)
+        _audit(db, org_id, "sso.signin", subject=user.id)
         await db.commit()
         return SigninResult(user.id, user.token_version, org.id, org.slug)
 
 
-async def set_enforced(org_id: int, enabled: bool) -> bool:
+async def set_enforced(org_id: int, enabled: bool, actor_user_id: int | None = None) -> bool:
     async with session_maker() as db:
         config = await db.get(EnterpriseSSO, org_id)
         if config is None:
@@ -143,8 +171,60 @@ async def set_enforced(org_id: int, enabled: bool) -> bool:
             raise EnterpriseSSOError("test SSO sign-in before requiring it")
         config.enforced = enabled
         db.add(config)
+        _audit(db, org_id, "sso.enforcement_enabled" if enabled else "sso.enforcement_disabled",
+               actor=actor_user_id)
         await db.commit()
         return enabled
+
+
+async def block_removed_member(db, org_id: int, user_id: int, actor_user_id: int) -> None:
+    """Persist an owner's removal in the membership transaction."""
+    identity = (await db.execute(select(EnterpriseSSOIdentity).where(
+        EnterpriseSSOIdentity.org_id == org_id,
+        EnterpriseSSOIdentity.user_id == user_id,
+    ))).scalar_one_or_none()
+    if identity is not None:
+        identity.manually_blocked = True
+        identity.active = False
+        db.add(identity)
+        _audit(db, org_id, "sso.manual_access_removed", actor=actor_user_id, subject=user_id)
+
+
+async def blocked_members(org_id: int) -> list[dict]:
+    async with session_maker() as db:
+        rows = (await db.execute(select(EnterpriseSSOIdentity, User).join(
+            User, User.id == EnterpriseSSOIdentity.user_id).where(
+            EnterpriseSSOIdentity.org_id == org_id,
+            EnterpriseSSOIdentity.manually_blocked.is_(True),
+        ))).all()
+        return [{"user_id": user.id, "email": user.email} for _, user in rows]
+
+
+async def unblock_member(org_id: int, user_id: int, actor_user_id: int) -> None:
+    async with session_maker() as db:
+        identity = (await db.execute(select(EnterpriseSSOIdentity).where(
+            EnterpriseSSOIdentity.org_id == org_id,
+            EnterpriseSSOIdentity.user_id == user_id,
+            EnterpriseSSOIdentity.manually_blocked.is_(True),
+        ))).scalar_one_or_none()
+        if identity is None:
+            raise EnterpriseSSOError("blocked SSO member not found")
+        config = await db.get(EnterpriseSSO, org_id)
+        identity.manually_blocked = False
+        if config and config.plan == "sso_directory" and config.directory_id:
+            record = (await db.execute(select(EnterpriseDirectoryUser).where(
+                EnterpriseDirectoryUser.org_id == org_id,
+                EnterpriseDirectoryUser.directory_id == config.directory_id,
+                EnterpriseDirectoryUser.idp_id == identity.idp_id,
+            ))).scalar_one_or_none()
+            user = await db.get(User, user_id)
+            identity.active = bool(config.directory_active and record and record.active
+                                   and user and record.email == user.email)
+        else:
+            identity.active = True
+        db.add(identity)
+        _audit(db, org_id, "sso.manual_access_restored", actor=actor_user_id, subject=user_id)
+        await db.commit()
 
 
 async def apply_directory_event(event: dict) -> bool:
@@ -228,7 +308,7 @@ async def apply_directory_event(event: dict) -> bool:
                 identity.directory_user_id = directory_user_id
                 if not record.active:
                     await _deactivate_identity(db, identity)
-                else:
+                elif not identity.manually_blocked:
                     identity.active = True
                     db.add(identity)
         db.add(config)
@@ -242,6 +322,8 @@ async def apply_directory_event(event: dict) -> bool:
 
 
 async def _deactivate_identity(db, identity: EnterpriseSSOIdentity) -> None:
+    if identity.active:
+        _audit(db, identity.org_id, "sso.directory_access_removed", subject=identity.user_id)
     identity.active = False
     membership = (await db.execute(select(Membership).where(
         Membership.org_id == identity.org_id,
@@ -250,6 +332,69 @@ async def _deactivate_identity(db, identity: EnterpriseSSOIdentity) -> None:
     if membership is not None and membership.role != "owner":
         await teams.delete_membership(db, membership)
     db.add(identity)
+
+
+async def reconcile_directory(org_id: int, directory_id: str, users: list[dict],
+                              observed_at_ms: int) -> dict:
+    """Apply a complete WorkOS roster; newer webhook updates win over this snapshot."""
+    roster: dict[str, tuple[str, str, bool]] = {}
+    for item in users:
+        if not isinstance(item, dict) or item.get("directory_id") != directory_id:
+            raise EnterpriseSSOError("incomplete or wrong directory roster")
+        user_id, idp_id, email = item.get("id"), item.get("idp_id"), item.get("email")
+        if not all(isinstance(v, str) and v for v in (user_id, idp_id, email)) or user_id in roster:
+            raise EnterpriseSSOError("invalid or duplicate directory user")
+        roster[user_id] = (idp_id, _norm_email(email), item.get("state") == "active")
+    async with session_maker() as db:
+        config = await db.get(EnterpriseSSO, org_id)
+        if (config is None or config.plan != "sso_directory" or
+                config.directory_id != directory_id or not config.directory_active or
+                config.subscription_status not in PAID_STATUSES):
+            raise EnterpriseSSOError("directory is no longer active for this team")
+        if any(item.get("organization_id") not in (None, config.workos_org_id) for item in users):
+            raise EnterpriseSSOError("roster belongs to another organization")
+        records = (await db.execute(select(EnterpriseDirectoryUser).where(
+            EnterpriseDirectoryUser.org_id == org_id,
+            EnterpriseDirectoryUser.directory_id == directory_id,
+        ))).scalars().all()
+        existing = {row.directory_user_id: row for row in records}
+        identities = {row.idp_id: row for row in (await db.execute(select(EnterpriseSSOIdentity).where(
+            EnterpriseSSOIdentity.org_id == org_id,
+        ))).scalars().all()}
+        removed = 0
+        for user_id, (idp_id, email, active) in roster.items():
+            record = existing.pop(user_id, None)
+            if record is not None and record.last_event_ms > observed_at_ms:
+                continue
+            record = record or EnterpriseDirectoryUser(org_id=org_id,
+                directory_user_id=user_id, directory_id=directory_id,
+                idp_id=idp_id, email=email)
+            record.idp_id, record.email, record.active = idp_id, email, active
+            record.last_event_ms = observed_at_ms
+            db.add(record)
+            identity = identities.get(idp_id)
+            if identity is not None:
+                if identity.directory_user_id and identity.directory_user_id != user_id:
+                    raise EnterpriseSSOError("directory identity mismatch")
+                identity.directory_user_id = user_id
+                if not active:
+                    await _deactivate_identity(db, identity)
+                    removed += 1
+                elif not identity.manually_blocked:
+                    identity.active = True
+                    db.add(identity)
+        for record in existing.values():
+            if record.last_event_ms > observed_at_ms:
+                continue
+            record.active = False
+            record.last_event_ms = observed_at_ms
+            db.add(record)
+            identity = identities.get(record.idp_id)
+            if identity is not None and identity.active:
+                await _deactivate_identity(db, identity)
+                removed += 1
+        await db.commit()
+    return {"roster_size": len(roster), "memberships_removed": removed}
 
 
 async def revoke_team_keys_and_memberships(db, org_id: int) -> None:

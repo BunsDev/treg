@@ -1823,6 +1823,23 @@
   {
     "kind": "APIRoute",
     "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "sso_blocked_members",
+    "path": "/orgs/{org_id}/sso/blocked"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_restore_member",
+    "path": "/orgs/{org_id}/sso/blocked/{user_id}/restore"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
       "POST"
     ],
     "name": "sso_checkout",
@@ -1839,11 +1856,36 @@
   {
     "kind": "APIRoute",
     "methods": [
+      "POST"
+    ],
+    "name": "sso_invite_it",
+    "path": "/orgs/{org_id}/sso/invite-it"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "sso_idp_start",
+    "path": "/auth/sso/idp/start"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
       "GET",
       "HEAD"
     ],
     "name": "sso_start",
     "path": "/auth/sso/{org_slug}/start"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_discover",
+    "path": "/auth/sso/discover"
   },
   {
     "kind": "APIRoute",

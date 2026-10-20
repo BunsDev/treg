@@ -3,11 +3,26 @@ import { useDashboard } from '../state/context'
 import BrandMark from './BrandMark.vue'
 export default {
   components: { BrandMark }, setup: useDashboard,
-  data: () => ({ ssoTeam: '' }),
+  data: () => ({ ssoEmail: '', ssoChoices: [], ssoBusy: false }),
   methods: {
-    ssoLogin() {
-      const slug = this.ssoTeam.trim().toLowerCase()
-      if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) { this.loginErr = 'Enter your team link name.'; return }
+    async ssoLogin() {
+      const email = this.ssoEmail.trim()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { this.loginErr = 'Enter your work email.'; return }
+      this.ssoBusy = true; this.loginErr = ''; this.ssoChoices = []
+      try {
+        const response = await fetch('/auth/sso/discover', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email }),
+        })
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.detail || 'Could not find company sign-in.')
+        this.ssoChoices = result.teams || []
+        if (this.ssoChoices.length === 1) this.ssoGo(this.ssoChoices[0].slug)
+        else if (!this.ssoChoices.length) this.loginErr = 'No company sign-in found. Ask your IT admin for the treg link, or use another sign-in method.'
+      } catch (error) { this.loginErr = error.message || 'Could not find company sign-in.' }
+      finally { this.ssoBusy = false }
+    },
+    ssoGo(slug) {
       location.href = `/auth/sso/${encodeURIComponent(slug)}/start`
     },
   },
@@ -40,9 +55,13 @@ export default {
       </div>
       <details v-if="!oauthSignin && !invitePrefill && !shareGate" style="margin-top:12px;text-align:left">
         <summary class="sub" style="cursor:pointer;text-align:center">Sign in with company SSO</summary>
-        <p class="sub" style="font-size:11px">Use the sign-in link your company shared, or enter its unique team link name.</p>
-        <div class="field"><input v-model="ssoTeam" aria-label="Team link name" placeholder="team-link-name" @keyup.enter="ssoLogin"/></div>
-        <button class="btn" style="width:100%" @click="ssoLogin">Continue with SSO</button>
+        <p class="sub" style="font-size:11px">Enter your work email, or use the sign-in link your company shared.</p>
+        <div class="field"><input v-model="ssoEmail" type="email" autocomplete="email" aria-label="Work email for company SSO" placeholder="you@company.com" @keyup.enter="ssoLogin"/></div>
+        <button class="btn" style="width:100%" :disabled="ssoBusy" @click="ssoLogin">{{ssoBusy?'Finding company…':'Continue with SSO'}}</button>
+        <div v-if="ssoChoices.length > 1" style="margin-top:10px">
+          <p class="sub">Choose your company team:</p>
+          <button v-for="team in ssoChoices" :key="team.slug" class="btn" style="width:100%;margin-top:6px" @click="ssoGo(team.slug)">{{team.name}} · {{team.slug}}</button>
+        </div>
       </details>
       <details v-if="!oauthSignin" style="margin-top:12px;text-align:left">
         <summary class="sub" style="cursor:pointer;text-align:center">or paste an org token (agents &amp; CLI)</summary>

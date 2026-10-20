@@ -14,7 +14,7 @@ from treg.application import billing, enterprise_billing, enterprise_sso
 from treg.domain.identity import session as identity_session
 from treg.infra import workos
 from treg.infra.db import session_maker
-from treg.models import EnterpriseSSO, Membership, Org, User
+from treg.models import EnterpriseSSO, EnterpriseSSOAudit, Membership, Org, User
 
 
 def profile(org="org_workos_1", email="employee@example.com"):
@@ -44,6 +44,48 @@ async def test_sso_profile_must_match_team_and_jit_is_member(clients):
         member = (await db.execute(select(Membership).where(
             Membership.org_id == org_id, Membership.user_id == result.user_id))).scalar_one()
         assert member.role == "member"
+        audit = (await db.execute(select(EnterpriseSSOAudit).where(
+            EnterpriseSSOAudit.org_id == org_id))).scalars().all()
+        assert [row.event for row in audit] == ["sso.signin", "sso.signin"]
+        assert all(row.subject_user_id == result.user_id for row in audit)
+
+
+async def test_owner_can_restore_manually_removed_sso_member(clients):
+    org_id = await team(clients)
+    result = await enterprise_sso.finish_signin(org_id, profile())
+    removed = await clients.delete(f"/orgs/{org_id}/members/{result.user_id}")
+    assert removed.status_code == 200
+    with pytest.raises(enterprise_sso.EnterpriseSSOError, match="deactivated"):
+        await enterprise_sso.finish_signin(org_id, profile())
+    blocked = await clients.get(f"/orgs/{org_id}/sso/blocked")
+    assert blocked.json() == {"members": [{"user_id": result.user_id, "email": "employee@example.com"}]}
+    restored = await clients.post(f"/orgs/{org_id}/sso/blocked/{result.user_id}/restore")
+    assert restored.status_code == 200
+    assert (await enterprise_sso.finish_signin(org_id, profile())).user_id == result.user_id
+    assert (await clients.get(f"/orgs/{org_id}/sso/blocked")).json() == {"members": []}
+    async with session_maker() as db:
+        events = (await db.execute(select(EnterpriseSSOAudit.event).where(
+            EnterpriseSSOAudit.org_id == org_id))).scalars().all()
+        assert "sso.manual_access_removed" in events
+        assert "sso.manual_access_restored" in events
+
+
+async def test_directory_cannot_restore_a_manually_removed_member(clients):
+    org_id = await team(clients, plan="sso_directory")
+    base = {"organization_id": "org_workos_1", "directory_id": "directory_1",
+            "id": "directory_user_1", "idp_id": profile()["idp_id"],
+            "email": "employee@example.com", "state": "active"}
+    await enterprise_sso.apply_directory_event({"id": "activate", "event": "dsync.activated",
+        "data": {"id": "directory_1", "organization_id": "org_workos_1"}})
+    await enterprise_sso.apply_directory_event({"id": "create", "event": "dsync.user.created", "data": base})
+    result = await enterprise_sso.finish_signin(org_id, profile())
+    assert (await clients.delete(f"/orgs/{org_id}/members/{result.user_id}")).status_code == 200
+    await enterprise_sso.apply_directory_event({"id": "update", "event": "dsync.user.updated", "data": base})
+    await enterprise_sso.reconcile_directory(org_id, "directory_1", [base], 1000)
+    with pytest.raises(enterprise_sso.EnterpriseSSOError, match="deactivated"):
+        await enterprise_sso.finish_signin(org_id, profile())
+    assert (await clients.post(f"/orgs/{org_id}/sso/blocked/{result.user_id}/restore")).status_code == 200
+    assert (await enterprise_sso.finish_signin(org_id, profile())).user_id == result.user_id
 
 
 async def test_sso_does_not_link_an_unverified_existing_account(clients):
@@ -58,6 +100,98 @@ async def test_sso_does_not_link_an_unverified_existing_account(clients):
         assert user.email_verified_at is None
         assert (await db.execute(select(Membership).where(
             Membership.org_id == org_id, Membership.user_id == user.id))).scalar_one_or_none() is None
+
+
+async def test_company_sso_cookie_cannot_open_another_team_or_mint_its_key(clients):
+    org_id = await team(clients)
+    result = await enterprise_sso.finish_signin(org_id, profile())
+    async with session_maker() as db:
+        other = Org(name="Unrelated", slug="unrelated")
+        db.add(other)
+        await db.flush()
+        db.add(Membership(org_id=other.id, user_id=result.user_id, role="member", token_hash=""))
+        await db.commit()
+        other_id = other.id
+    clients.headers.pop("X-Treg-Token")
+    clients.cookies.set(identity_session.COOKIE,
+        identity_session.make_session(result.user_id, token_version=result.token_version,
+                                      sso_org_id=org_id))
+    assert {row["org_id"] for row in (await clients.get("/orgs")).json()} == {org_id}
+    assert (await clients.get(f"/orgs/{org_id}/balance",
+        headers={"X-Treg-Org": str(org_id)})).status_code == 200
+    assert (await clients.get(f"/orgs/{other_id}/balance",
+        headers={"X-Treg-Org": str(other_id)})).status_code == 403
+    key = (await clients.get("/auth/cli-token", headers={"X-Treg-Org": str(org_id)})).json()["token"]
+    assert identity_session.read_identity_claims(key)["sso_org_id"] == org_id
+    assert (await clients.get(f"/orgs/{other_id}/balance", headers={
+        "X-Treg-Token": key, "X-Treg-Org": str(other_id)})).status_code == 403
+    assert (await clients.post("/orgs", json={"name": "Another"},
+        headers={"X-Treg-Token": key})).status_code == 403
+    assert (await clients.get("/auth/cli-token",
+        headers={"X-Treg-Org": str(other_id)})).status_code == 403
+    assert (await clients.post("/orgs", json={"name": "Another"})).status_code == 403
+
+
+async def test_company_sso_session_cannot_become_platform_admin(clients):
+    org_id = await team(clients)
+    result = await enterprise_sso.finish_signin(org_id, profile())
+    async with session_maker() as db:
+        user = await db.get(User, result.user_id)
+        user.is_superadmin = True
+        db.add(user)
+        await db.commit()
+    clients.headers.pop("X-Treg-Token")
+    clients.cookies.set(identity_session.COOKIE,
+        identity_session.make_session(result.user_id, token_version=result.token_version,
+                                      sso_org_id=org_id))
+    assert (await clients.get("/admin/stats")).status_code == 403
+    key = (await clients.get("/auth/cli-token", headers={"X-Treg-Org": str(org_id)})).json()["token"]
+    assert (await clients.get("/admin/stats", headers={"X-Treg-Token": key})).status_code == 403
+
+
+async def test_role_change_on_sso_team_is_durable_with_old_and_new_role(clients):
+    org_id = await team(clients)
+    result = await enterprise_sso.finish_signin(org_id, profile())
+    response = await clients.patch(f"/orgs/{org_id}/members/{result.user_id}",
+        json={"role": "admin"})
+    assert response.status_code == 200, response.text
+    async with session_maker() as db:
+        change = (await db.execute(select(EnterpriseSSOAudit).where(
+            EnterpriseSSOAudit.org_id == org_id,
+            EnterpriseSSOAudit.event == "sso.role_changed"))).scalar_one()
+        assert (change.subject_user_id, change.from_role, change.to_role) == (
+            result.user_id, "member", "admin")
+
+
+async def test_sso_email_discovery_routes_but_does_not_join(clients, monkeypatch):
+    from treg.config import get_settings
+    await team(clients)
+    monkeypatch.setattr(get_settings(), "workos_api_key", "sk_test")
+    async def find(_client, *, key, domain):
+        assert key == "sk_test" and domain == "example.com"
+        return [{"id": "org_workos_1"}]
+    monkeypatch.setattr(workos, "verified_organizations_for_domain", find)
+    result = await clients.post("/auth/sso/discover", json={"email": "employee@example.com"})
+    assert result.status_code == 200
+    assert len(result.json()["teams"]) == 1
+    async with session_maker() as db:
+        assert (await db.execute(select(User).where(
+            User.email == "employee@example.com"))).scalar_one_or_none() is None
+
+
+async def test_workos_discovery_uses_verified_org_domain_without_listing_test_idp_connection():
+    """WorkOS staging excludes its Test IdP from connection lists; org domains still route."""
+    def response(request):
+        assert request.url.path == "/organizations"
+        assert request.url.params.get("domains[]") == "example.com"
+        return httpx.Response(200, json={"data": [
+            {"id": "org_verified", "domains": [{"domain": "example.com", "state": "verified"}]},
+            {"id": "org_pending", "domains": [{"domain": "example.com", "state": "pending"}]},
+        ], "list_metadata": {"after": None}})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(response)) as client:
+        found = await workos.verified_organizations_for_domain(client,
+            key="sk_test", domain="example.com")
+    assert [item["id"] for item in found] == ["org_verified"]
 
 
 async def test_directory_deactivation_removes_team_access(clients):
@@ -76,8 +210,32 @@ async def test_directory_deactivation_removes_team_access(clients):
     async with session_maker() as db:
         assert (await db.execute(select(Membership).where(
             Membership.org_id == org_id, Membership.user_id == result.user_id))).scalar_one_or_none() is None
+        assert (await db.execute(select(EnterpriseSSOAudit).where(
+            EnterpriseSSOAudit.org_id == org_id,
+            EnterpriseSSOAudit.event == "sso.directory_access_removed"))).scalar_one().subject_user_id == result.user_id
     with pytest.raises(enterprise_sso.EnterpriseSSOError, match="not active"):
         await enterprise_sso.finish_signin(org_id, profile())
+
+
+async def test_reconciliation_repairs_a_missed_directory_removal(clients):
+    org_id = await team(clients, plan="sso_directory")
+    base = {"organization_id": "org_workos_1", "directory_id": "directory_1",
+            "id": "directory_user_1", "idp_id": profile()["idp_id"],
+            "email": "employee@example.com", "state": "active"}
+    await enterprise_sso.apply_directory_event({"id": "activate", "event": "dsync.activated",
+        "data": {"id": "directory_1", "organization_id": "org_workos_1"}})
+    await enterprise_sso.apply_directory_event({"id": "add", "event": "dsync.user.created", "data": base})
+    result = await enterprise_sso.finish_signin(org_id, profile())
+    with pytest.raises(enterprise_sso.EnterpriseSSOError, match="wrong directory roster"):
+        await enterprise_sso.reconcile_directory(org_id, "directory_1", [{**base, "directory_id": "other"}], 1000)
+    async with session_maker() as db:
+        assert (await db.execute(select(Membership).where(
+            Membership.org_id == org_id, Membership.user_id == result.user_id))).scalar_one_or_none()
+    repaired = await enterprise_sso.reconcile_directory(org_id, "directory_1", [], 1000)
+    assert repaired["memberships_removed"] == 1
+    async with session_maker() as db:
+        assert (await db.execute(select(Membership).where(
+            Membership.org_id == org_id, Membership.user_id == result.user_id))).scalar_one_or_none() is None
 
 
 async def test_whole_directory_removal_revokes_members(clients):
@@ -152,6 +310,25 @@ async def test_workos_portal_accepts_live_staging_url():
     assert url == "https://setup.workos.com/init?apiToken=example"
 
 
+async def test_workos_invites_it_contact_with_both_setup_intents():
+    calls = []
+    def handle(request):
+        calls.append((request.method, request.url.path))
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": []})
+        if request.url.path.endswith("/invite"):
+            assert json.loads(request.content) == {"intents": ["sso", "directory_sync"]}
+            return httpx.Response(204)
+        assert json.loads(request.content) == {"email": "it@example.com"}
+        return httpx.Response(201, json={"id": "it_contact_123"})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        await workos.invite_it_contact(client, key="sk_test", organization="org_123",
+            email="it@example.com", directory_sync=True)
+    assert calls == [("GET", "/organizations/org_123/it_contacts"),
+                     ("POST", "/organizations/org_123/it_contacts"),
+                     ("POST", "/organizations/org_123/it_contacts/it_contact_123/invite")]
+
+
 async def test_workos_code_exchange_uses_documented_profile_shape():
     def handle(request):
         assert request.url.path == "/sso/token"
@@ -209,7 +386,8 @@ async def test_browser_callback_requires_company_proof_for_enforced_team(clients
     assert regular_key.status_code == 403
     bearer_key = await clients.get("/auth/cli-token", headers={
         "X-Treg-Token": sso_key.json()["token"], "X-Treg-Org": slug})
-    assert bearer_key.status_code == 403
+    assert bearer_key.status_code == 200
+    assert identity_session.read_identity_claims(bearer_key.json()["token"])["sso_org_id"] == org_id
 
 
 async def test_workos_domain_rejection_returns_to_signin_without_raw_error(clients, monkeypatch):

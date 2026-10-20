@@ -424,7 +424,12 @@ async def cli_orgs(session_cookie: str) -> dict:
         user = await _user_from_session(session_cookie, db)
         if user is None:
             return {"email": None, "orgs": []}
-        return {"email": user.email, "orgs": await _orgs_brief(user, db)}
+        orgs = await _orgs_brief(user, db)
+        sso_org_id = (sess.read_session_claims(session_cookie) or {}).get("sso_org_id")
+        if sso_org_id is not None:
+            scoped_org = await db.get(Org, sso_org_id)
+            orgs = [org for org in orgs if scoped_org is not None and org["slug"] == scoped_org.slug]
+        return {"email": user.email, "orgs": orgs}
 
 
 async def approve_cli_login(
@@ -434,6 +439,11 @@ async def approve_cli_login(
         user = await _user_from_session(session_cookie, db)
         if user is None:
             raise CliPairingError("no_session")
+        sso_org_id = (sess.read_session_claims(session_cookie) or {}).get("sso_org_id")
+        if sso_org_id is not None:
+            requested = await _resolve_org(requested_org or "", db)
+            if requested is None or requested.id != sso_org_id:
+                raise CliPairingError("not_member")
         # The pairing code proves the approver is the same person who ran `treg login` (the code is
         # shown only in that terminal). Validate it after session resolution and before org lookup so
         # a phished login link cannot complete and the poll endpoint stays codeless.
@@ -472,6 +482,7 @@ async def approve_cli_login(
             ttl=None if active_org else sess.BOOTSTRAP_TTL_SECONDS,
             key_generation=default.default_generation if default else None,
             scope=sess.TEAM_SCOPE if active_org else sess.BOOTSTRAP_SCOPE,
+            sso_org_id=sso_org_id,
         ), "email": user.email}
         if active_org:
             result["active_org"] = active_org
@@ -496,6 +507,10 @@ async def issue_cli_token(
     sso_org_id: int | None = None,
 ) -> dict:
     async with database.session_maker() as db:
+        if sso_org_id is not None:
+            scoped_org = await _resolve_org(org_ref, db)
+            if scoped_org is None or scoped_org.id != sso_org_id:
+                raise IdentityLookupError("sign in separately for this team")
         org_slug = None
         if org_ref:
             org = await _resolve_org(org_ref, db)
@@ -526,6 +541,7 @@ async def issue_cli_token(
                 ttl=None if org_slug else sess.BOOTSTRAP_TTL_SECONDS,
                 key_generation=default.default_generation if default else None,
                 scope=sess.TEAM_SCOPE if org_slug else sess.BOOTSTRAP_SCOPE,
+                sso_org_id=sso_org_id,
             ),
             "email": email,
             "org": org_slug,

@@ -1228,7 +1228,8 @@ async def auth_cli_token(
         result = await auth_use_cases.issue_cli_token(
             user_id=user.id, email=user.email, token_version=user.token_version,
             org_ref=x_treg_org,
-            sso_org_id=(sess.read_session_claims(treg_session) or {}).get("sso_org_id"),
+            sso_org_id=((claims or {}).get("sso_org_id") if x_treg_token else
+                        (sess.read_session_claims(treg_session) or {}).get("sso_org_id")),
         )
     except auth_use_cases.IdentityLookupError as exc:
         raise HTTPException(403, str(exc)) from exc

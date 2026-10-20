@@ -15,6 +15,8 @@
     treg-worker admin purge-evidence [--batch-size 5000]  # blank expired error evidence past 14-day retention
     treg-worker admin purge-ad-clicks                      # delete email-to-click stash rows past 90 days
     treg-worker admin erase-archive --org <id>             # erase what an opted-out team stored in the archive
+    treg-worker enterprise reconcile [--org <id>]          # repair missed Directory Sync removals
+    treg-worker enterprise purge-audit [--days 400]        # delete expired SSO audit evidence
 
 Not the light `treg` CLI: these need the server extra (DB, platform keys in the env) and make
 outbound calls to third parties, so they run as Render cron jobs with the server's env — never as
@@ -465,6 +467,65 @@ async def _admin_erase_archive(args) -> int:
     return 0
 
 
+async def _enterprise_reconcile(args) -> int:
+    """Bounded full-roster repair; run periodically, independent of webhook delivery."""
+    import time
+    import httpx
+    from sqlmodel import select
+    from .application import enterprise_sso
+    from .config import get_settings
+    from .infra import workos
+    from .infra.db import session_maker, verify_db
+    from .models import EnterpriseSSO
+
+    await verify_db()
+    key = get_settings().workos_api_key
+    if not key:
+        print(json.dumps({"error": "WorkOS API key is not configured"}))
+        return 1
+    async with session_maker() as db:
+        statement = select(EnterpriseSSO).where(
+            EnterpriseSSO.plan == "sso_directory",
+            EnterpriseSSO.directory_active.is_(True),
+            EnterpriseSSO.subscription_status.in_(("active", "trialing")),
+        )
+        if args.org:
+            statement = statement.where(EnterpriseSSO.org_id == args.org)
+        targets = [(row.org_id, row.directory_id) for row in
+                   (await db.execute(statement)).scalars().all() if row.directory_id]
+    results = []
+    failed = False
+    async with httpx.AsyncClient() as client:
+        for org_id, directory_id in targets:
+            observed_at_ms = int(time.time() * 1000)
+            try:
+                roster = await workos.directory_users(client, key=key, directory=directory_id)
+                result = await enterprise_sso.reconcile_directory(
+                    org_id, directory_id, roster, observed_at_ms)
+                results.append({"org_id": org_id, **result})
+            except (workos.WorkOSError, enterprise_sso.EnterpriseSSOError):
+                failed = True
+                results.append({"org_id": org_id, "error": "reconciliation failed; no partial roster applied"})
+    print(json.dumps({"results": results}, sort_keys=True))
+    return 1 if failed else 0
+
+
+async def _enterprise_purge_audit(args) -> int:
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import delete
+    from .infra.db import session_maker, verify_db
+    from .models import EnterpriseSSOAudit
+
+    await verify_db()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=args.days)).replace(tzinfo=None)
+    async with session_maker() as db:
+        result = await db.execute(delete(EnterpriseSSOAudit).where(
+            EnterpriseSSOAudit.created_at < cutoff))
+        await db.commit()
+    print(json.dumps({"audit_rows_deleted": result.rowcount, "retention_days": args.days}))
+    return 0
+
+
 def _positive_int(value: str) -> int:
     n = int(value)
     if n < 1:
@@ -603,6 +664,14 @@ def main(argv: list[str] | None = None) -> int:
     erase = adminsub.add_parser("erase-archive", help="erase what an opted-out team stored in the archive")
     erase.add_argument("--org", type=_positive_int, required=True, help="the team's org id")
     erase.set_defaults(fn=_admin_erase_archive)
+    enterprise = sub.add_parser("enterprise", help="enterprise identity maintenance")
+    enterprisesub = enterprise.add_subparsers(dest="cmd", required=True)
+    reconcile = enterprisesub.add_parser("reconcile", help="repair missed WorkOS Directory Sync changes")
+    reconcile.add_argument("--org", type=_positive_int, help="one team id (default: every connected team)")
+    reconcile.set_defaults(fn=_enterprise_reconcile)
+    purge_audit = enterprisesub.add_parser("purge-audit", help="delete expired enterprise access evidence")
+    purge_audit.add_argument("--days", type=_positive_int, default=400)
+    purge_audit.set_defaults(fn=_enterprise_purge_audit)
     args = ap.parse_args(argv)
     _need_server()
     return asyncio.run(_run_command(args))
