@@ -12,12 +12,9 @@ This plugin ships MCP tools alongside the skill. **Look at your tools before you
 connected. Use those; there is nothing to install. The rest of this page is written around the `treg`
 command line, so read `treg catalog search` as `catalog_search`, `treg call` as `call`, and so on.
 
-**If the tools error or you cannot see them**, the plugin needs a token. The human sets `TREG_TOKEN`:
-
-1. Sign in at https://treg.to (GitHub / Google / email code)
-2. Copy the token from Settings → API Token
-3. Set `TREG_TOKEN` in the environment Cursor reads (or add it in Cursor's plugin configuration)
-4. Restart the agent — the tools will appear
+**If the tools error or you cannot see them**, the connector is not signed in yet. The human connects
+it in the app's MCP or connector settings; the app opens treg's sign-in page (GitHub / Google / email
+code) and the tools appear after it.
 
 A new team starts with **$1.00 of free balance**, so there is nothing to pay before the first call.
 If sign-in is needed, say so plainly and stop — never ask the human for a provider's API key, which
