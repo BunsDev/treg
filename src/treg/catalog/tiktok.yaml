@@ -135,6 +135,8 @@ endpoints:
     docs_url: https://developers.tiktok.com/doc/content-posting-api-reference-upload-video/
 
   - id: tiktok.tiktok.content.init
+    status: retired
+    status_note: "Hidden for now: photo posts are PULL_FROM_URL only, so the images must sit on a domain verified in treg's TikTok developer portal, and a direct post also needs TikTok's Direct Post audit. For a video, use tiktok.tiktok.video.inbox.init."
     added: '2026-07-28'
     kind: action
     capability: tiktok.photo.publish
