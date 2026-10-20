@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 import stripe
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import update
 from sqlmodel import select
 
 from conftest import make_upstream, verified_signup
@@ -943,6 +944,49 @@ async def test_repeated_unknown_outcomes_pause_without_another_charge(c: AsyncCl
     assert sdk.state["charge_count"] == 0 and sdk.state["status"] == "open"
     assert len(notices) == 1 and notices[0][0][2] == "stripe_unconfirmed"
     assert sum("outcome unconfirmed" in record.message for record in caplog.records) == limit
+
+
+async def test_auto_topup_that_loses_the_claim_never_reaches_stripe(c: AsyncClient, monkeypatch):
+    """`_lock` is per process. Another web process that read the same old stamp and claimed first
+    must leave this attempt with nothing to do, not a second request on the same invoice."""
+    org_id, owner = await _org(c)
+    await _armed(org_id)
+    monkeypatch.setattr(billing, "_sdk", _no_sdk)
+    spend = billing.monthly_autotopup_spend
+
+    async def rival_claims_first(db, oid):
+        # Runs after this attempt read the stamp and before it claims: the rival's UPDATE lands.
+        await db.execute(update(Org).where(Org.id == oid)
+                         .values(autotopup_last_attempt_at=billing._now()))
+        await db.commit()
+        return await spend(db, oid)
+
+    monkeypatch.setattr(billing, "monthly_autotopup_spend", rival_claims_first)
+    assert (await _attempt(org_id))["reason"] == "cooldown"
+    state = (await c.get("/billing", headers=_h(owner))).json()["autotopup"]
+    assert state["failures"] == 0 and state["enabled"] is True
+
+
+async def test_stripe_conflict_is_not_a_failed_attempt(c: AsyncClient, monkeypatch):
+    """A 409 means Stripe is still running another request on this invoice. Counting it as a
+    failure switched auto top-up off for teams whose payment then went through."""
+    org_id, owner = await _org(c)
+    await _armed(org_id)
+    conflict = stripe.APIError("concurrent request on this invoice", http_status=409)
+    sdk = _invoice_sdk(pay_error=conflict)
+    monkeypatch.setattr(billing, "_sdk", sdk)
+    notices = []
+
+    async def disabled_notice(*args, **kwargs):
+        notices.append(args)
+
+    monkeypatch.setattr(billing.email_mod, "send_autotopup_disabled", disabled_notice)
+    for _ in range(get_settings().autotopup_max_attempts + 1):
+        await _set_org(org_id, autotopup_last_attempt_at=None)
+        assert (await _attempt(org_id))["reason"] == "stripe_busy"
+    state = (await c.get("/billing", headers=_h(owner))).json()["autotopup"]
+    assert state["failures"] == 0 and state["enabled"] is True and not notices
+    assert sdk.state["invoice_count"] == 1 and sdk.state["charge_count"] == 0
 
 
 async def test_invoice_lookup_starts_before_last_auto_credit_not_later_manual_credit(

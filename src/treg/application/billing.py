@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlmodel import select
 
 from .. import adsconv
@@ -1023,9 +1023,20 @@ async def attempt_auto_topup(db: AsyncSession, org_id: int) -> dict:
 
         # Claim the attempt BEFORE talking to Stripe. If this process dies mid-charge, the cooldown
         # has already been recorded — the next attempt waits instead of double-charging blind.
-        org.autotopup_last_attempt_at = _now()
-        db.add(org)
+        # The claim is a compare-and-set on the stamp we just read: `_lock` is per process, so
+        # every web process and instance that read the same old stamp races here, and only the
+        # first UPDATE matches. The rest stop before Stripe instead of piling onto one invoice.
+        stamp = _now()
+        claimed = await db.execute(
+            update(Org).where(
+                Org.id == org_id,
+                Org.autotopup_last_attempt_at.is_(None) if last is None
+                else Org.autotopup_last_attempt_at == last,
+            ).values(autotopup_last_attempt_at=stamp)
+            .execution_options(synchronize_session=False))
         await db.commit()
+        if claimed.rowcount != 1:
+            return {"ok": False, "reason": "cooldown"}
 
         crossing = (await db.execute(select(func.count(CreditBlock.id)).where(
             CreditBlock.org_id == org_id, CreditBlock.stripe_payment_intent.is_not(None)
@@ -1125,6 +1136,12 @@ async def attempt_auto_topup(db: AsyncSession, org_id: int) -> dict:
         except Exception as e:  # noqa: BLE001 — a Stripe outage must not surface as a 500 elsewhere
             # A timeout can arrive after Stripe charged. Keep the same attempt key and the invoice
             # available for the next lookup; auto_advance=False prevents autonomous collection.
+            if getattr(e, "http_status", None) == 409:
+                # Stripe is still running another request on this invoice. Nothing was declined,
+                # so it is not a failed attempt; the cooldown stamp makes the next lookup wait.
+                log.warning("billing: auto top-up for org %s invoice %s overlapped another "
+                            "Stripe request", org_id, getattr(e, "invoice_id", invoice_id) or "unknown")
+                return {"ok": False, "reason": "stripe_busy"}
             return await _record_unconfirmed(
                 db, org_id, getattr(e, "invoice_id", invoice_id), type(e).__name__)
 
@@ -1228,7 +1245,8 @@ async def _run_autotopup(org_id: int) -> None:
         async with session_maker() as db:
             result = await attempt_auto_topup(db, org_id)
         if not result.get("ok") and result.get("reason") not in (
-                "above_threshold", "cooldown", "disabled", "no_consent", "no_card", "not_configured"):
+                "above_threshold", "cooldown", "disabled", "no_consent", "no_card", "not_configured",
+                "stripe_busy"):  # stripe_busy already logged its warning
             log.info("billing: auto top-up for org %s did not fund: %s", org_id, result)
     except Exception as e:  # noqa: BLE001 — a background task's exception must not vanish silently
         log.warning("billing: auto top-up task for org %s crashed: %s", org_id, e)
