@@ -46,12 +46,12 @@ Either way, the rest of this page is the part that matters — **when** treg is 
 volume, a TikTok profile, a work email, a competitor's ads) or a generative model, search the
 catalog, read the price, and call it.
 
-Two kinds of tool answer to the same token, and the credential is injected on the server, so you
-never hold it:
+One token reaches two kinds of tool, and treg injects the credential on the server, so you never
+hold it:
 
 - **The catalog**: curated tools treg calls for you, each by id.
-- **Your own tools**: what a teammate registered for the team: API accounts, OAuth connections,
-  vendor CLIs, skills. Never billed, with one exception: an X connection made through treg's own X
+- **Your own tools**: API accounts, OAuth connections, vendor CLIs and skills a teammate registered
+  for the team. Never billed, with one exception: an X connection made through treg's own X
   app is billed per call, because X bills the app owner; the answer reports the price.
 
 ## First: check where you stand
@@ -64,7 +64,7 @@ its `help` lines. Not set up yet:
 curl -fsSL https://treg.to/install.sh | sh
 treg login                            # browser sign-in: GitHub, Google or an emailed code
 treg login --email you@company.com    # an emailed 6-digit code
-treg login --token <team-key>         # non-interactive, for agents and CI
+treg login --token <team-token>       # non-interactive, for agents and CI
 ```
 
 The installer puts in the CLI, this skill, and treg's MCP server for every supported agent.
@@ -74,13 +74,10 @@ Everything runs in the **active team**. Invites arrive by email: `treg invites` 
 verified account gets $1.00 of credit once, on its first eligible team; aliases of one inbox (`+tag`,
 Gmail dots) share it.
 
-**Connected over MCP instead?** (ChatGPT, Claude Code, Cursor through `https://treg.to/mcp/`.) Then you have
-tools, not the CLI, and everything here maps onto them:
+**Over MCP** (`https://treg.to/mcp/`), tools replace the CLI, and everything here maps onto them:
 
-- search the catalog → `catalog_search`, then `catalog_get` for the exact parameters and price. Its
-  `verdict` says what you got: `strong` (these do the job, every provider of it ranked by measured
-  success), `closest` (the nearest; read `catalog_get` before relying on one), `none` (not in the
-  catalog: file `catalog_request`, do not rephrase), `keyword` (ranked by words alone).
+- search the catalog → `catalog_search`, then `catalog_get` for the exact parameters and price. On
+  `verdict: none`, file `catalog_request` rather than rephrasing.
 - what is new → `catalog_search` with `added_within_days` (30 is a good default) or
   `sort: "newest"`; `query` may then be empty.
 - call it → `call` with the tool id, or `<tool-name>/<path>` for one of the team's own tools;
@@ -93,7 +90,7 @@ tools, not the CLI, and everything here maps onto them:
 ```bash
 treg catalog search "subreddit posts"                    # tools that do the job, with prices
 treg catalog search --new                                # added in the last 30 days, newest first
-treg catalog get scrapecreators.reddit.subreddit.posts   # parameters, price, reliability, a ready call line
+treg catalog get scrapecreators.reddit.subreddit.posts   # parameters, price, a ready call line
 treg call scrapecreators.reddit.subreddit.posts --query subreddit=news
 treg catalog request "<what you need>"                   # searched and it is not there: file it
 ```
@@ -128,16 +125,12 @@ match. Only `output.verified: true` means the mailbox was checked; otherwise `_t
 the verify step. Run it before anyone sends, and never re-send the same find: every hit is billed,
 repeats included.
 
-- Send `X-Treg-Route-Verify: true` on `treg.people.email.find` (or `treg.people.email.find.personal`
-  for a personal address from a LinkedIn URL or work email) to verify each hit in the same call, as
-  its own small charge. Read `_treg.verification.verdict`: `valid`, `invalid`, `catch_all`, `risky`
-  or `unknown`; `checked: false` with a `reason` means no check ran and nothing was charged.
-- The same header on `treg.people.phone.find` checks the line live: `live`, `dead` or `unknown`. A
-  live line does not prove the number is this person's; for a US number,
-  `trestleiq.people.contact.verify` checks the name. A number not written internationally is not
-  checked, and `_treg.advice` says how to check it yourself.
+- Send `X-Treg-Route-Verify: true` on `treg.people.email.find`, `treg.people.email.find.personal` or
+  `treg.people.phone.find` to check each hit in the same call, as its own small charge. Read
+  `_treg.verification.verdict` and follow `_treg.advice`. A live phone line does not prove the
+  number is this person's.
 - **Verify every address before it is sent to**, including rows from a company or domain search
-  (`treg.people.search`, `hunter.companies.emails`): those are directory listings, unconfirmed
+  (`treg.people.search` and the like): those are directory listings, unconfirmed
   unless the row's own verification field says otherwise. `invalid` is dead, `accept_all` is risky,
   and an address the provider did not return (`info@` after an empty domain search) is a guess, not
   a result.
@@ -147,17 +140,16 @@ job with `COST`, `WORKS` (the success rate treg observed, with its sample size),
 and `LAST OK`. Work down this order:
 
 1. **The inputs you actually hold.** A tool that wants a `profile_url` is no substitute when you have
-   a name and a domain, whatever it costs. This outranks price every time.
+   a name and a domain, whatever it costs.
 2. **Reliability.** A high `WORKS` on a real sample beats a rounder number on a tiny one: `99% (121)`
    is stronger evidence than `100% (8)`.
 3. **Price.** Spreads inside one job reach 200×, so this is usually where the money is.
 4. **`LAST OK`** breaks ties. A bare age means a real call came back; a `✓` age is the catalog's own
    verification stamp, not live traffic; `—` means nobody has verified or called it.
 
-After a 429, a 5xx or a timeout, try the next provider: you know its parameters, so you can build its
-request. Say which one you switched to. **Never retry a 4xx with another provider:** it is almost
-always your request, and retrying spends the team's money on several providers for one mistake.
-treg does not switch providers on a direct call; only you know which inputs you hold.
+After a 429, a 5xx or a timeout, switch to the next provider and say which. **Never retry a 4xx
+elsewhere:** it is almost always your request, and retrying spends money on several providers for
+one mistake. treg does not switch providers on a direct call; only you know which inputs you hold.
 
 **More on searching.**
 
@@ -166,10 +158,8 @@ treg does not switch providers on a direct call; only you know which inputs you 
   provider-specific field (catch-all, disposable, role address, SMTP), call that provider's tool:
   the routed `treg.people.email.verify` defines only `valid`, `status` and `score`.
 - Discovery jobs usually come in two shapes: structured (filters such as title, location, followers,
-  funding) and semantic (describe what you want; the `exa.*` tools). When a brief mixes hard limits
-  with a fuzzy niche, run both and merge: creators = `influencersclub.creators.search` with
-  `exa.creators.search` pinned to the platform's domain; people = a `people.search` provider with
-  `exa.people.search`; who holds a role = `exa.web.answer`.
+  funding) and semantic (describe what you want). When a brief mixes hard limits with a fuzzy niche,
+  run one tool of each shape and merge the results.
 - A tool marked `strict_query: true` accepts only its declared query parameters, once each, with
   required fields and allowed values enforced, and no body. Rejected input is not forwarded.
 
@@ -180,8 +170,7 @@ treg does not switch providers on a direct call; only you know which inputs you 
 3. neither, and the tool has a verified public route: no key, free;
 4. otherwise treg's own account, billed to the team's balance.
 
-The team's own key always wins, so connecting a key it already pays for takes those calls off the
-balance. A free public route stays free only while you send no provider credential header yourself.
+Connecting a key the team already pays for takes those calls off the balance. A free public route stays free only while you send no provider credential header yourself.
 A tool with no published price is refused, not served free: connect the team's own key. A few
 providers that sell only subscriptions carry a per-call rate treg set; `catalog get` says whose
 price it is. A team admin can pin a job to one provider (`treg org pin`), and then calls to the
@@ -253,35 +242,33 @@ no JSON `detail` is never treg's.
 | 402 `insufficient_balance` | no | The body has `balance_micro`, `estimated_cost_micro`, `topup_url`. Check `treg balance`, then top up (`treg topup`, or the dashboard's Team → Billing) or connect the team's own key for that provider. |
 | 402 `route_max_cost` | no | Your `X-Treg-Route-Max-Cost` refused it. Ask for fewer rows or targets, or raise the ceiling. |
 | 429 `share_busy` | no | treg's slots with that provider are all in use. Retry after `retry_after_s`, or call the routed tool, which moves on by itself. |
-| 429 naming a daily allowance | no | A free trial pool on treg's key is used up for today. Connect the team's own key. |
+| 429 `trial_allowance_reached` | no | A free trial pool on treg's key is used up for today; it resets at 00:00 UTC. Connect the team's own key. |
+| 429 `trial_allowance_unavailable` | no | Today's trial use could not be checked. Retry shortly. |
 | 503 `provider_capacity_unavailable` | no | treg's own account for that provider is out. Take one of the body's `alternatives`, use the team's own key, or retry after `resets_at` or a minute. |
 | 503 `provider_paused` | no | This registry paused that provider; read `message`. Use another provider. Do not reconnect: the team's connection is kept. |
 | 503 with `treg_saturated: true` | no | Wait for `Retry-After`, then send the same request again. |
 | `X-Treg-Capacity: exhausted` on any status | not when `X-Treg-Cost-Micro` is `0` | treg's own account for that tool refused for want of credit. Not your balance; try another tool. |
 | 502 `response_buffer_limit` | no | The answer is over 8 MiB; narrow the request. If the message says it is temporary, treg is busy: retry shortly. |
-| 426 | no | The CLI is too old for this registry: `treg update`. |
 | 409, 410 with an `idempotency_*` error | see below | See "Retrying without paying twice". |
 
 ## Retrying without paying twice
 
-Most retries need nothing: a failed call, a 5xx, a timeout and a network error were never billed.
-The case that needs a key is narrower: the provider answered and charged, and the answer was lost on
-its way to you. Repeat that call with the same `Idempotency-Key` header (`idempotency_key` over MCP).
+Failed calls, 5xx answers, timeouts and network errors were never billed: just retry. An idempotency
+key matters only when the provider answered and charged and the answer was lost on its way to you.
+Repeat that call with the same `Idempotency-Key` header (`idempotency_key` over MCP).
 treg returns the stored answer, does not call the provider again and charges nothing; the reply
 carries `X-Treg-Idempotent-Replay: true` (`replayed: true` over MCP), `X-Treg-Cost-Micro: 0`, and the
 first call's charge in `X-Treg-Original-Cost-Micro`.
 
-- Use a new key, or none, for new work, even with the same parameters: asking again to see what
-  changed is a new call, and the old key would hand back the old answer. Reusing a key for a
+- Use a new idempotency key, or none, for new work, even with the same parameters: asking again to
+  see what changed is a new call, and the old key would hand back the old answer. Reusing one for a
   different request is refused (422).
-- Keys belong to the caller and last 24 hours; a call that fails frees its key at once.
+- Idempotency keys belong to the caller and last 24 hours; a call that fails frees its key at once.
 - 409: the original call is still running; retry shortly.
-- 410 `idempotency_response_lost`: it was charged but its answer was not kept. Try
-  `GET https://treg.to/calls/<call id>/result`, or call again with a new key.
-- 410 `idempotency_response_too_large`: it was charged and you already received the full answer, but
-  it was over the 2 MB replay limit and was not kept. A new key calls again.
-- 410 `idempotency_outcome_unknown`: its outcome was never recorded and it may have reached the
-  provider. `GET https://treg.to/calls/<call id>` shows the cost; a new key calls again.
+- 410 (`idempotency_response_lost`, `idempotency_response_too_large` over the 2 MB replay limit,
+  `idempotency_outcome_unknown`): the first call was, or may have been, charged and its answer was
+  not kept. The body names the `call_id`; `GET https://treg.to/calls/<call id>` shows the cost and
+  `/result` any stored answer. A new idempotency key calls again.
 
 ## Generate video, images, voice or music
 
@@ -291,14 +278,8 @@ prices. Models are not interchangeable: you pick one, treg does not.
 
 ```bash
 treg catalog search "text to video"                  # every model, with prices
-treg catalog get minimax.video-gen.h3.generate       # native parameters, model enum, price table
-treg call minimax.video-gen.h3.generate --await --timeout 900 --data '{"model":"MiniMax-H3-Max",
-  "content":[{"type":"text","text":"A paper boat drifts across a quiet pond at sunrise."}],
-  "resolution":"480P","duration":5,"ratio":"16:9"}'
-treg call minimax.voice-gen.voices.list --data '{"voice_type":"system"}'
-treg call minimax.voice-gen.speech-2-8-turbo --data '{"model":"speech-2.8-turbo",
-  "text":"A calm voice can make a complex idea feel simple.","stream":false,"output_format":"url",
-  "voice_setting":{"voice_id":"English_expressive_narrator","speed":1,"vol":1,"pitch":0}}'
+treg catalog get minimax.video-gen.h3.generate       # native parameters, model enum, price, a ready call line
+treg call minimax.video-gen.h3.generate --await --timeout 900 --data @body.json
 ```
 
 - **Video and image generation is an asynchronous task.** The submission returns a task id at once
@@ -316,18 +297,15 @@ treg call minimax.voice-gen.speech-2-8-turbo --data '{"model":"speech-2.8-turbo"
   is already finished is the answer and is charged as one. If it says it is still working, poll no
   faster than the descriptor's `interval` and stop at its `max_age`; a task with no answer by then
   is refunded.
-- **Result URLs expire** (the descriptor's `ttl_note`; MiniMax's last about 9 hours). Download
+- **Result URLs expire** (the descriptor's `ttl_note` says when). Download
   promptly: treg never stores generated media. On some routes the file needs one more call, and
   `--await` prints that command.
 - **Reference media** (a face, a voice clip, a first frame) must be at a public URL the vendor can
   fetch. Paste hosts fail vendor probes at random; `treg host face.jpg` prints a public URL (30 MB,
   7 days, free) to put in `image_urls` or `audio_urls`.
-- **Voice.** MiniMax speech is synchronous: with `stream:false` and `output_format:"url"` it returns
-  an audio URL valid for 24 hours; `minimax.voice-gen.voices.list` lists valid voice ids. Fish Audio
-  (`fishaudio.tts.s2-1-pro`) returns binary audio: redirect stdout to a file, or use MCP
-  `call_media`. `fishaudio.voices.discover` finds voices to pass as `reference_id`; voices the team
-  created are listed by `treg resources list --provider fishaudio --kind voice` (MCP
-  `resources_list`).
+- **Binary answers** (speech from some providers): redirect stdout to a file, or use MCP
+  `call_media`. Provider objects the team created, such as cloned voices, are listed by
+  `treg resources list --provider <provider>` (MCP `resources_list`).
 - A tool whose answer inlines media as base64 (Google AI's images, speech and Lyria music) may answer
   up to 64 MiB and is charged from the provider's reported usage. Its answer is never replayed: an
   `Idempotency-Key` retry generates, and bills, a new one.
@@ -343,11 +321,11 @@ treg call intercom conversations?per_page=5   # <tool-name> and the upstream pat
 ```
 
 Over HTTP that is `https://treg.to/call/<tool-name>/<path>`, or the upstream URL behind the prefix,
-`https://treg.to/call/https://api.intercom.io/me`, with `X-Treg-Token: <token>`. A personal sign-in token
-also sends `X-Treg-Org: <team-slug>`; a team key does not need it. treg finds the tool, injects the
-team's credential on the server, and relays method, query, headers and body unchanged; your
-`X-Treg-Token` is removed before the provider sees the request. `GET https://treg.to/tools` lists the tools
-as JSON.
+`https://treg.to/call/https://api.intercom.io/me`, with `X-Treg-Token: <token>`. With a personal sign-in
+token, also send `X-Treg-Org: <team-slug>`; a team token does not need it. treg finds the tool,
+injects the team's credential on the server, and relays method, query, headers and body unchanged;
+your `X-Treg-Token` is removed before the provider sees the request. `GET https://treg.to/tools` lists the
+tools as JSON.
 
 **Command-line tools** (stripe, gh, vercel, gcloud and others) run with the team's credential and
 without you logging in:
@@ -381,7 +359,7 @@ recognises in `.env` and the skills in the subfolders, and registers only the on
 variable names, and loads a value only for a key that is picked. Without a terminal it refuses
 unless you pass `--select a,b` or `--all`, so nothing is imported by accident.
 
-**Wrap a new key in a skill.** Registering a key, endpoint or CLI, pair it with a skill, so the
+**Wrap a new key in a skill.** Registering a key, an API or a CLI, pair it with a skill, so the
 credential, the tool and the recipe land together. If none exists, write a basic one: a SKILL.md
 with frontmatter (agents find skills by it) and one example call.
 
@@ -457,32 +435,20 @@ Put that token in the agent's `TREG_TOKEN`. An agent token calls the team's tool
 never sign in, create a team or own one. If you are an agent with a token of your own, use it rather
 than the machine owner's: your calls then appear under your own name.
 
-## Feedback
+## Feedback and reviews
 
-Share problems and suggestions about treg as you meet them, small ones included: unclear
-instructions, confusing results or charges, unhelpful errors, capabilities you had to work around,
-even when the task succeeded. Describe what you needed and what you observed, and keep what you saw
-apart from what you suspect. Use the `feedback` tool over MCP, or `treg feedback submit
-<quality|pricing|friction|other> "message"`, passing related call ids in `call_ids` (CLI:
-`--call-id`). Report each issue once, keep private information out, and carry on with the task
-afterwards. See [feedback instructions](https://treg.to/feedback.md).
+Report problems and suggestions about treg as you meet them, small ones included (unclear
+instructions, confusing results or charges, unhelpful errors, workarounds), even when the task
+succeeded: `treg feedback submit <quality|pricing|friction|other> "message" --call-id <id>`, or MCP
+`feedback`. Report each issue once, keep private information out, then carry on. See
+[feedback instructions](https://treg.to/feedback.md).
 
-## Review
-
-If a call result invites a review, rate that call after using it: `review(call_id, usefulness,
-reason?)` over MCP or `treg review CALL_ID USEFULNESS [--reason "..."]`, with `useful`, `partly`,
-`not_useful` or `not_sure`. One review per invitation. A reason may be quoted on the tool's catalog
-page without naming your team: write about the tool, leave out private data, and use `feedback` for
-anything confusing or wrong.
+When a result invites a review, rate that call after using it: `treg review CALL_ID USEFULNESS
+[--reason "..."]` or MCP `review`, with `useful`, `partly`, `not_useful` or `not_sure`. A reason may
+be quoted on the tool's catalog page without naming your team, so write about the tool.
 
 ## Rules
 
-- **Search by the job**, and file what the catalog lacks with `treg catalog request` instead of
-  rephrasing the search.
-- **Call at the listed price, then report the cost.** Say the expected total first and set
-  `X-Treg-Route-Max-Cost` only for a generation task or a loop over many inputs.
-- **A 4xx is your request.** Fix it; never retry it with another provider.
-- **Verify a found email or phone** before anyone sends to it.
 - **Follow the next step an answer names**: a `help` line, `_treg.advice`, an error body.
 - **Never ask for or paste a provider key.** Register it once; the team calls it without holding it.
 - **Keys are write-only.** No one can read a stored value back, you included. A tool may use a key a
