@@ -71,7 +71,7 @@ _flusher: asyncio.Task | None = None
 # False after a batch exhausted its retries: later batches get one attempt each until one lands,
 # so a stream outage costs one try per batch instead of stalling the flusher on backoffs.
 _healthy = True
-_last_stats = 0.0
+_last_stats: float | None = None   # monotonic time of the last stats line; None = never
 counters = {"queued": 0, "sent": 0, "retried": 0, "dropped_overflow": 0, "dropped_failed": 0,
             "dropped_unserializable": 0, "unbuilt": 0, "build_failed": 0}
 
@@ -179,7 +179,9 @@ async def _flush_all(*, retry: bool = True) -> None:
 def _log_stats(*, force: bool = False) -> None:
     global _last_stats
     now = time.monotonic()
-    if not force and now - _last_stats < _STATS_INTERVAL_S:
+    # Not "0.0 = long ago": monotonic time counts from boot, so a freshly booted host would
+    # wait out the interval before its first line.
+    if not force and _last_stats is not None and now - _last_stats < _STATS_INTERVAL_S:
         return
     _last_stats = now
     log.info("call events stats: pid=%d pending=%d %s", os.getpid(), len(_queue),
@@ -242,7 +244,7 @@ async def drain() -> None:
 def reset() -> None:
     """Tests: forget queued events and counters."""
     global _retained, _flusher, _healthy, _last_stats
-    _healthy, _last_stats = True, 0.0
+    _healthy, _last_stats = True, None
     _queue.clear()
     _retained = 0
     if _flusher is not None and not _flusher.done():

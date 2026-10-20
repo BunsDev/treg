@@ -200,7 +200,9 @@ async def test_drain_never_retries(scripted_stream):
     assert len(seen) == 1 and sink.counters["dropped_failed"] == 1
 
 
-async def test_counters_reach_the_log(scripted_stream, caplog):
+async def test_counters_reach_the_log(scripted_stream, caplog, monkeypatch):
+    # A freshly booted host: monotonic time is still smaller than the interval.
+    monkeypatch.setattr(sink.time, "monotonic", lambda: 5.0)
     sink.emit({"call_ref": "a"})
     with caplog.at_level("INFO", logger="treg.call_events"):
         await sink._flush_all()
