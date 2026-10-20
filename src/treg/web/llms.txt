@@ -33,8 +33,8 @@ holds those accounts and bills a fraction of a cent per call.
   choose which team pays. Then stop.
 - **Local coding agent** (Claude Code, Cursor, Codex, opencode on the human's machine): the human
   has authorized the whole flow. If your runtime asks permission for shell commands, ask for `treg`
-  once and work straight through. The installer puts in the CLI, the treg skill, and treg's MCP
-  server for every supported agent.
+  once and work straight through. The installer puts in the CLI and the treg skill for every agent it
+  detects; `treg mcp install` adds treg's MCP server to them once you are signed in.
 
       curl -fsSL {BASE}/install.sh | sh
       treg login    # browser sign-in: GitHub, Google or an emailed code
