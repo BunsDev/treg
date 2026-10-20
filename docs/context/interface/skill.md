@@ -48,7 +48,8 @@ installed agent carries: choosing a tool and a provider, money, a table of failu
 each was charged and what to do, idempotent retries, generation tasks, the team's own tools and CLIs,
 sharing keys, running a team, and one Rules list. The money rule both state: call at the listed
 price without asking and report `X-Treg-Cost-Micro` after; only before a generation task or a loop
-over many inputs, say the expected total and set `X-Treg-Route-Max-Cost`. Provider-specific detail
+over many inputs, say the expected total and keep a running sum against it, because
+`X-Treg-Route-Max-Cost` caps each call and does not add up across calls. Provider-specific detail
 (a provider's allowance, voice discovery, pricing provenance) lives on its catalog row as a `note`,
 which `catalog get` shows, not in either file.
 

@@ -98,8 +98,9 @@ Publishing a hub tool adds `hub_create`, `hub_update` and `hub_mine`.
   reliability, then price. `treg catalog get <id>` lists every provider of the job with all three.
 - Call at the listed price without asking, then report what the call cost: the `X-Treg-Cost-Micro`
   response header, or `cost_usd` over MCP (on a generation task, the amount reserved until the task
-  finishes). Before a generation task or a loop over many inputs, tell
-  the human the expected total and cap it with the `X-Treg-Route-Max-Cost` header.
+  finishes). Before a generation task or a loop over many inputs, tell the human the expected
+  total, then keep a running sum of the cost and stop before it passes what they agreed to. The
+  `X-Treg-Route-Max-Cost` header caps each call, not the loop.
 - A 4xx from the provider (other than 429) is about your request: fix it rather than retrying it with
   another provider. After a 429 or a 5xx, try the next provider of the job and say which one you
   switched to. treg's own refusals say in their body what to do.

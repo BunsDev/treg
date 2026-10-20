@@ -169,7 +169,9 @@ pin a job to one provider (`treg org pin`), and then calls to the job's other pr
   PowerShell prefer it to inline JSON, whose inner quotes PowerShell strips.
 - **Scripting many calls:** use `treg --json call …`. Stdout is then one line,
   `{"result": <provider body>, "_treg": {"http_status", "call_id", "charged_micro"}}`, and nothing
-  goes to stderr, so a script that merges the streams still parses every answer. Run a handful and
+  goes to stderr, so a script that merges the streams still parses every answer. `--await` is the
+  exception: it prints the raw final response and writes progress to stderr, so keep the streams
+  apart when you wait on a generation task. Run a handful and
   check the parsed results before looping over the whole list: a parse bug throws away answers that
   were already paid for.
 - **Calling in parallel is fine**, within limits: treg sets no per-token or per-team concurrency
@@ -184,8 +186,9 @@ pin a job to one provider (`treg org pin`), and then calls to the job's other pr
 
 **Call at the listed price without asking, then report what it cost.** Prices are visible before a
 call (`treg catalog get`, MCP `catalog_get`) and most are fractions of a cent. Before a generation
-task or a loop over many inputs, tell the human the expected total and cap it with
-`X-Treg-Route-Max-Cost`.
+task or a loop over many inputs, tell the human the expected total, then keep a running sum of
+`X-Treg-Cost-Micro` and stop before it passes what they agreed to. `X-Treg-Route-Max-Cost` caps
+each call, not the loop.
 
 - **Read the `cost` block, not only the headline.** `per_call` is flat. `type: per_result` with
   `unit: row` is priced per returned row, and its `~$/call` figure assumes a 20-row page (your
@@ -198,8 +201,9 @@ task or a loop over many inputs, tell the human the expected total and cap it wi
   the exact body. On an asynchronous submission (a generation task) the header is the **reserved**
   amount, not a charge: the task settles the real one when it succeeds and refunds it all when it
   fails, so report it as reserved until the task is done.
-- **A hard ceiling:** `X-Treg-Route-Max-Cost: <usd>` refuses a call whose reservation would exceed
-  it (402 `route_max_cost`, nothing charged). Direct calls have no default; on a routed call it also
+- **A hard ceiling per call:** `X-Treg-Route-Max-Cost: <usd>` refuses a call whose reservation would
+  exceed it (402 `route_max_cost`, nothing charged). It applies to each request on its own and does
+  not add up across calls. Direct calls have no default; on a routed call it also
   bounds the whole waterfall, $1 by default.
 - **Failed calls are free.** A 4xx or 5xx relayed from the provider costs nothing. Empty results mean
   whatever the provider means by them; treg relays and does not normalise. A provider that reports
