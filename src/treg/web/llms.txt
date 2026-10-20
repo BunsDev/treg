@@ -11,12 +11,6 @@ and SERP, backlinks, social and trends, enrichment, ads, scraping, image and vid
 know which vendor sells backlink data, or to hold an account with them. Search the catalog for what
 you want to do, read the price, call it.
 
-Three readable indexes, each also served as Markdown by appending `.md`: `{BASE}/use-cases`
-(one page per job, every provider that does it compared on price, measured success rate and
-speed), `{BASE}/workflows` (several jobs chained into one prompt, each step priced, with the
-receipt from a real run) and `{BASE}/tools/<provider>` (one provider's endpoints and per-call
-prices). Start there when you want the comparison rather than one endpoint.
-
 Why this exists: the tools an agent needs for real work are behind subscriptions nobody buys for a
 single run (Semrush $139/mo, Moz $99/mo, Crunchbase $99/mo, Apollo $59/seat), behind signup walls,
 or behind no public API at all — invite-only, partner-only, app-review-only. treg carries those

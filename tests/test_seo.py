@@ -8,6 +8,7 @@ walks every URL it publishes rather than spot-checking, and the host tests asser
 
 from __future__ import annotations
 
+import re
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -180,6 +181,19 @@ async def test_no_page_ships_an_unsubstituted_base(clients: AsyncClient, path: s
     text = r.text
     for placeholder in ("{BASE}", "{ENDPOINTS}", "{PROVIDERS}"):
         assert placeholder not in text, (path, placeholder)
+
+
+@pytest.mark.parametrize("source", ["/llms.txt", "/skill.md"])
+async def test_every_document_an_agent_file_links_answers(clients: AsyncClient, source: str):
+    """llms.txt once promised Markdown twins of three index pages that were never built, and agents
+    following it got 404s. Any `.md` or `.txt` it or the skill links must exist."""
+    text = (await clients.get(source)).text
+    paths = {url[len(_base()):] for url in re.findall(r"https?://[^\s`\"')<>\]*]+\.(?:md|txt)\b", text)
+             if url.startswith(_base() + "/")}
+    assert paths, source
+    for path in sorted(paths):
+        r = await clients.get(path)
+        assert r.status_code == 200, f"{path} -> {r.status_code} (linked from {source})"
 
 
 # ------------------------------------------------------------------------------------ redirects

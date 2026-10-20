@@ -843,7 +843,6 @@ What links what now, and where it is generated:
 | `/catalog` prerender | both hubs, in a sentence | `catalog_index` |
 | `/tools/<provider>` "Used in" | every job page whose capabilities the provider answers | `_jobs_by_provider()`, cached per process from `USE_CASE_PAGES` × the catalog |
 | `/use-cases/<job>` "Run the full sequence" | every workflow with a step on one of the job's capabilities | `_workflows_by_capability()`, cached from `WORKFLOWS[*].steps` |
-| `llms.txt` | the three indexes, with the `.md` twins | hand-kept |
 
 Both reverse indexes are derived from the same tables the pages render from, so a new job or
 workflow is cross-linked the moment it is routed, and nothing is listed by hand.
