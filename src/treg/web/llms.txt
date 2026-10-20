@@ -637,9 +637,10 @@ All need a credential, and the challenge comes EARLY: every id-bearing JSON-RPC 
 authorize, and challenging the first request is what makes it run OAuth before the session proceeds
 rather than reporting a connected server whose every tool then fails.
 
-Only notifications (no id, no response expected) and `ping` pass without a credential. The
-`.well-known/*` documents are ordinary GET routes and stay open, which is the discovery a client
-actually needs.
+Only notifications (no id, no response expected) and `ping` pass without a credential. A GET (or
+any other non-POST) on the MCP URL gets the same 401 without a credential, and 405 with one: there
+is no server-initiated stream. The `.well-known/*` documents are ordinary GET routes and stay open,
+which is the discovery a client actually needs.
 
 An access token that is expired, forged, or minted for another resource gets a 401 carrying
 `error="invalid_token"`. That is the cue an OAuth client uses to run its refresh grant silently, so a
