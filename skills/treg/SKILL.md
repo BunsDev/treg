@@ -58,6 +58,7 @@ curl -fsSL https://treg.to/install.sh | sh     # installs the CLI + points it he
 treg login                            # browser sign-in (GitHub / Google / email code) — first login registers you
 treg login --email you@company.com    # emailed 6-digit code (falls back to the browser if the server requires a browser check)
 treg login --token <per-org-token>    # non-interactive (agents/CI)
+treg                                  # who you are, the active team, its balance, own tools, next commands
 ```
 Everything runs in your **active org** (after first login, create or join a team). Team invites arrive by
 email — see them with `treg invites`, accept with `treg accept` (or `treg org join <code>`). Switch

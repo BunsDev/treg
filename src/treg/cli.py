@@ -247,6 +247,10 @@ def _detect_runtime() -> str:
     return "cli"  # a plain terminal — recorded but kept out of the observed-agents roster
 
 
+def _registry_url(cfg: dict) -> str:
+    return os.environ.get("TREG_URL") or cfg["base_url"]
+
+
 def _client(cfg: dict, *, auth: bool = True) -> httpx.Client:
     headers = {"ngrok-skip-browser-warning": "1", "X-Treg-Client": _detect_runtime(),
                "X-Treg-Key-Protocol": "1"}
@@ -262,7 +266,7 @@ def _client(cfg: dict, *, auth: bool = True) -> httpx.Client:
             headers["X-Treg-Org"] = org  # ignored for per-org tokens; picks the org for identity tokens
     # TREG_URL rides with TREG_TOKEN: an agent identity names its registry too, or a per-process
     # token would be sent to whatever base_url the machine owner's config points at.
-    base = os.environ.get("TREG_URL") or cfg["base_url"]
+    base = _registry_url(cfg)
     # Read timeout 190s: relayed upstreams legitimately run long (BrightData sync scrapes ~20-35s,
     # merchant routes up to ~105s) and the SERVER's upstream timeout is 180 — the client must
     # outlive it so the caller gets the server's real error, not a client-side cutoff. Connect
@@ -276,18 +280,43 @@ def _admin_client(cfg: dict) -> httpx.Client:
     return httpx.Client(base_url=cfg["base_url"], headers={"X-Treg-Token": token, "ngrok-skip-browser-warning": "1"}, timeout=30.0)
 
 
-def _active_org_id(cfg: dict, c: httpx.Client, *, strict: bool = True) -> int | None:
-    """The active org's numeric id (for /orgs/{id}/... endpoints), resolved via GET /orgs.
+def _json_dict(resp: httpx.Response) -> dict:
+    """A response's JSON object, or {} when the body is not one (an HTML error page, a list)."""
+    try:
+        body = resp.json()
+    except ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def _org_rows(c: httpx.Client) -> list[dict] | None:
+    """Your memberships from `/orgs`, or None when it will not answer: an agent key is refused there
+    on purpose, and `/auth/me` names its one team instead."""
+    r = c.get("/orgs")
+    if r.status_code != 200:
+        return None
+    return [o for o in _as_list(r) if isinstance(o, dict) and "slug" in o]
+
+
+def _pick_org(rows: list[dict], cfg: dict) -> dict | None:
+    """The membership this CLI acts in: the `--org`/active slug, else the one the server marks active."""
+    target = _effective_org(cfg)
+    return next((o for o in rows if o["slug"] == target), None) or next((o for o in rows if o.get("active")), None)
+
+
+def _active_org(cfg: dict, c: httpx.Client, *, strict: bool = True) -> dict | None:
+    """The active org as a row (`org_id`, `slug`, `role`), resolved via GET /orgs.
 
     A MACHINE identity (an agent token) cannot call `/orgs` — the server refuses it there on purpose
     — but its token IS one membership, so `/auth/me` tells it the one org id it could ever mean.
     Without this fallback every /orgs/{id}/… command (balance, topup, pins, deny) died with a bare
     "no active org" for exactly the callers those commands exist to serve."""
-    r = c.get("/orgs")
-    if r.status_code != 200:
+    rows = _org_rows(c)
+    if rows is None:
         me = c.get("/auth/me")
-        if me.status_code == 200 and me.json().get("org_id"):
-            return int(me.json()["org_id"])
+        body = _json_dict(me)
+        if me.status_code == 200 and body.get("org_id"):
+            return {"org_id": int(body["org_id"]), "slug": body.get("org"), "role": body.get("role")}
         # An invalid or expired token used to fall through to the caller's bare "no active org",
         # which sends the reader to fix org config when the real problem is authentication. 21
         # commands printed that message, so the honest answer belongs here, once.
@@ -295,21 +324,17 @@ def _active_org_id(cfg: dict, c: httpx.Client, *, strict: bool = True) -> int | 
         # the catalog is public, so a signed-out reader must still get the page. sys.exit raises
         # SystemExit, which `except Exception` does not catch — a try/except around the call site
         # would NOT have saved it.
-        if strict and 401 in (r.status_code, me.status_code):
+        if strict and me.status_code == 401:
             sys.exit("treg: not signed in, or this token is invalid/expired.\n"
                      "  Sign in:            treg login\n"
                      "  Using TREG_TOKEN?   check it is the token `org agent-new` printed.")
         return None
-    orgs = r.json()
-    target = _effective_org(cfg)
-    if target:
-        for o in orgs:
-            if o["slug"] == target:
-                return o["org_id"]
-    for o in orgs:
-        if o.get("active"):
-            return o["org_id"]
-    return None
+    return _pick_org(rows, cfg)
+
+
+def _active_org_id(cfg: dict, c: httpx.Client, *, strict: bool = True) -> int | None:
+    """The active org's numeric id (for /orgs/{id}/... endpoints); see `_active_org`."""
+    return (_active_org(cfg, c, strict=strict) or {}).get("org_id")
 
 
 def _load_json_arg(s: str, label: str):
@@ -4154,40 +4179,28 @@ def cmd_whoami(args, cfg) -> None:
     through `treg with` and printed the Mac's user name, which reads like the treg account."""
     with _client(cfg) as c:
         me = c.get("/auth/me")
-        orgs = c.get("/orgs")
+        active = _pick_org(_org_rows(c) or [], cfg)
     if me.status_code == 401:
         sys.exit("treg: not signed in, or this token is invalid/expired.\n  Sign in:  treg login")
     who = me.json() if me.status_code == 200 else {}
-    rows = orgs.json() if orgs.status_code == 200 else []
-    target = _effective_org(cfg)
-    active = next((o for o in rows if o["slug"] == target), None) or next((o for o in rows if o.get("active")), None)
     if _JSON_OVERRIDE:
         print(json.dumps({"email": who.get("email") or cfg.get("email"), "team": active and active["slug"],
-                          "role": active and active.get("role"), "registry": os.environ.get("TREG_URL") or cfg["base_url"]}, indent=2))
+                          "role": active and active.get("role"), "registry": _registry_url(cfg)}, indent=2))
         return
     _kv("email", who.get("email") or cfg.get("email") or "-")
-    _kv("team", f"{active['slug']}  ({active.get('role')})" if active else (target or "-"))
-    _kv("server", os.environ.get("TREG_URL") or cfg["base_url"])
-
-
-def _team_line(c, cfg) -> str:
-    r = c.get("/orgs")
-    rows = _as_list(r) if r.status_code == 200 else None
-    rows = [o for o in (rows or []) if isinstance(o, dict) and "slug" in o]
-    target = _effective_org(cfg)
-    o = next((o for o in rows if o["slug"] == target), None) or next((o for o in rows if o.get("active")), None)
-    return o["slug"] if o else ""
+    _kv("team", f"{active['slug']}  ({active.get('role')})" if active else (_effective_org(cfg) or "-"))
+    _kv("server", _registry_url(cfg))
 
 
 def cmd_balance(args, cfg) -> None:
     """The team's prepaid balance, what it's made of, and the recent ledger. Amounts are shown in USD;
     the API's `*_micro` integers are the real values (`--json` for those)."""
     with _client(cfg) as c:
-        org_id = _active_org_id(cfg, c)
-        if org_id is None:
+        org = _active_org(cfg, c)
+        if org is None:
             sys.exit("no active org")
-        r = c.get(f"/orgs/{org_id}/balance", params={"limit": args.limit})
-        team = "" if (_JSON_OVERRIDE or r.status_code >= 400) else _team_line(c, cfg)
+        r = c.get(f"/orgs/{org['org_id']}/balance", params={"limit": args.limit})
+    team = org.get("slug") or ""
     if _JSON_OVERRIDE or r.status_code >= 400:
         _show(r)  # exits non-zero on an error
         return
@@ -4383,6 +4396,127 @@ def cli_version() -> str:
 
 def cmd_version(args, cfg) -> None:
     print(f"treg {cli_version()}")
+
+
+_HOME_DESCRIPTION = ("the tool catalog for your agent plus your team's own tools, on one token; "
+                     "credentials are injected on the server, never held here")
+
+
+def _quietly(read):
+    """One best-effort read for the home view: its result, or None when the read fails, so one slow
+    or odd answer leaves out its own line and not the rest."""
+    try:
+        return read()
+    except (httpx.HTTPError, ValueError):
+        return None
+
+
+def _home_state(cfg: dict) -> dict:
+    """What bare `treg` reports: who is signed in, which team, what it can spend, what it has.
+
+    Nearly every caller is an agent that ran `treg` to orient itself, so this answers with live state
+    instead of a usage error. Each line is best-effort: a line the server will not answer is left
+    out, and nothing here exits non-zero. The team is resolved the way `balance` and `whoami` do it."""
+    state: dict = {"registry": _registry_url(cfg)}
+    if not (os.environ.get("TREG_TOKEN") or cfg.get("token")):
+        state["account"] = None
+        return state
+    with _client(cfg) as c:
+        c.timeout = httpx.Timeout(5.0)  # an orientation glance of up to four reads, not a relayed call
+        try:
+            me = c.get("/auth/me")
+        except httpx.HTTPError as exc:
+            state["unavailable"] = f"{type(exc).__name__} reaching the registry"
+            return state
+        if me.status_code == 401:
+            state["account"], state["account_error"] = None, "token rejected"
+            return state
+        if me.status_code >= 500:  # the right registry, having a bad moment
+            state["registry_error"] = f"HTTP {me.status_code} from /auth/me"
+            return state
+        body = _json_dict(me)
+        if me.status_code != 200 or not body:  # something answers here, but not a treg registry
+            state["unavailable"] = f"HTTP {me.status_code} from /auth/me is not a treg answer"
+            return state
+        state["account"] = body.get("email")
+        rows = _quietly(lambda: _org_rows(c))
+        if rows is None:  # an agent key: /auth/me names its one team
+            org = {"org_id": body["org_id"], "slug": body.get("org"), "role": body.get("role")} \
+                if body.get("org_id") else None
+        else:
+            org, state["teams"] = _pick_org(rows, cfg), len(rows)
+        if org is None:
+            state["team"] = None
+            return state
+        state["team"], state["role"] = org.get("slug"), org.get("role")
+        b = _quietly(lambda: c.get(f"/orgs/{org['org_id']}/balance", params={"limit": 1}))  # the minimum
+        micro = _json_dict(b).get("balance_micro") if b is not None and b.status_code == 200 else None
+        if isinstance(micro, int):
+            state["balance_micro"] = micro
+        t = _quietly(lambda: c.get("/tools"))
+        if t is not None and t.status_code == 200:
+            state["own_tools"] = [x["name"] for x in _as_list(t) if isinstance(x, dict) and x.get("name")]
+    return state
+
+
+def _home_help(state: dict) -> list[str]:
+    """Next steps as runnable commands, most useful first. Runtime values stay `<placeholders>`."""
+    out: list[str] = []
+    if state.get("unavailable"):
+        out.append("Run `treg config` to check which registry this CLI talks to")
+    elif state.get("registry_error"):
+        out.append("Run `treg` again in a minute: the registry answered with a server error")
+    elif not state.get("account"):
+        out.append("Run `treg login` to sign in, or `treg login --token <key>` with a team key")
+    elif not state.get("team") and state.get("teams"):
+        out.append("Run `treg org ls` to see your teams, then `treg org use <team>` to pick one")
+    elif not state.get("team"):
+        out.append("Run `treg org create \"<team name>\"` to make a team, or `treg invites` to see invites")
+    elif state.get("balance_micro") is not None and state["balance_micro"] <= 0:
+        out.append("Run `treg topup` to add funds: catalog calls on treg's key spend the balance")
+    out += ["Run `treg catalog search \"<task>\"` to find a tool for a job, with prices",
+            "Run `treg catalog get <id>` for its parameters, price and a ready `treg call` line"]
+    if state.get("own_tools"):
+        out.append("Run `treg call <tool>/<path>` to call one of your own tools; `treg tool ls` lists them")
+    out.append("Run `treg --help` for every command")
+    return out
+
+
+def cmd_home(args, cfg) -> None:
+    """Bare `treg`: live state and the next commands, the way an agent orients itself."""
+    state = _home_state(cfg)
+    exe = shutil.which(sys.argv[0]) or sys.argv[0]
+    home = str(Path.home())
+    exe = "~" + exe[len(home):] if exe.startswith(home + os.sep) else exe
+    help_lines = _home_help(state)
+    if _JSON_OVERRIDE:
+        print(json.dumps({"bin": exe, "version": cli_version(), "description": _HOME_DESCRIPTION,
+                          **state, "help": help_lines}))
+        return
+    print(f"bin: {exe}")
+    print(f"version: {cli_version()}")
+    print(f"description: {_HOME_DESCRIPTION}")
+    problem = state.get("unavailable") or state.get("registry_error")
+    if problem:
+        print(f"registry: {state['registry']} ({problem})")
+    else:
+        print(f"registry: {state['registry']}")
+        account = state.get("account") or "not signed in"
+        print(f"account: {account} ({state['account_error']})" if state.get("account_error") else f"account: {account}")
+    if state.get("account"):
+        team, role = state.get("team") or "none", state.get("role")
+        print(f"team: {team} ({role})" if role else f"team: {team}")
+    if "balance_micro" in state:
+        print(f"balance: {_usd(state['balance_micro'])}")
+    names = state.get("own_tools")
+    if names:
+        more = ", …" if len(names) > 8 else ""
+        print(f"own_tools[{len(names)}]: {', '.join(names[:8])}{more}")
+    elif names is not None:
+        print("own_tools: none registered")
+    print(f"help[{len(help_lines)}]:")
+    for line in help_lines:
+        print(f"  {line}")
 
 
 def cmd_update(args, cfg) -> None:
@@ -5364,10 +5498,11 @@ def _catalog_search(query: str, args, cfg) -> None:
         if e.get("kind") == "routed":
             _close_group()
             open_group = e
+            # the count stays on every row: only a few children print, so it is the one place an
+            # agent learns how many providers the routed id really draws on
+            label = f"ROUTED ({len(e.get('routed_children') or [])} providers) - "
             print(f"▸ {_clip(e['id'], idw):<{idw}} {_clip(_cost_usd(e.get('cost')), 16):<16} {'-':<10} "
-                  f"{'●' if e['provider'] in connected else ' '}  ROUTED — {_clip(e.get('summary', ''), 70)}")
-            _dim(f"    treg picks among {len(e.get('routed_children') or [])} providers (own keys first, then cheapest "
-                 f"per hit) and names the one that served. To choose the provider yourself, call a child id:")
+                  f"{'●' if e['provider'] in connected else ' '}  {label}{_clip(e.get('summary', ''), 79 - len(label))}")
             continue
         if open_group and e.get("capability") != open_group.get("capability"):
             _close_group()
@@ -5381,7 +5516,12 @@ def _catalog_search(query: str, args, cfg) -> None:
         _dim("\nno exact fit: read treg catalog get before relying on one of these, or say the task differently")
     elif body.get("verdict") == "keyword" and body.get("reason") not in (None, "", "not_task"):
         _dim("\nranked by keywords only (the judge did not answer)")
-    _dim(f"\ntreg catalog get {rows[0]['id']}   # params, cost, example response")
+    print()
+    if routed_caps:
+        # Once, below the table: inside it, an indented sentence reads like one more row.
+        _dim("hint: a ▸ ROUTED row lets treg pick among its providers (own keys first, then cheapest per "
+             "hit) and names the one that served; call an indented id to choose the provider yourself")
+    _dim(f"next: treg catalog get <id> (e.g. {rows[0]['id']}) for its params, price and a ready `treg call` line")
 
 
 def _feedback_error(code: str, message: str, **details) -> None:
@@ -6489,8 +6629,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"treg {cli_version()}", help="print the treg version and exit")
     # parser_class: without it argparse clones OUR class into every subparser, so `treg call -h`
     # would print the top-level grouped page instead of its own help.
-    sub = p.add_subparsers(dest="cmd", required=True, metavar="<command>",
+    # Not required: bare `treg` is the home view. Nearly every caller is an agent orienting itself,
+    # and a usage error would cost it a second turn on `--help`.
+    sub = p.add_subparsers(dest="cmd", required=False, metavar="<command>",
                            parser_class=argparse.ArgumentParser)
+    p.set_defaults(fn=cmd_home)
 
     def mk(parent, name, help_, *examples, **kw):  # subparser with description + a copy-paste Examples epilog
         return parent.add_parser(name, help=help_, description=help_,
