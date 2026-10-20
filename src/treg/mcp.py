@@ -2095,9 +2095,8 @@ class RequireAuthForProtectedTools:
     handshake) so OAuth runs before the session proceeds — which is what Stripe/Subframe/AuthKit MCP
     servers do, and what makes a client show "needs authentication" and prompt, rather than "Connected"
     with silent 200s on a server nothing works against. Only notifications and `ping` pass without a
-    credential (see `_auth_verdict`); any other HTTP method is challenged the same way, and one
-    carrying a credential reaches the transport (`_refuse_non_post`). `.well-known/*` discovery is
-    separate GET routes.
+    credential (see `_auth_verdict`); any other HTTP method is challenged the same way, then
+    refused with 405 (`_refuse_non_post`). `.well-known/*` discovery is separate GET routes.
 
     Sits in front of the transport rather than inside it: this is an HTTP concern, and the SDK owns
     everything below.
@@ -2146,15 +2145,14 @@ class RequireAuthForProtectedTools:
         return await self.app(scope, replay, send)
 
     async def _refuse_non_post(self, scope, receive, send) -> None:
-        """Challenge like a POST; a request carrying a credential goes on to the transport.
-
-        A 405 for a credentialed GET broke installs: Grok Bot sends the Cursor plugin's
-        `Bearer ${env:TREG_TOKEN}` unresolved, read the 405 as a failed connection, and stopped at
-        "Finish plugin setup" instead of listing tools. Only a missing or dead credential is refused."""
+        """Challenge like a POST, else 405: the stateless transport has no GET stream or session."""
         verdict = self._token_verdict(scope)
         if verdict is not None:
             return await self._challenge(scope, receive, send, invalid=(verdict == "invalid"))
-        return await self.app(scope, receive, send)
+        await JSONResponse({
+            "error": "method_not_allowed",
+            "error_description": "this MCP server accepts only POST; send JSON-RPC as a POST",
+        }, status_code=405, headers={"Allow": "POST"})(scope, receive, send)
 
     def _auth_verdict(self, scope, body: bytes) -> str | None:
         """None = pass through. "missing" = no credential. "invalid" = a DEAD access token.
