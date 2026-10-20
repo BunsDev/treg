@@ -256,7 +256,9 @@ out-of-range value is a 400 before reserve, the hold is `quantity x price`, and 
 settles exactly that on success, ignoring any provider-reported charge (adding room is often free on
 the provider's side and reported as 0). An optional `applied` JSON path names the answer field that
 says the units were added; when it is not `true` (a retry the provider recognised by its purchase
-id) the call settles at 0. The validator requires it on a `per_success` price with no
+id) the call settles at 0. A cancel after the request has left (`settle._finish_cancelled_call` with
+`sent`) charges the hold instead of returning it, because the provider may already have added the
+units; the retry with the same purchase id then settles at 0, so the team pays exactly once. The validator requires it on a `per_success` price with no
 `reported_charge`. Together they let a team buy a budget for background work under its own label.
 
 ## Authorization metadata
