@@ -253,8 +253,9 @@ def test_the_cursor_layout_matches_cursors_template():
 
 def test_the_cursor_plugin_ships_mcp_alongside_the_skill():
     """Cursor now ships MCP tools alongside the skill, so users don't need `treg mcp install`.
-    The manifest declares `mcpServers` pointing at a config file, and that file contains the
-    remote server entry with Cursor's env variable syntax for the token."""
+    The manifest declares `mcpServers` pointing at a config file, and that file declares the URL
+    only: the host runs OAuth. A `${env:TREG_TOKEN}` header made Grok Bot, which installs this
+    plugin, ask for the variable before sign-in and fail on phones where it cannot be set."""
     manifest = json.loads(CURSOR_MANIFEST.read_text(encoding="utf-8"))
     assert manifest["mcpServers"] == "./mcp.json", "the manifest must point to the MCP config"
     assert manifest["skills"] == "./skills/", "the manifest must still ship the skill"
@@ -264,8 +265,7 @@ def test_the_cursor_plugin_ships_mcp_alongside_the_skill():
     assert "treg" in mcp_config["mcpServers"]
     server = mcp_config["mcpServers"]["treg"]
     assert server["url"] == "https://treg.to/mcp/", "the MCP URL must be the production endpoint"
-    assert "${env:TREG_TOKEN}" in json.dumps(server), (
-        "auth must use Cursor's env variable syntax, not a hardcoded token")
+    assert set(server) == {"url"}, "url only: a token header blocks the host's own OAuth sign-in"
     assert "localhost" not in server["url"] and "127.0.0.1" not in server["url"]
 
 
