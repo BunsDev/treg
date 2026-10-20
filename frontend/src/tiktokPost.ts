@@ -2,6 +2,9 @@
 // drawer's TikTok form (dialogs/TikTokPostForm.vue) so they can be tested. The browser sends the
 // video straight to TikTok's upload URL; treg relays only the init, creator and status calls.
 
+// The one tool whose Try drawer is TikTok's post screen rather than a test console.
+export const TIKTOK_PUBLISH = 'tiktok.tiktok.video.publish.init'
+
 export type Creator = {
   ok: boolean
   error?: { code: string, message: string } | null

@@ -8,8 +8,9 @@ export default { components: { TikTokPostForm }, setup: useDashboard }
 <div class="scrim" role="dialog" aria-labelledby="try-endpoint-dialog-title" aria-modal="true" v-dialog="closeEpTry" @click.self="closeEpTry" style="place-items:stretch;justify-items:end">
       <!-- Opened from a catalog tool drawer, it stacks on top of that one: same width, and the tool it
            came from stays visible underneath (ToolDrawer's .behind), one Escape away. -->
-      <div class="drawer" :class="{stack:!!drawerEp}"><div class="hd" style="padding:15px 18px;border-bottom:1px solid var(--line)"><b id="try-endpoint-dialog-title">Try “{{epTry.id}}”</b><button class="btn sm" @click="closeEpTry" aria-label="Close">✕</button></div>
+      <div class="drawer" :class="{stack:!!drawerEp}"><div class="hd" style="padding:15px 18px;border-bottom:1px solid var(--line)"><b id="try-endpoint-dialog-title">{{isTikTokPost(epTry)?'Publish a video to TikTok':'Try “'+epTry.id+'”'}}</b><button class="btn sm" @click="closeEpTry" aria-label="Close">✕</button></div>
         <div class="bd" style="padding:16px 18px;overflow:auto">
+          <template v-if="!isTikTokPost(epTry)">
           <p class="explain"><span class="mono">{{epTry.method||'GET'}} {{epTryDisplayPath}}</span><br>{{epTry.summary}}</p>
           <p class="sub" v-if="epTryAccess" style="margin:0 0 12px">
             <template v-if="epTryAccess.tier==='anonymous'">◎ {{epTryAccess.detail||'No provider key needed — the verified public upstream route is free.'}}</template>
@@ -36,6 +37,7 @@ export default { components: { TikTokPostForm }, setup: useDashboard }
             <button :class="{on:epTryTab==='api'}" @click="epTryTab='api'">API</button>
             <button :class="{on:epTryTab==='manual'}" @click="epTryTab='manual'">Manual</button>
           </div>
+          </template>
 
           <!-- AI AGENT — one-line setup (token embedded here only), then the prompt to run this endpoint -->
           <template v-if="epTryTab==='agent'">
@@ -66,8 +68,8 @@ treg login</pre></div>
             <p class="sub" v-if="!myToken" style="margin:8px 0 0;font-size:12px"><span class="mono">$TREG_TOKEN</span> is a placeholder — set it to your API token (copy it on Getting started).</p>
           </template>
 
-          <!-- MANUAL, TikTok direct post: TikTok's required post screen instead of a JSON body -->
-          <TikTokPostForm v-else-if="epTry.id==='tiktok.tiktok.video.publish.init'" />
+          <!-- TikTok direct post: TikTok's required post screen; opened on this tab with the tabs hidden -->
+          <TikTokPostForm v-else-if="isTikTokPost(epTry)" />
 
           <!-- MANUAL — the live test form -->
           <template v-else>

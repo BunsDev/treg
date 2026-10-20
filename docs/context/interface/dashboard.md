@@ -28,6 +28,7 @@ sources:
   - src/treg/web/tutorial.js
   - src/treg/web/tour/tour.js
   - frontend/src/dialogs/TryEndpointDialog.vue
+  - frontend/src/state/tryTool.js
   - frontend/src/dialogs/TikTokPostForm.vue
   - frontend/src/tiktokPost.ts
 related:
@@ -211,8 +212,9 @@ land, and the address then names the tab. Opening Activity without a tab still l
   <platform> for …", and "Search all tools" (`findEverywhere`) moves to the Catalog page with the box
   prefilled and the same words asked unscoped. "Request it" appears only on an unscoped gap (and on
   v1's empty answers, which carry no reason).
-- The Try drawer's Manual tab for `tiktok.tiktok.video.publish.init` is TikTok's required post
-  screen (`TikTokPostForm.vue`), not a JSON body: an account picker when more than one connection
+- For `tiktok.tiktok.video.publish.init` the tool drawer's button reads "Publish a video" and the
+  Try drawer is TikTok's required post screen (`TikTokPostForm.vue`, `isTikTokPost`), with no tabs,
+  endpoint id or JSON body; the agent line stays in the tool drawer. An account picker when more than one connection
   can publish, a video that previews from the local file, then the Content Sharing Guidelines
   settings with nothing preset. After Post the browser PUTs the bytes straight to TikTok's upload
   URL (`*.tiktokapis.com`, which allows any origin); treg relays only creator_info, init and status
