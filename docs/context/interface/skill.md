@@ -53,19 +53,17 @@ over many inputs, say the expected total and set `X-Treg-Route-Max-Cost`. Provid
 which `catalog get` shows, not in either file.
 
 One skill, three personas:
-- **consumer** — discover + call tools with no credentials locally: search, read, call by catalog
+- **consumer** - discover + call tools with no credentials locally: search, read, call by catalog
   id; one of the team's own tools by name (`treg call <tool> <path>`) or by its upstream URL behind
-  `{BASE}/call/` with the `X-Treg-Token` header. Its
-  generation task distinguishes synchronous MiniMax voice generation from asynchronous video and
-  image generation. Voice callers discover current system voice IDs through
-  `minimax.voice-gen.voices.list`, then call the HD or Turbo endpoint for a temporary audio URL.
-  Video/image callers learn `--await`, the `X-Treg-Async` descriptor and lazy 30-60 s polling for
-  MCP agents, the shell-timeout warning (video takes 1-5 minutes), reserve-then-settle money with
-  releases on failure, and expiring result URLs that treg never stores.
-- **creator** — turn a local skill into a shared tool: `treg secret add`, `treg tool add` (single-key or
+  `{BASE}/call/` with the `X-Treg-Token` header. Its generation task teaches `--await`, the
+  `X-Treg-Async` descriptor and lazy 30-60 s polling for MCP agents, the shell-timeout warning
+  (video takes 1-5 minutes), reserve-then-settle money with releases on failure (the cost header on
+  a submission is the reservation), binary answers through `call_media`, and expiring result URLs
+  that treg never stores. A model's parameters and voices come from `catalog get`.
+- **creator** - turn a local skill into a shared tool: `treg secret add`, `treg tool add` (single-key or
   `--bind` multi-credential), the `treg skill scaffold → push` bundle flow, and `treg oauth connect` for
   browser-consent tokens. Documents the two OAuth modes (auto-refresh vs manual) and the four auth shapes.
-- **admin** — inventory + monitor: `treg tool/secret/skill ls`, `treg calls`, and `treg health [--run]`
+- **admin** - inventory + monitor: `treg tool/secret/skill ls`, `treg calls`, and `treg health [--run]`
   (with the per-tool `health_check` probe).
 
 **Distribution:** the file is `{BASE}`-templated and served at **`GET /skill.md`**
@@ -73,7 +71,7 @@ One skill, three personas:
 `~/.claude/skills/treg/SKILL.md` right after installing the CLI — so `curl {BASE}/install.sh | sh`
 gives a machine both the `treg` command AND the skill that teaches an agent to use it. It restates the
 invariants (secrets are write-only, use-without-hold, the proxy relays the upstream's truth) and links
-`{BASE}/llms.txt` + `{BASE}/tutorial`. It mirrors the surfaces in [api.md](api.md) + [cli.md](cli.md);
+`{BASE}/llms.txt` + `{BASE}/tutorial.md`. It mirrors the surfaces in [api.md](api.md) + [cli.md](cli.md);
 keep the three in sync when the API/CLI change.
 
 The catalog-search guidance in `skill.md` tells agents to include required output

@@ -3137,8 +3137,8 @@ does not route between providers automatically and does not fail over.</p>
 <p>The whole catalog is also browsable as pages: <a href="/catalog">/catalog</a>.</p>
 
 <h2>Other ways in</h2>
-<p><a href="/llms.txt">/llms.txt</a> is the file to point a coding agent at — it teaches the whole
-protocol in one fetch. <code>curl -fsSL {BASE}/install.sh | sh</code> installs the CLI. The MCP
+<p><a href="/llms.txt">/llms.txt</a> is the file to point a coding agent at: it sets the agent up
+and links <a href="/skill.md">/skill.md</a>, the guide to calls, prices, errors and retries. <code>curl -fsSL {BASE}/install.sh | sh</code> installs the CLI. The MCP
 endpoint is at <code>{BASE}/mcp</code>. An interactive console for everything below lives at
 <a href="/docs/api">/docs/api</a>.</p>
 

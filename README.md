@@ -309,7 +309,7 @@ treg org access <member> --tools a,b          # per-member tool access (admin+)
   Rate an invited catalog call after using its result; `not_sure` is fine. Omit private data and continue the task.
 
 - [`USAGE.md`](USAGE.md) — the full `treg` CLI reference.
-- [`/llms.txt`](https://treg.to/llms.txt) — the agent entry point, in the [llms.txt](https://llmstxt.org)
+- [`/llms.txt`](https://treg.to/llms.txt): the agent entry point, in the [llms.txt](https://llmstxt.org)
 format: what treg is, setup for each kind of agent, the search-read-call loop and the rules, with
 links to [`/skill.md`](https://treg.to/skill.md), the operating guide, for everything else.
 - **The dashboard** at [treg.to](https://treg.to) — full CRUD, a guided

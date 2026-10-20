@@ -75,6 +75,7 @@ money and more calls.
 
 `catalog_get <id>` shows each one's inputs, output and price.
 <!--/hub-->
+
 <!--routed-->
 **For a common job, call the routed tool, not a provider you remember.** Scraping a page
 (`treg.web.extract`), web search (`treg.web.search`), Google results (`treg.google.serp.organic`,
@@ -156,11 +157,11 @@ one mistake. treg does not switch providers on a direct call; only you know whic
 3. neither, and the tool has a verified public route: no key, free;
 4. otherwise treg's own account, billed to the team's balance.
 
-Connecting a key the team already pays for takes those calls off the balance. A free public route stays free only while you send no provider credential header yourself.
-A tool with no published price is refused, not served free: connect the team's own key. A few
-providers that sell only subscriptions carry a per-call rate treg set; `catalog get` says whose
-price it is. A team admin can pin a job to one provider (`treg org pin`), and then calls to the
-job's other providers are refused.
+Connecting a key the team already pays for takes those calls off the balance. A free public route
+stays free only while you send no provider credential header yourself. A tool with no published
+price is refused, not served free: connect the team's own key. A few providers that sell only
+subscriptions carry a per-call rate treg set; `catalog get` says whose price it is. A team admin can
+pin a job to one provider (`treg org pin`), and then calls to the job's other providers are refused.
 
 **Calling well.**
 
@@ -171,8 +172,10 @@ job's other providers are refused.
   goes to stderr, so a script that merges the streams still parses every answer. Run a handful and
   check the parsed results before looping over the whole list: a parse bug throws away answers that
   were already paid for.
-- **Calling in parallel is fine.** There is no per-token or per-team concurrency limit; provider
-  rate limits are relayed as they are.
+- **Calling in parallel is fine**, within limits: treg sets no per-token or per-team concurrency
+  limit, and provider rate limits are relayed as they are. Where treg's own account for a provider is
+  at its limit of calls in progress, a team that already has calls running on it gets 429
+  `share_busy`: send fewer at once, or call the routed tool, which moves on by itself.
 - **Over raw HTTP**, if a body carrying SQL or HTML is refused with an HTML 403 page by the hosting
   edge before treg sees it, base64-encode the body and add `X-Treg-Body-Encoding: base64` (also
   `gzip` or `base64+gzip`). The CLI does this by itself.
@@ -192,7 +195,9 @@ task or a loop over many inputs, tell the human the expected total and cap it wi
   over MCP), never anything in the provider's body. Keep `X-Treg-Call-Id` with it: it is the id to
   quote, and `GET {BASE}/calls/<call id>/result` returns the stored answer of a successful catalog
   call you lost. The CLI prints `treg: charged $<usd> · call id <id>` on stderr; stdout is always
-  the exact body.
+  the exact body. On an asynchronous submission (a generation task) the header is the **reserved**
+  amount, not a charge: the task settles the real one when it succeeds and refunds it all when it
+  fails, so report it as reserved until the task is done.
 - **A hard ceiling:** `X-Treg-Route-Max-Cost: <usd>` refuses a call whose reservation would exceed
   it (402 `route_max_cost`, nothing charged). Direct calls have no default; on a routed call it also
   bounds the whole waterfall, $1 by default.
@@ -223,25 +228,30 @@ no JSON `detail` is never treg's.
 
 | you see | charged | what to do |
 |---|---|---|
-| a 4xx from the provider | no | Fix your request. Do not retry it with another provider. |
-| a 429, 5xx or timeout from the provider | no | Try the next provider of the job, and say which. |
+| a 4xx from the provider, other than 429 | no | Fix your request. Do not retry it with another provider. |
+| a 429 or 5xx from the provider | no | Try the next provider of the job, and say which. |
+| a timeout or dropped connection on your side | maybe | The provider may have answered and been paid. Repeat with the same `Idempotency-Key`; see below. |
+| 403 `capability_pinned` | no | A team admin pinned this job to one provider. Call `use_endpoint` from the body instead. |
 | 402 `insufficient_balance` | no | The body has `balance_micro`, `estimated_cost_micro`, `topup_url`. Check `treg balance`, then top up (`treg topup`, or the dashboard's Team → Billing) or connect the team's own key for that provider. |
 | 402 `route_max_cost` | no | Your `X-Treg-Route-Max-Cost` refused it. Ask for fewer rows or targets, or raise the ceiling. |
-| 429 `share_busy` | no | treg's slots with that provider are all in use. Retry after `retry_after_s`, or call the routed tool, which moves on by itself. |
+| 429 `share_busy` | no | treg's account for that provider is at its limit and your team already has calls running on it. Send fewer at once, retry after `retry_after_s`, or call the routed tool. |
 | 429 `trial_allowance_reached` | no | A free trial pool on treg's key is used up for today; it resets at 00:00 UTC. Connect the team's own key. |
 | 429 `trial_allowance_unavailable` | no | Today's trial use could not be checked. Retry shortly. |
 | 503 `provider_capacity_unavailable` | no | treg's own account for that provider is out. Take one of the body's `alternatives`, use the team's own key, or retry after `resets_at` or a minute. |
 | 503 `provider_paused` | no | This registry paused that provider; read `message`. Use another provider. Do not reconnect: the team's connection is kept. |
 | 503 with `treg_saturated: true` | no | Wait for `Retry-After`, then send the same request again. |
 | `X-Treg-Capacity: exhausted` on any status | not when `X-Treg-Cost-Micro` is `0` | treg's own account for that tool refused for want of credit. Not your balance; try another tool. |
+| 502 `route_failed` | `charged_micro` in the body | Every provider of a routed call failed or missed; `tried` lists them. Misses can be billed: read `charged_micro` before running it again. |
 | 502 `response_buffer_limit` | no | The answer is over 8 MiB; narrow the request. If the message says it is temporary, treg is busy: retry shortly. |
 | 409, 410 with an `idempotency_*` error | see below | See "Retrying without paying twice". |
+| 426 on sign-in or a team command | no | The CLI is too old for this registry: `treg update`. |
 
 ## Retrying without paying twice
 
-Failed calls, 5xx answers, timeouts and network errors were never billed: just retry. An idempotency
-key matters only when the provider answered and charged and the answer was lost on its way to you.
-Repeat that call with the same `Idempotency-Key` header (`idempotency_key` over MCP).
+A failed call (a 4xx or 5xx relayed from the provider) was never billed: fix it, or try another
+provider. A timeout or a dropped connection on your side is different: the provider may have
+answered and been paid before the answer was lost. Send an `Idempotency-Key` header
+(`idempotency_key` over MCP) on any call you may need to repeat, and repeat it with the same key.
 treg returns the stored answer, does not call the provider again and charges nothing; the reply
 carries `X-Treg-Idempotent-Replay: true` (`replayed: true` over MCP), `X-Treg-Cost-Micro: 0`, and the
 first call's charge in `X-Treg-Original-Cost-Micro`.
@@ -377,18 +387,18 @@ treg tool add supabase --base-url https://<ref>.supabase.co \
   --bind "secret=<ID>,name=Authorization,format=Bearer {secret}"     # then list "supabase" in `uses`
 ```
 
-**What a script gets:** `ctx.inputs` (checked against the manifest);
-`ctx.call(target, {method, query, body, headers, timeout_s})` → `{status, headers, json, text,
-timed_out, cost_usd}`, where calls in one `Promise.all` run four at a time and a call past its
-`timeout_s` returns `{status: 0, timed_out: true}` while the run goes on; `ctx.charge(usd, note)`;
-`ctx.csv(text)`; `ctx.data`, the rows of a `data.csv` uploaded with the tool (5 MB at most,
-read-only); and `ctx.log(text)`. No network, no files, no `require`: `ctx.call` is the only road
-out, and its `target` must be in the manifest's `uses`: a catalog id, one of the team's own tools as
-`<tool>/<path>`, or a full URL under such a tool's base URL. Your own server is a tool too:
-`treg tool add my-api --base-url https://api.mine.com` (a key is optional; a public Google Sheet
-needs none). Limits: 120 s, 20 calls, 64 MB, four runs at a time per team. None of the team's own tools may
-point at treg itself. A steps recipe names its calls in `steps` instead and reads earlier answers with
-references (`$input.x`, `$step.path`, `$step[]`, `$step.length`).
+**What a script gets:** `ctx.inputs` (checked against the manifest); `ctx.call(target, {method,
+query, body, headers, timeout_s})` → `{status, headers, json, text, timed_out, cost_usd}`, where
+calls in one `Promise.all` run four at a time and a call past its `timeout_s` returns `{status: 0,
+timed_out: true}` while the run goes on; `ctx.charge(usd, note)`; `ctx.csv(text)`; `ctx.data`, the
+rows of a `data.csv` uploaded with the tool (5 MB at most, read-only); and `ctx.log(text)`. No
+network, no files, no `require`: `ctx.call` is the only road out, and its `target` must be in the
+manifest's `uses`: a catalog id, one of the team's own tools as `<tool>/<path>`, or a full URL under
+such a tool's base URL. Your own server is a tool too: `treg tool add my-api --base-url
+https://api.mine.com` (a key is optional; a public Google Sheet needs none). Limits: 120 s, 20
+calls, 64 MB, four runs at a time per team. None of the team's own tools may point at treg itself. A
+steps recipe names its calls in `steps` instead and reads earlier answers with references
+(`$input.x`, `$step.path`, `$step[]`, `$step.length`).
 
 **Pricing is your price only.** The provider fees of the catalog steps are billed to the caller on
 top, and a failed run charges nothing.
