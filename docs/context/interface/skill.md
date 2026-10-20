@@ -39,10 +39,23 @@ asks for observations rather than a proven bug, and names MCP `call_ids` / CLI `
 The Review section, between Feedback and Rules, asks agents to rate an invited catalog call after use, names the four
 usefulness choices and CLI/MCP forms, and directs problems to feedback.
 
+**`skill.md` and `llms.txt` split the work.** `llms.txt` is the entry point and follows the
+[llms.txt](https://llmstxt.org) format: an H1, a summary blockquote, prose without headings (what treg
+is, setup by surface: hosted assistant, local coding agent, sandboxed agent; the report after setup;
+the search-read-call loop; a short list of rules), then H2 link lists (`Docs`, `Optional`). It
+restates nothing operational; it links `skill.md` for that. `skill.md` is the operating guide every
+installed agent carries: choosing a tool and a provider, money, a table of failures with whether
+each was charged and what to do, idempotent retries, generation tasks, the team's own tools and CLIs,
+sharing keys, running a team, and one Rules list. The money rule both state: call at the listed
+price without asking and report `X-Treg-Cost-Micro` after; only before a generation task or a loop
+over many inputs, say the expected total and set `X-Treg-Route-Max-Cost`. Provider-specific detail
+(a provider's allowance, voice discovery, pricing provenance) lives on its catalog row as a `note`,
+which `catalog get` shows, not in either file.
+
 One skill, three personas:
-- **consumer** — discover + call tools with no credentials locally. Teaches the agent-native
-  **URL-passthrough** first: take the real upstream URL and prefix it with `{BASE}/call/`
-  + the `X-Treg-Token` header; `treg call <tool> <path>` is the CLI shorthand. Its
+- **consumer** — discover + call tools with no credentials locally: search, read, call by catalog
+  id; one of the team's own tools by name (`treg call <tool> <path>`) or by its upstream URL behind
+  `{BASE}/call/` with the `X-Treg-Token` header. Its
   generation task distinguishes synchronous MiniMax voice generation from asynchronous video and
   image generation. Voice callers discover current system voice IDs through
   `minimax.voice-gen.voices.list`, then call the HD or Turbo endpoint for a temporary audio URL.
@@ -63,7 +76,7 @@ invariants (secrets are write-only, use-without-hold, the proxy relays the upstr
 `{BASE}/llms.txt` + `{BASE}/tutorial`. It mirrors the surfaces in [api.md](api.md) + [cli.md](cli.md);
 keep the three in sync when the API/CLI change.
 
-The catalog-search guidance in `skill.md` and `llms.txt` tells agents to include required output
+The catalog-search guidance in `skill.md` tells agents to include required output
 facets in the query, inspect candidates with `catalog_get`, and call a provider endpoint when they
 need fields outside a routed contract. Email verification illustrates this: the routed
 `people.email.verify` contract defines `valid`, `status` and `score`, while provider responses can

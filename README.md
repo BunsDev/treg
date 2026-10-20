@@ -309,8 +309,9 @@ treg org access <member> --tools a,b          # per-member tool access (admin+)
   Rate an invited catalog call after using its result; `not_sure` is fine. Omit private data and continue the task.
 
 - [`USAGE.md`](USAGE.md) — the full `treg` CLI reference.
-- [`/llms.txt`](https://treg.to/llms.txt) — the agent-onboarding file: call
-protocol, discovery, auth, CLI, skills. One fetch teaches an agent the whole registry.
+- [`/llms.txt`](https://treg.to/llms.txt) — the agent entry point, in the [llms.txt](https://llmstxt.org)
+format: what treg is, setup for each kind of agent, the search-read-call loop and the rules, with
+links to [`/skill.md`](https://treg.to/skill.md), the operating guide, for everything else.
 - **The dashboard** at [treg.to](https://treg.to) — full CRUD, a guided
 tutorial (Help → Tutorial), and copyable setup instructions for your agents.
 - **The API** — everything the CLI does is plain HTTP; interactive OpenAPI docs live at `/docs`.

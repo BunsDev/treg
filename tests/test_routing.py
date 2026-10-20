@@ -1228,7 +1228,8 @@ async def test_routed_discovery_is_a_runtime_switch(clients: AsyncClient, enrich
         body = (await clients.get(path)).text
         assert "Routed endpoints" not in body, f"{path} must not teach what search hides"
         assert "<!--routed" not in body, f"{path} leaked a marker"
-        assert "provider_capacity_unavailable" in body, f"{path} lost the unrelated overflow guidance"
+        if path == "/skill.md":  # the failure table lives in the skill; llms.txt links to it
+            assert "provider_capacity_unavailable" in body, f"{path} lost the unrelated overflow guidance"
 
     # …but the endpoint is untouched: still callable, still priced, still found by id
     r = await clients.get("/catalog/endpoints/treg.people.email.find")

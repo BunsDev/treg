@@ -752,8 +752,8 @@ and an invoice archive are the org's money, not a member's preference.
 `GET /orgs/{id}/balance` is different, and deliberately so. Any **member** sees the figure and the
 in-flight holds; the **funding detail** (credit blocks, the ledger) stays admin+. It used to be
 admin-only, which meant a machine identity could not read the balance it was spending - while every
-402 already hands the caller `balance_micro`, and both `llms.txt` and `skill.md` tell an agent to run
-`treg balance` after a call. Refusing the number there while shipping it in an error was incoherent.
+402 already hands the caller `balance_micro`, and `skill.md` points an agent at `treg balance` when
+the balance runs out. Refusing the number there while shipping it in an error was incoherent.
 (Reported by Jason, 2026-08-07.)
 
 The 402 also carries `autotopup_enabled` and an `auto top-up:` line in `message`. Off → the one
