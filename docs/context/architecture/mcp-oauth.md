@@ -354,11 +354,9 @@ now fires for **every id-bearing JSON-RPC request** — `initialize`, `tools/lis
 **notifications** (no id, no response expected) and **`ping`** (liveness) pass without a credential;
 `.well-known/*` discovery is separate GET routes, untouched — that IS the discovery the client needs.
 Any **non-POST** request (a GET probe included) is challenged the same way (missing or dead token),
-because letting an uncredentialed GET through left a client that probes with one waiting on
-keep-alive pings instead of a 401. A non-POST that carries a credential still reaches the
-transport, as it always did: answering it 405 made Grok Bot, which sends the Cursor plugin's
-unresolved `${env:TREG_TOKEN}` header, read the probe as a failed connection and stop at plugin
-setup. The protected-resource metadata is also served at the
+and otherwise refused with **405** `Allow: POST`: the transport is stateless, so the SDK's standalone
+GET stream has no session to carry anything, and letting a GET through left a client that probes
+with one waiting on keep-alive pings instead of a 401. The protected-resource metadata is also served at the
 trailing-slash paths RFC 9728 derives from `/mcp/` and `/mcp/v2/`, since some clients do not follow
 a redirect during discovery.
 The challenge also carries `scope` (spec SHOULD) so a client requests least-privilege scopes up front.
