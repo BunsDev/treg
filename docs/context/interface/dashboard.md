@@ -27,6 +27,9 @@ sources:
   - src/treg/routers/web.py
   - src/treg/web/tutorial.js
   - src/treg/web/tour/tour.js
+  - frontend/src/dialogs/TryEndpointDialog.vue
+  - frontend/src/dialogs/TikTokPostForm.vue
+  - frontend/src/tiktokPost.ts
 related:
   - interface/api.md
   - interface/seo.md
@@ -208,6 +211,12 @@ land, and the address then names the tab. Opening Activity without a tab still l
   <platform> for …", and "Search all tools" (`findEverywhere`) moves to the Catalog page with the box
   prefilled and the same words asked unscoped. "Request it" appears only on an unscoped gap (and on
   v1's empty answers, which carry no reason).
+- The Try drawer's Manual tab for `tiktok.tiktok.video.publish.init` is TikTok's required post
+  screen (`TikTokPostForm.vue`), not a JSON body: an account picker when more than one connection
+  can publish, a video that previews from the local file, then the Content Sharing Guidelines
+  settings with nothing preset. After Post the browser PUTs the bytes straight to TikTok's upload
+  URL (`*.tiktokapis.com`, which allows any origin); treg relays only creator_info, init and status
+  on the chosen connection's tool, so the video never reaches treg.
 - Every catalog surface (shelf, comparison, provider page, Catalog index) sends one event set from
   `state/catalogEvents.js`: `catalog_platform_viewed`, `catalog_comparison_viewed`,
   `catalog_tool_opened`, and `catalog_action` for try, copy, connect, own key and docs.

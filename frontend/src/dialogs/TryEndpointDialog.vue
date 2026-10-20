@@ -1,6 +1,7 @@
 <script>
 import { useDashboard } from '../state/context'
-export default { setup: useDashboard }
+import TikTokPostForm from './TikTokPostForm.vue'
+export default { components: { TikTokPostForm }, setup: useDashboard }
 </script>
 
 <template>
@@ -64,6 +65,9 @@ treg login</pre></div>
             <div class="lc-codewrap"><button class="lc-cp" @click="copyStart(epTryCurl,'ep-api')">{{startCopied==='ep-api'?'✓ copied':'copy'}}</button><pre style="white-space:pre-wrap;word-break:break-all">{{epTryCurl}}</pre></div>
             <p class="sub" v-if="!myToken" style="margin:8px 0 0;font-size:12px"><span class="mono">$TREG_TOKEN</span> is a placeholder — set it to your API token (copy it on Getting started).</p>
           </template>
+
+          <!-- MANUAL, TikTok direct post: TikTok's required post screen instead of a JSON body -->
+          <TikTokPostForm v-else-if="epTry.id==='tiktok.tiktok.video.publish.init'" />
 
           <!-- MANUAL — the live test form -->
           <template v-else>
