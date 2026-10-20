@@ -1054,6 +1054,122 @@ def test_catalog_search_new_and_newest(monkeypatch, capsys):
         cli.cmd_catalog(p.parse_args(["catalog", "search"]), {"base_url": "http://x"})
 
 
+def test_catalog_search_explains_routing_once(monkeypatch, capsys):
+    """Every reader is an agent paying per token: two routed groups share one explanation."""
+    def routed(cap, children):
+        return [{"id": f"treg.{cap}", "kind": "routed", "provider": "treg", "capability": cap,
+                 "summary": cap, "routed_children": children, "cost": {"type": "per_success", "usd": 0.01}}] + [
+            {"id": child, "provider": child.split(".")[0], "capability": cap, "summary": child,
+             "cost": {"type": "per_call", "usd": 0.001}, "added": "2026-07-28"} for child in children]
+    rows = routed("web.backlinks.list", ["moz.web.backlinks.list", "serpstat.web.backlinks.list"]) \
+        + routed("web.anchors.list", ["moz.web.anchors.list", "serpstat.web.anchors.list"])
+    _stub_catalog_client(monkeypatch, {"/catalog/search": _CatalogResp(
+        {"query": "backlinks", "total": len(rows), "verdict": "strong", "results": rows})})
+    monkeypatch.setattr(cli, "_connected_providers", lambda cfg: set())
+    cli.cmd_catalog(cli.build_parser().parse_args(["catalog", "search", "backlinks"]), {"base_url": "http://x"})
+    out = capsys.readouterr().out
+    assert out.count("hint: a ▸ ROUTED row") == 1
+    assert out.index("hint:") > out.index("serpstat.web.anchors.list"), "below the table, not inside it"
+    assert out.rstrip().endswith("for its params, price and a ready `treg call` line")
+    assert "next: treg catalog get <id> (e.g. treg.web.backlinks.list)" in out
+    assert out.count("ROUTED (2 providers)") == 2, "each routed row still says how many it draws on"
+    assert "serpstat.web.anchors.list" in out
+
+
+def _home_registry(monkeypatch, *, me=None, orgs=None, balance_micro=1_000_000, tools=()):
+    """A fake registry for bare `treg`. `me` is /auth/me's answer (an httpx.Response or a body)."""
+    seen = []
+
+    def handle(request):
+        seen.append(request.url.path)
+        path = request.url.path
+        if path == "/auth/me":
+            return me if isinstance(me, httpx.Response) else httpx.Response(200, json=me)
+        if path == "/orgs":
+            return httpx.Response(200, json=orgs or [])
+        if path.endswith("/balance"):
+            return httpx.Response(200, json={"balance_micro": balance_micro, "entries": {"items": []}})
+        if path == "/tools":
+            return httpx.Response(200, json=[{"name": n} for n in tools])
+        return httpx.Response(500, json={"detail": f"unexpected {path}"})
+
+    monkeypatch.setattr(cli, "_client", lambda cfg, auth=True: httpx.Client(
+        transport=httpx.MockTransport(handle), base_url="https://registry.example.test"))
+    return seen
+
+
+def _home(cfg=None):
+    cli.cmd_home(None, {"base_url": "https://registry.example.test", **(cfg or {})})
+
+
+def test_bare_treg_shows_live_state_and_next_commands(monkeypatch, capsys):
+    """Content first: an agent that runs bare `treg` gets its team, balance and own tools, then
+    runnable next steps, instead of a usage error that costs it a turn on `--help`."""
+    monkeypatch.delenv("TREG_TOKEN", raising=False)
+    seen = _home_registry(monkeypatch, me={"email": "a@example.com"},
+                          orgs=[{"org_id": 3, "slug": "other", "role": "member"},
+                                {"org_id": 7, "slug": "acme", "role": "admin"}],
+                          tools=("stripe", "gh"))
+    _home({"token": "t", "active_org": "acme"})
+    out = capsys.readouterr().out
+    assert "account: a@example.com" in out and "team: acme (admin)" in out
+    assert "balance: $1.00" in out and "own_tools[2]: stripe, gh" in out
+    assert "/orgs/7/balance" in seen, "the active team's balance, not the first membership's"
+    assert "help[4]:" in out and "Run `treg call <tool>/<path>`" in out and "treg topup" not in out
+
+
+def test_bare_treg_with_a_team_key_needs_no_org_lookup(monkeypatch, capsys):
+    monkeypatch.delenv("TREG_TOKEN", raising=False)
+    seen = _home_registry(monkeypatch, me={"email": "a@example.com", "org_id": 7, "org": "acme",
+                                           "role": "member"}, balance_micro=0)
+    _home({"token": "t"})
+    out = capsys.readouterr().out
+    assert "/orgs" not in seen and "team: acme (member)" in out
+    assert "own_tools: none registered" in out
+    help_lines = out.split("help[", 1)[1]
+    assert help_lines.index("treg topup") < help_lines.index("treg catalog search"), "the blocker leads"
+
+
+@pytest.mark.parametrize("cfg, me, expect", [
+    ({}, None, "Run `treg login`"),
+    ({"token": "t"}, httpx.Response(401, json={"detail": "no session"}), "(token rejected)"),
+    ({"token": "t"}, {"email": "a@example.com"}, "Run `treg org create"),
+])
+def test_bare_treg_names_what_is_missing(monkeypatch, capsys, cfg, me, expect):
+    monkeypatch.delenv("TREG_TOKEN", raising=False)
+    _home_registry(monkeypatch, me=me)
+    _home(cfg)
+    out = capsys.readouterr().out
+    assert expect in out and "Run `treg catalog search" in out and "balance:" not in out
+
+
+def test_bare_treg_survives_an_unreachable_registry(monkeypatch, capsys):
+    monkeypatch.delenv("TREG_TOKEN", raising=False)
+
+    def refuse(request):
+        raise httpx.ConnectError("refused", request=request)
+    monkeypatch.setattr(cli, "_client", lambda cfg, auth=True: httpx.Client(
+        transport=httpx.MockTransport(refuse), base_url="https://registry.example.test"))
+    _home({"token": "t"})
+    out = capsys.readouterr().out
+    assert "(ConnectError reaching the registry)" in out and "account:" not in out
+    assert "Run `treg config`" in out
+
+
+def test_bare_treg_json_and_dispatch(monkeypatch, capsys):
+    """`treg` and `treg --json` both reach the home view through `main`; JSON keeps micro-USD."""
+    monkeypatch.delenv("TREG_TOKEN", raising=False)
+    monkeypatch.setattr(cli, "_load_config", lambda: {"base_url": "https://registry.example.test",
+                                                      "token": "t"})
+    monkeypatch.setattr("treg.cli_analytics.track_command", lambda **kw: None)
+    _home_registry(monkeypatch, me={"email": "a@example.com", "org_id": 7, "org": "acme", "role": "owner"})
+    cli.main(["--json"])
+    body = json.loads(capsys.readouterr().out)
+    assert body["team"] == "acme" and body["balance_micro"] == 1_000_000 and body["help"]
+    cli.main([])
+    assert capsys.readouterr().out.startswith("bin: ")
+
+
 def test_catalog_get_needs_an_id_and_404s_helpfully(monkeypatch, capsys):
     p = cli.build_parser()
     with pytest.raises(SystemExit):

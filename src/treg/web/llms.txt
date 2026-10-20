@@ -833,7 +833,8 @@ skills` restrict it (`--dir` sets the location).
      request `treg` ONCE and work straight through; do not stop between steps. The flow:
      install (`curl -fsSL {BASE}/install.sh | sh`), sign in (`treg login`, or
      `treg login --token <token>` + `treg org use <team>` if they gave you one), then verify
-     quietly: `treg balance` and one `treg catalog search`.
+     quietly: bare `treg` (account, team, balance, own tools and next commands in one call) and
+     one `treg catalog search`.
    - **Sandboxed agent** (cloud container, restricted egress): try the installer. If `{BASE}`
      is unreachable — a proxy `403` on `CONNECT`, a DNS failure, or a timeout — you are behind
      an egress allowlist. Do not retry and do not try alternate hosts. Tell the human that

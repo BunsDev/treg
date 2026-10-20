@@ -54,6 +54,25 @@ line pointing to that tool; `--json` puts it in `_treg.routed_tool`, and MCP ret
 with a `suggestion` sentence beside the result, leaving the invitation `hint` slot alone. Call responses
 retain the existing `_show` formatting on stdout, including pretty-printed JSON.
 
+## Bare `treg`: the home view
+
+Nearly every caller is an agent, so `treg` with no arguments answers with live state instead of a
+usage error that costs it a turn on `--help`. `_main` rewrites an empty argv to the hidden `__home`
+subcommand (`cmd_home`), so `--org` and `--json` apply as everywhere else. `_home_state` reads
+`/auth/me` (a team key names its team there), then `/orgs` for an identity token (the effective org,
+else the active one), `/orgs/{id}/balance?limit=0` and `/tools`, under a short timeout; a line the
+server will not answer is left out and the command always exits 0. The output is plain `key: value`
+lines (`bin`, `version`, `description`, `registry`, `account`, `team`, `balance`, `own_tools[N]`)
+ending in `help[N]`, runnable next commands with runtime values as `<placeholders>` (`_home_help`).
+A blocker leads the help: no registry, not signed in, no team, or an empty balance (`treg topup`).
+`--json` prints the same state as one object with `balance_micro` and a `help` list.
+
+`catalog search` says how routed rows work once, as a `hint:` line below the table (only when a
+routed row printed); inside the table an indented sentence read like one more row. The last line,
+`next:`, names `treg catalog get <id>` with the first row as the example.
+Every `▸` row keeps its provider count (`ROUTED (26 providers)`): only a few children print, so the
+count is where an agent learns how many the routed id draws on.
+
 ## Pasted-key connect
 
 `treg connections connect --provider <service>` (and the hidden `oauth connect`) first reads

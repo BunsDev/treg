@@ -4385,6 +4385,107 @@ def cmd_version(args, cfg) -> None:
     print(f"treg {cli_version()}")
 
 
+_HOME_DESCRIPTION = ("the tool catalog for your agent plus your team's own tools, on one token; "
+                     "credentials are injected on the server, never held here")
+
+
+def _home_state(cfg: dict) -> dict:
+    """What bare `treg` reports: who is signed in, which team, what it can spend, what it has.
+
+    Nearly every caller is an agent that ran `treg` to orient itself, so this answers with live state
+    instead of a usage error. Each line is best-effort: a line the server will not answer is left
+    out, and nothing here exits non-zero."""
+    state: dict = {"registry": os.environ.get("TREG_URL") or cfg["base_url"]}
+    if not (os.environ.get("TREG_TOKEN") or cfg.get("token")):
+        state["account"] = None
+        return state
+    try:
+        with _client(cfg) as c:
+            c.timeout = httpx.Timeout(15.0, connect=5.0)  # an orientation glance, not a relayed call
+            me = c.get("/auth/me")
+            if me.status_code == 401:
+                state["account"], state["account_error"] = None, "token rejected"
+                return state
+            if me.status_code != 200:
+                state["unavailable"] = f"HTTP {me.status_code} from /auth/me"
+                return state
+            m = me.json()
+            state["account"] = m.get("email")
+            # A per-org key names its one team; an identity token picks one of its memberships.
+            org_id, slug, role = m.get("org_id"), m.get("org"), m.get("role")
+            if org_id is None:
+                r = c.get("/orgs")
+                rows = [o for o in (_as_list(r) if r.status_code == 200 else []) if isinstance(o, dict)]
+                target = _effective_org(cfg)
+                o = next((o for o in rows if o.get("slug") == target), None) \
+                    or next((o for o in rows if o.get("active")), None)
+                if o:
+                    org_id, slug, role = o.get("org_id"), o.get("slug"), o.get("role")
+            state["team"], state["role"] = slug, role
+            if org_id is None:
+                return state
+            b = c.get(f"/orgs/{org_id}/balance", params={"limit": 0})
+            if b.status_code == 200:
+                state["balance_micro"] = b.json().get("balance_micro")
+            t = c.get("/tools")
+            if t.status_code == 200:
+                state["own_tools"] = [x["name"] for x in _as_list(t) if isinstance(x, dict) and x.get("name")]
+    except httpx.HTTPError as exc:
+        state["unavailable"] = f"{type(exc).__name__} reaching the registry"
+    return state
+
+
+def _home_help(state: dict) -> list[str]:
+    """Next steps as runnable commands, most useful first. Runtime values stay `<placeholders>`."""
+    out: list[str] = []
+    if state.get("unavailable"):
+        out.append("Run `treg config` to check which registry this CLI talks to")
+    elif not state.get("account"):
+        out.append("Run `treg login` to sign in, or `treg login --token <key>` with a team key")
+    elif not state.get("team"):
+        out.append("Run `treg org create \"<team name>\"` to make a team, or `treg invites` to see invites")
+    elif state.get("balance_micro") is not None and state["balance_micro"] <= 0:
+        out.append("Run `treg topup` to add funds: catalog calls on treg's key spend the balance")
+    out += ["Run `treg catalog search \"<task>\"` to find a tool for a job, with prices",
+            "Run `treg catalog get <id>` for its parameters, price and a ready `treg call` line"]
+    if state.get("own_tools"):
+        out.append("Run `treg call <tool>/<path>` to call one of your own tools; `treg tool ls` lists them")
+    out.append("Run `treg --help` for every command")
+    return out
+
+
+def cmd_home(args, cfg) -> None:
+    """Bare `treg`: live state and the next commands, the way an agent orients itself."""
+    state = _home_state(cfg)
+    exe = shutil.which(sys.argv[0]) or sys.argv[0]
+    home = str(Path.home())
+    exe = "~" + exe[len(home):] if exe.startswith(home + os.sep) else exe
+    help_lines = _home_help(state)
+    if _JSON_OVERRIDE:
+        print(json.dumps({"bin": exe, "version": cli_version(), "description": _HOME_DESCRIPTION,
+                          **state, "help": help_lines}))
+        return
+    print(f"bin: {exe}")
+    print(f"version: {cli_version()}")
+    print(f"description: {_HOME_DESCRIPTION}")
+    print(f"registry: {state['registry']}" + (f" ({state['unavailable']})" if state.get("unavailable") else ""))
+    if not state.get("unavailable"):
+        print(f"account: {state.get('account') or 'not signed in'}"
+              + (f" ({state['account_error']})" if state.get("account_error") else ""))
+    if state.get("account"):
+        team = state.get("team")
+        print(f"team: {team} ({state['role']})" if team and state.get("role") else f"team: {team or 'none'}")
+    if "balance_micro" in state:
+        print(f"balance: {_usd(state['balance_micro'])}")
+    if "own_tools" in state:
+        names = state["own_tools"]
+        print(f"own_tools[{len(names)}]: " + ", ".join(names[:8]) + (", …" if len(names) > 8 else "")
+              if names else "own_tools: none registered")
+    print(f"help[{len(help_lines)}]:")
+    for line in help_lines:
+        print(f"  {line}")
+
+
 def cmd_update(args, cfg) -> None:
     """Re-run the server's install.sh to upgrade the CLI in place (uv/pipx/pip, from the git repo)."""
     import subprocess
@@ -5364,10 +5465,11 @@ def _catalog_search(query: str, args, cfg) -> None:
         if e.get("kind") == "routed":
             _close_group()
             open_group = e
+            # the count stays on every row: only a few children print, so it is the one place an
+            # agent learns how many providers the routed id really draws on
+            label = f"ROUTED ({len(e.get('routed_children') or [])} providers) — "
             print(f"▸ {_clip(e['id'], idw):<{idw}} {_clip(_cost_usd(e.get('cost')), 16):<16} {'-':<10} "
-                  f"{'●' if e['provider'] in connected else ' '}  ROUTED — {_clip(e.get('summary', ''), 70)}")
-            _dim(f"    treg picks among {len(e.get('routed_children') or [])} providers (own keys first, then cheapest "
-                 f"per hit) and names the one that served. To choose the provider yourself, call a child id:")
+                  f"{'●' if e['provider'] in connected else ' '}  {label}{_clip(e.get('summary', ''), 79 - len(label))}")
             continue
         if open_group and e.get("capability") != open_group.get("capability"):
             _close_group()
@@ -5381,7 +5483,12 @@ def _catalog_search(query: str, args, cfg) -> None:
         _dim("\nno exact fit: read treg catalog get before relying on one of these, or say the task differently")
     elif body.get("verdict") == "keyword" and body.get("reason") not in (None, "", "not_task"):
         _dim("\nranked by keywords only (the judge did not answer)")
-    _dim(f"\ntreg catalog get {rows[0]['id']}   # params, cost, example response")
+    print()
+    if routed_caps:
+        # Once, below the table: inside it, an indented sentence reads like one more row.
+        _dim("hint: a ▸ ROUTED row lets treg pick among its providers (own keys first, then cheapest per "
+             "hit) and names the one that served; call an indented id to choose the provider yourself")
+    _dim(f"next: treg catalog get <id> (e.g. {rows[0]['id']}) for its params, price and a ready `treg call` line")
 
 
 def _feedback_error(code: str, message: str, **details) -> None:
@@ -6906,6 +7013,9 @@ def build_parser() -> argparse.ArgumentParser:
     rh.add_argument("args", nargs=argparse.REMAINDER)
     rh.set_defaults(fn=cmd_run_helper)
 
+    # hidden: what bare `treg` runs (see `_main`); the name is internal, `treg` is the interface
+    sub.add_parser("__home").set_defaults(fn=cmd_home)
+
     # ---- skills ----
     sk = mk(sub, "skill", "Register / manage skills (a recipe + its secrets + tool(s), as one bundle).",
             "treg skill init --dir ./my-skill", "treg skill add --dir ./my-skill", "treg skill install seo-blog-writer",
@@ -7342,6 +7452,10 @@ def _main(argv: list[str]) -> None:
     if len(argv) > 1 and argv[0] == "feedback" and argv[1] in FEEDBACK_CATEGORIES:
         argv.insert(1, "submit")
     parser = build_parser()
+    if not argv:
+        # Content first: an agent that runs bare `treg` to orient itself gets live state and next
+        # commands, not a usage error that costs it a second turn on `--help`.
+        argv = ["__home"]
     if _looks_like_a_program(argv, _subcommands(parser)):
         argv = ["with", *argv]
     args = parser.parse_args(argv)
