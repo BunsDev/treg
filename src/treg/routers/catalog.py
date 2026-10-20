@@ -573,6 +573,7 @@ async def _your_values(request: Request, db: AsyncSession, ep: dict) -> dict:
 @app.get("/catalog/endpoints/{endpoint_id}")
 async def catalog_endpoint(
     request: Request,
+    response: Response,
     endpoint_id: str,
     observations: endpoint_stats.EndpointObservationReader = Depends(
         _endpoint_observation_reader),
@@ -608,7 +609,12 @@ async def catalog_endpoint(
     view = (catalog_store.endpoint_view(ep, _provider_display(ep["provider"]), cat)
             | catalog_store.endpoint_context(ep, cat))
     if ep.get("team_label") or ep.get("caller_email"):
-        view |= await _your_values(request, db, ep)
+        personal = await _your_values(request, db, ep)
+        if personal:
+            # One reader's label and email: never stored by a shared cache, never served to another.
+            response.headers["Cache-Control"] = "private, no-store"
+            response.headers["Vary"] = "Authorization, X-Treg-Token, X-Treg-Org, Cookie"
+        view |= personal
     siblings = [
         catalog_store.endpoint_view(other, _provider_display(other["provider"]), cat)
         for other in sorted(cat.for_capability(ep["capability"]), key=lambda e: e["id"])
