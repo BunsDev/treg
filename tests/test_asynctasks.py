@@ -788,7 +788,8 @@ async def test_byok_task_status_keeps_direct_provider_object_access(
 
 @pytest.mark.parametrize(("start", "payload", "created", "owned_calls"), [
     (
-        "/call/brightdata.web.scrape.job.start?dataset_id=gd_test", [{"url": "https://example.com"}],
+        "/call/brightdata.linkedin.user.profile?dataset_id=gd_l1viktl72bvl7bjuj0",
+        {"input": [{"url": "https://www.linkedin.com/in/example"}]},
         {"snapshot_id": "snapshot-owned"},
         [
             "/call/brightdata.web.scrape.job.status?snapshot_id=snapshot-owned",
@@ -797,7 +798,7 @@ async def test_byok_task_status_keeps_direct_provider_object_access(
     ),
     (
         # an extended dataset row on the sync runner: past a minute it answers 202 + snapshot_id
-        "/call/brightdata.x.amazon-reviews?dataset_id=gd_le8e811kzy4ggddlq",
+        "/call/brightdata.x.amazon-products?dataset_id=gd_l7q7dkf244hwjntr0",
         {"input": [{"url": "https://www.amazon.com/dp/B000000000"}]},
         {"snapshot_id": "snapshot-extended"},
         ["/call/brightdata.web.scrape.job.results?snapshot_id=snapshot-extended&format=json"],

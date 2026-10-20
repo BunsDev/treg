@@ -162,8 +162,9 @@ async def test_resource_creation_and_fetch_preserve_customer(clients, identities
         hits.append(True)
         return _response(200, {'snapshot_id': 'snapshot-a'})
     monkeypatch.setattr(call_service, 'relay', relay)
-    response = await clients.post('/call/brightdata.web.scrape.job.start?dataset_id=gd_test',
-                                  json=[{'url': 'https://example.com'}], headers=h['a'])
+    response = await clients.post('/call/brightdata.linkedin.user.profile?dataset_id=gd_l1viktl72bvl7bjuj0',
+                                  json={'input': [{'url': 'https://www.linkedin.com/in/example'}]},
+                                  headers=h['a'])
     assert response.status_code == 200, response.text
     for path in ['/call/brightdata.web.scrape.job.status?snapshot_id=snapshot-a',
                  '/call/brightdata.web.scrape.job.results?snapshot_id=snapshot-a&format=json']:

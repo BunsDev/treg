@@ -96,6 +96,7 @@ endpoints:
   scope: any_account
   method: POST
   path: /datasets/v3/scrape
+  platform_blocked: "One URL can return an unbounded number of records, and a run past one minute continues as a background job on treg's key with no record cap; connect your own Bright Data key."
   resource_ownership:
     produces:
     - {kind: snapshot, path: snapshot_id}
@@ -332,6 +333,7 @@ endpoints:
   scope: any_account
   method: POST
   path: /datasets/v3/scrape
+  platform_blocked: "One URL can return an unbounded number of records, and a run past one minute continues as a background job on treg's key with no record cap; connect your own Bright Data key."
   resource_ownership:
     produces:
     - {kind: snapshot, path: snapshot_id}
@@ -615,6 +617,7 @@ endpoints:
   scope: any_account
   method: POST
   path: /datasets/v3/scrape
+  platform_blocked: "One URL can return an unbounded number of records, and a run past one minute continues as a background job on treg's key with no record cap; connect your own Bright Data key."
   resource_ownership:
     produces:
     - {kind: snapshot, path: snapshot_id}
@@ -707,6 +710,7 @@ endpoints:
   scope: any_account
   method: POST
   path: /datasets/v3/scrape
+  platform_blocked: "One URL can return an unbounded number of records, and a run past one minute continues as a background job on treg's key with no record cap; connect your own Bright Data key."
   resource_ownership:
     produces:
     - {kind: snapshot, path: snapshot_id}
@@ -852,6 +856,7 @@ endpoints:
   scope: any_account
   method: POST
   path: /datasets/v3/scrape
+  platform_blocked: "One URL can return an unbounded number of records, and a run past one minute continues as a background job on treg's key with no record cap; connect your own Bright Data key."
   resource_ownership:
     produces:
     - {kind: snapshot, path: snapshot_id}
@@ -898,6 +903,7 @@ endpoints:
   scope: any_account
   method: POST
   path: /datasets/v3/scrape
+  platform_blocked: "One URL can return an unbounded number of records, and a run past one minute continues as a background job on treg's key with no record cap; connect your own Bright Data key."
   resource_ownership:
     produces:
     - {kind: snapshot, path: snapshot_id}
@@ -1189,6 +1195,7 @@ endpoints:
   scope: any_account
   method: POST
   path: /datasets/v3/scrape
+  platform_blocked: "One URL can return an unbounded number of records, and a run past one minute continues as a background job on treg's key with no record cap; connect your own Bright Data key."
   resource_ownership:
     produces:
     - {kind: snapshot, path: snapshot_id}
@@ -1281,6 +1288,7 @@ endpoints:
   scope: any_account
   method: POST
   path: /datasets/v3/scrape
+  platform_blocked: "One URL can return an unbounded number of records, and a run past one minute continues as a background job on treg's key with no record cap; connect your own Bright Data key."
   resource_ownership:
     produces:
     - {kind: snapshot, path: snapshot_id}
@@ -1372,6 +1380,7 @@ endpoints:
   scope: any_account
   method: POST
   path: /datasets/v3/scrape
+  platform_blocked: "One URL can return an unbounded number of records, and a run past one minute continues as a background job on treg's key with no record cap; connect your own Bright Data key."
   resource_ownership:
     produces:
     - {kind: snapshot, path: snapshot_id}
@@ -1510,6 +1519,7 @@ endpoints:
   scope: any_account
   method: POST
   path: /datasets/v3/scrape
+  platform_blocked: "One URL can return an unbounded number of records, and a run past one minute continues as a background job on treg's key with no record cap; connect your own Bright Data key."
   resource_ownership:
     produces:
     - {kind: snapshot, path: snapshot_id}
@@ -1602,6 +1612,7 @@ endpoints:
   scope: any_account
   method: POST
   path: /datasets/v3/scrape
+  platform_blocked: "One URL can return an unbounded number of records, and a run past one minute continues as a background job on treg's key with no record cap; connect your own Bright Data key."
   resource_ownership:
     produces:
     - {kind: snapshot, path: snapshot_id}
@@ -1701,6 +1712,7 @@ endpoints:
   scope: any_account
   method: POST
   path: /datasets/v3/scrape
+  platform_blocked: "One URL can return an unbounded number of records, and a run past one minute continues as a background job on treg's key with no record cap; connect your own Bright Data key."
   resource_ownership:
     produces:
     - {kind: snapshot, path: snapshot_id}
@@ -1791,6 +1803,7 @@ endpoints:
   scope: any_account
   method: POST
   path: /datasets/v3/scrape
+  platform_blocked: "One URL can return an unbounded number of records, and a run past one minute continues as a background job on treg's key with no record cap; connect your own Bright Data key."
   resource_ownership:
     produces:
     - {kind: snapshot, path: snapshot_id}
@@ -2115,6 +2128,7 @@ endpoints:
   scope: any_account
   method: POST
   path: /datasets/v3/scrape
+  platform_blocked: "One URL can return an unbounded number of records, and a run past one minute continues as a background job on treg's key with no record cap; connect your own Bright Data key."
   resource_ownership:
     produces:
     - {kind: snapshot, path: snapshot_id}

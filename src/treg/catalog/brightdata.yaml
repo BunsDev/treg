@@ -45,6 +45,7 @@ endpoints:
     scope: any_account
     method: POST
     path: /datasets/v3/scrape
+    platform_blocked: "Runs any Bright Data dataset with no record cap enforced on treg's key, so one call can start an unbounded job; connect your own Bright Data key."
     name: "Scrape URLs into structured records in one call"
     summary: "Scrape one or more URLs into structured records and get them back in the same call"
     resource_ownership:
@@ -75,6 +76,7 @@ endpoints:
     scope: any_account
     method: POST
     path: /datasets/v3/trigger
+    platform_blocked: "Runs any Bright Data dataset with no record cap enforced on treg's key, so one call can start an unbounded job; connect your own Bright Data key."
     name: "Start a batch scrape"
     summary: "Start an asynchronous scraping job over a batch of URLs and get a snapshot id back"
     resource_ownership:
