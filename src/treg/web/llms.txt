@@ -85,6 +85,9 @@ Publishing a hub tool adds `hub_create`, `hub_update` and `hub_mine`.
 
 **Rules.**
 
+- Before your first real call, read `{BASE}/skill.md`: the operating guide (choosing providers,
+  money, every error and what to do about it). The installer puts the same file in your skills
+  folder, and later sessions load it on their own.
 - Search by the job you want done. When the catalog has no tool for it (`verdict: none`), file the
   need with `treg catalog request "<what you need>"` (MCP `catalog_request`) instead of rephrasing
   the search: requests steer what gets added next.
