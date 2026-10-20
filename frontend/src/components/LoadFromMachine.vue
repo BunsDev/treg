@@ -26,7 +26,7 @@ export default { props: { title: { type: String, required: true } }, setup: useD
 <span class="hl-cmd">treg</span> upload <span class="hl-flag">--all</span></pre></div>
     </template>
     <template v-else>
-      <p class="own-step-note">One line, token included: your agent reads llms.txt, installs the CLI, signs in, and registers your skills + keys (read-only scan first, you approve).</p>
+      <p class="own-step-note">One line: your agent reads llms.txt, installs the CLI and signs you in. Then ask it to share your keys and skills: it previews them with a read-only scan and registers only what you approve.</p>
       <div class="lc-codewrap"><button class="lc-cp" @click="copyAgentGuide('agent')">{{agentRowCopied==='agent'?'✓ copied':'copy'}}</button><pre class="own-prompt">{{buildAgentPrompt('agent', true)}}</pre></div>
     </template>
   </div>

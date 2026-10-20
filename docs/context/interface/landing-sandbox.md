@@ -158,7 +158,7 @@ and an index name must be a plain slug before it becomes a folder), falling back
 `{BASE}/skill.md` into `~/.claude/skills/treg`. Because the package is public on PyPI,
 `curl … /install.sh | sh` now works for anyone with no repo/git access needed. The **Getting started**
 dashboard view (`view==='start'`) surfaces this install command + `treg login`/`onboard`/`add`/`call` and
-links to the tutorial and `/llms.txt`; `llms.txt` has a matching **Install the CLI** section.
+links to the tutorial and `/llms.txt`; `llms.txt` gives the same install command in its setup paragraph.
 
 ## Backend follow-up
 Remove the now-unreachable sandbox mint, export, sample, live-wire, feed, governance, and call-pipeline

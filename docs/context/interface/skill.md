@@ -39,20 +39,32 @@ asks for observations rather than a proven bug, and names MCP `call_ids` / CLI `
 The Review section, between Feedback and Rules, asks agents to rate an invited catalog call after use, names the four
 usefulness choices and CLI/MCP forms, and directs problems to feedback.
 
+**`skill.md` and `llms.txt` split the work.** `llms.txt` is the entry point and follows the
+[llms.txt](https://llmstxt.org) format: an H1, a summary blockquote, prose without headings (what treg
+is, setup by surface: hosted assistant, local coding agent, sandboxed agent; the report after setup;
+the search-read-call loop; a short list of rules), then H2 link lists (`Docs`, `Optional`). It
+restates nothing operational; it links `skill.md` for that. `skill.md` is the operating guide every
+installed agent carries: choosing a tool and a provider, money, a table of failures with whether
+each was charged and what to do, idempotent retries, generation tasks, the team's own tools and CLIs,
+sharing keys, running a team, and one Rules list. The money rule both state: call at the listed
+price without asking and report `X-Treg-Cost-Micro` after; only before a generation task or a loop
+over many inputs, say the expected total and keep a running sum against it, because
+`X-Treg-Route-Max-Cost` caps each call and does not add up across calls. Provider-specific detail
+(a provider's allowance, voice discovery, pricing provenance) lives on its catalog row as a `note`,
+which `catalog get` shows, not in either file.
+
 One skill, three personas:
-- **consumer** — discover + call tools with no credentials locally. Teaches the agent-native
-  **URL-passthrough** first: take the real upstream URL and prefix it with `{BASE}/call/`
-  + the `X-Treg-Token` header; `treg call <tool> <path>` is the CLI shorthand. Its
-  generation task distinguishes synchronous MiniMax voice generation from asynchronous video and
-  image generation. Voice callers discover current system voice IDs through
-  `minimax.voice-gen.voices.list`, then call the HD or Turbo endpoint for a temporary audio URL.
-  Video/image callers learn `--await`, the `X-Treg-Async` descriptor and lazy 30-60 s polling for
-  MCP agents, the shell-timeout warning (video takes 1-5 minutes), reserve-then-settle money with
-  releases on failure, and expiring result URLs that treg never stores.
-- **creator** — turn a local skill into a shared tool: `treg secret add`, `treg tool add` (single-key or
+- **consumer** - discover + call tools with no credentials locally: search, read, call by catalog
+  id; one of the team's own tools by name (`treg call <tool> <path>`) or by its upstream URL behind
+  `{BASE}/call/` with the `X-Treg-Token` header. Its generation task teaches `--await`, the
+  `X-Treg-Async` descriptor and lazy 30-60 s polling for MCP agents, the shell-timeout warning
+  (video takes 1-5 minutes), reserve-then-settle money with releases on failure (the cost header on
+  a submission is the reservation), binary answers through `call_media`, and expiring result URLs
+  that treg never stores. A model's parameters and voices come from `catalog get`.
+- **creator** - turn a local skill into a shared tool: `treg secret add`, `treg tool add` (single-key or
   `--bind` multi-credential), the `treg skill scaffold → push` bundle flow, and `treg oauth connect` for
   browser-consent tokens. Documents the two OAuth modes (auto-refresh vs manual) and the four auth shapes.
-- **admin** — inventory + monitor: `treg tool/secret/skill ls`, `treg calls`, and `treg health [--run]`
+- **admin** - inventory + monitor: `treg tool/secret/skill ls`, `treg calls`, and `treg health [--run]`
   (with the per-tool `health_check` probe).
 
 **Distribution:** the file is `{BASE}`-templated and served at **`GET /skill.md`**
@@ -60,10 +72,10 @@ One skill, three personas:
 `~/.claude/skills/treg/SKILL.md` right after installing the CLI — so `curl {BASE}/install.sh | sh`
 gives a machine both the `treg` command AND the skill that teaches an agent to use it. It restates the
 invariants (secrets are write-only, use-without-hold, the proxy relays the upstream's truth) and links
-`{BASE}/llms.txt` + `{BASE}/tutorial`. It mirrors the surfaces in [api.md](api.md) + [cli.md](cli.md);
+`{BASE}/llms.txt` + `{BASE}/tutorial.md`. It mirrors the surfaces in [api.md](api.md) + [cli.md](cli.md);
 keep the three in sync when the API/CLI change.
 
-The catalog-search guidance in `skill.md` and `llms.txt` tells agents to include required output
+The catalog-search guidance in `skill.md` tells agents to include required output
 facets in the query, inspect candidates with `catalog_get`, and call a provider endpoint when they
 need fields outside a routed contract. Email verification illustrates this: the routed
 `people.email.verify` contract defines `valid`, `status` and `score`, while provider responses can

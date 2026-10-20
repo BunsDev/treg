@@ -147,7 +147,7 @@ MAX_DATA_BYTES = 5_000_000   # the engine holds 64 MB; the rows travel into it o
 
 
 def validate_data(data: Any) -> str | None:
-    """The uploaded CSV: text, at most 50 MB, a header row and at least one data row, parseable."""
+    """The uploaded CSV: text, at most 5 MB, a header row and at least one data row, parseable."""
     import csv
     import io
     if data is None or data == "":
