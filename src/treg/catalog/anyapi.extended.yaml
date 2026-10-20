@@ -286,7 +286,8 @@ endpoints:
   unverified: http 502
 - id: anyapi.facebook.company_ads
   tier: extended
-  platform: facebook
+  platform: meta-ads
+  capability: meta-ads.library.advertiser
   domain: company
   method: POST
   path: /v1/run/facebook.company_ads

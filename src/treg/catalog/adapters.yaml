@@ -3490,6 +3490,31 @@ adapters:
           followers: "rows[0].followers", following: "rows[0].following", posts_count: "rows[0].tweets",
           is_verified: "rows[0].verified", description: "rows[0].bio"}
     miss: "coalesce(rows, []) == []"
+  crawl4ai.meta-ads.library.advertiser:
+    accepts: [[page_id], [company_name], [company_domain], [facebook_url]]
+    in: {}
+    in_expr: {body.page: "coalesce(page_id, company_name, company_domain, facebook_url)"}
+    test_identity: {page_id: "15087023444"}
+    out: {ads: rows, page_id: "rows[0].page_id", page_name: "rows[0].page_name", count: "len(rows)"}
+    miss: "coalesce(rows, []) == []"
+  anyapi.facebook.company_ads:
+    accepts: [[page_id], [company_name]]
+    in: {page_id: body.pageId, company_name: body.companyName}
+    out: {ads: output.data.ads, page_id: "output.data.ads[0].pageId", count: "len(output.data.ads)",
+          next_cursor: output.data.nextCursor}
+    miss: "coalesce(output.data.ads, []) == []"
+  adyntel.meta-ads.library.advertiser:
+    accepts: [[company_domain]]
+    in: {company_domain: body.company_domain}
+    out: {ads: results, page_id: "results[0].page_id", page_name: "results[0].page_name", count: "len(results)",
+          next_cursor: continuation_token}
+    miss: "coalesce(results, []) == []"
+  scrapecreators.x.v1-facebook-adlibrary-company-ads:
+    accepts: [[page_id], [company_name]]
+    in: {page_id: queryParams.pageId, company_name: queryParams.companyName}
+    out: {ads: results, page_id: "results[0].page_id", page_name: "results[0].page_name", count: "len(results)",
+          next_cursor: cursor}
+    miss: "coalesce(results, []) == []"
   crawl4ai.facebook.user.posts:
     accepts: [[url]]
     in: {url: body.page}

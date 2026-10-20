@@ -912,6 +912,27 @@ contracts:
     miss: "posts == []"
     idempotent: true
 
+  meta-ads.library.advertiser:
+    summary: "The ads one Facebook page is running in the Meta Ad Library, by page id, company name, domain or Facebook URL — provider-native ad rows in `ads`"
+    identity:
+      - {page_id: str}
+      - {company_name: str}
+      - {company_domain: str}
+      - {facebook_url: url}
+    filters: {}
+    output:
+      ads: {type: list, required: true, note: "the provider's own ad rows (id, dates, text, media…) — shapes differ per provider; raw is the same body"}
+      page_id: {type: str}
+      page_name: {type: str}
+      count: {type: int}
+      next_cursor: {type: str}
+    # No ads is a miss, so the next provider is tried: a provider whose fetch was blocked answers
+    # an empty list that looks like a page with no ads. Every child is free on an empty answer
+    # except a per_call one, which bills it.
+    miss: "ads == []"
+    idempotent: true
+    prefer: [crawl4ai]
+
   facebook.user.profile:
     summary: "A public Facebook profile or page by URL or profile id — treg picks the provider and names the one that served"
     identity:

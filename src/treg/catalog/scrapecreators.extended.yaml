@@ -567,7 +567,8 @@ endpoints:
   test_request:
     queryParams:
       pageId: '367152833370567'
-  skipped: not called — $1.0000 would exceed this run's $45.00 budget
+  verified: '2026-10-20'
+  example_response: examples/scrapecreators.x.v1-facebook-adlibrary-company-ads.json
 - id: scrapecreators.x.v1-facebook-adlibrary-search-ads
   added: '2026-07-28'
   tier: extended
