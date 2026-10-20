@@ -206,17 +206,12 @@ task or a loop over many inputs, tell the human the expected total and cap it wi
   a failure inside a 2xx (a DataForSEO task status other than 20000) is flagged with
   `X-Treg-Upstream-Failed` (`upstream_failed` over MCP): the body has no result, and the charge is
   what the provider billed for the attempt.
-- **Repeat questions are cheaper.** A call may be answered from treg's archive of the exact same
-  question while that answer is fresh: the provider's bytes, with `X-Treg-Cache: hit`,
-  `X-Treg-Fetched-At` and `X-Treg-Age`. The team's first call on a question costs full price; from
-  the second on, a hit costs 10%, and a hit on the team's own key is free. `Cache-Control: no-cache`
-  forces a live call; `X-Treg-Max-Age: <seconds>` accepts only a younger answer. A team admin can
-  turn the archive off for the team (`treg org archive off`).
-- **When treg's own account for a provider runs out**, it may serve the same tool through a relay
-  account it owns: same request, same answer shape, the relay's real price, and
-  `X-Treg-Served-Via: overflow:<name>` (`served_via` over MCP). `catalog_get` shows that price
-  up front as `overflow_price_usd`; a "free" tool with one may bill exactly that, so quote it. The
-  team's own keys are never relayed; a team opts out with `treg org overflow off`.
+- **Repeat questions are cheaper.** An answer may come from treg's archive of the same question
+  (`X-Treg-Cache: hit`): the team's first call on a question costs full price, later hits 10%, and
+  hits on the team's own key nothing. `Cache-Control: no-cache` forces a live call.
+- **A "free" tool can still bill** when treg's own account for its provider runs out and the call is
+  relayed (`X-Treg-Served-Via: overflow:<name>`): if `catalog_get` shows `overflow_price_usd`, quote
+  that price.
 - `treg balance` shows the balance and recent charges, and the dashboard's Activity page shows the
   settled cost of every call. `treg topup` adds funds or sets up automatic top-ups.
 
@@ -236,15 +231,13 @@ no JSON `detail` is never treg's.
 | 402 `route_max_cost` | no | Your `X-Treg-Route-Max-Cost` refused it. Ask for fewer rows or targets, or raise the ceiling. |
 | 429 `share_busy` | no | treg's account for that provider is at its limit and your team already has calls running on it. Send fewer at once, retry after `retry_after_s`, or call the routed tool. |
 | 429 `trial_allowance_reached` | no | A free trial pool on treg's key is used up for today; it resets at 00:00 UTC. Connect the team's own key. |
-| 429 `trial_allowance_unavailable` | no | Today's trial use could not be checked. Retry shortly. |
 | 503 `provider_capacity_unavailable` | no | treg's own account for that provider is out. Take one of the body's `alternatives`, use the team's own key, or retry after `resets_at` or a minute. |
-| 503 `provider_paused` | no | This registry paused that provider; read `message`. Use another provider. Do not reconnect: the team's connection is kept. |
-| 503 with `treg_saturated: true` | no | Wait for `Retry-After`, then send the same request again. |
 | `X-Treg-Capacity: exhausted` on any status | not when `X-Treg-Cost-Micro` is `0` | treg's own account for that tool refused for want of credit. Not your balance; try another tool. |
 | 502 `route_failed` | `charged_micro` in the body | Every provider of a routed call failed or missed; `tried` lists them. Misses can be billed: read `charged_micro` before running it again. |
-| 502 `response_buffer_limit` | no | The answer is over 8 MiB; narrow the request. If the message says it is temporary, treg is busy: retry shortly. |
 | 409, 410 with an `idempotency_*` error | see below | See "Retrying without paying twice". |
-| 426 on sign-in or a team command | no | The CLI is too old for this registry: `treg update`. |
+
+Any other refusal from treg (a paused provider, treg itself busy, an answer over its size limit, an
+old CLI) charged nothing, and its body's `message` says what to do.
 
 ## Retrying without paying twice
 
@@ -278,21 +271,16 @@ treg catalog get minimax.video-gen.h3.generate       # native parameters, model 
 treg call minimax.video-gen.h3.generate --await --timeout 900 --data @body.json
 ```
 
-- **Video and image generation is an asynchronous task.** The submission returns a task id at once
-  and reserves the price; it is charged only when the task succeeds, and a failed or moderated task
-  refunds the whole hold. `--await` polls until it finishes and prints only the final response on
-  stdout; stderr carries the task id, a resumable `treg call …` command (Ctrl-C loses the wait,
-  never the task or the money), progress and the result URL. Exit 0 is done, 2 means the provider
-  failed the task, 3 a timeout (resume with the printed command).
+- **Video and image generation is an asynchronous task.** The submission reserves the price and
+  returns a task id at once; it is charged only if the task succeeds, and a failed or moderated task
+  refunds the whole hold. `--await` waits and prints the final response; if the wait is cut off, the
+  task and the money are not lost, and the CLI prints the command that resumes it.
 - **CLI agents: raise your shell tool's timeout or run the call in the background.** A video takes
   1-5 minutes, and a default 2-minute command limit cuts the wait off.
 - **MCP and raw HTTP:** the response header `X-Treg-Async` is the descriptor: where to poll, which
   statuses are final, where the result is. Wait about 60 s before the first check, then every
   30-60 s; three to six checks per video is normal. Do other work in between.
-- **Some asynchronous tools usually answer at once** (an email verification): a first response that
-  is already finished is the answer and is charged as one. If it says it is still working, poll no
-  faster than the descriptor's `interval` and stop at its `max_age`; a task with no answer by then
-  is refunded.
+- A first answer that is already final (an email verification often is) is charged as one call.
 - **Result URLs expire** (the descriptor's `ttl_note` says when). Download
   promptly: treg never stores generated media. On some routes the file needs one more call, and
   `--await` prints that command.
@@ -433,15 +421,14 @@ never who called, nor inputs or output.
 <!--/hub-->
 ## Share keys and skills with the team
 
-**Bulk is fastest.** In the directory the human names, `treg upload` lists the provider keys it
-recognises in `.env` and the skills in the subfolders, and registers only the ones picked
-(`treg upload env|skills --dir <dir>` restricts it; `treg scan` previews and sends nothing). It reads
-variable names, and loads a value only for a key that is picked. Without a terminal it refuses
-unless you pass `--select a,b` or `--all`, so nothing is imported by accident.
+**Bulk is fastest.** In the directory the human names, `treg scan` lists the provider keys it
+recognises in `.env` and the skills in the subfolders, and sends nothing; `treg upload --select
+<names>` registers the ones the human picks. Without a terminal, `treg upload` refuses unless given
+`--select` or `--all`.
 
-**Wrap a new key in a skill.** Registering a key, an API or a CLI, pair it with a skill, so the
-credential, the tool and the recipe land together. If none exists, write a basic one: a SKILL.md
-with frontmatter (agents find skills by it) and one example call.
+**Wrap a new key in a skill**, so the credential, the tool and the recipe land together. If none
+exists, write a basic one: a SKILL.md with frontmatter (agents find skills by it) and one example
+call.
 
 ```bash
 mkdir -p ./posthog && cat > ./posthog/SKILL.md <<'MD'
@@ -455,65 +442,27 @@ treg skill init --dir ./posthog   # drafts treg.json (base URL, the secrets); re
 treg skill add --dir ./posthog    # registers the recipe, the secret and the tool together
 ```
 
-**A bare tool, only when a recipe adds nothing.** Never store a key without binding it to a tool.
+Without a recipe: `treg secret add`, then `treg tool add --secret <name>`; never store a key that no
+tool binds. A key in the query string, several credentials on one tool, and OAuth tokens are covered
+by `treg tool add --help`, `treg secret add --help` and `treg skill --help`. Hosted OAuth
+(`treg oauth connect`) needs `{BASE}/oauth/callback` among the OAuth app's redirect URIs.
 
-```bash
-treg secret add posthog-key --value "$POSTHOG_API_KEY"   # or --file ./.secret/token.json
-treg tool add posthog --base-url https://us.posthog.com --secret posthog-key
-# a key that goes in the query string instead of a header:
-treg tool add serpapi --base-url https://serpapi.com --secret <name-or-id> \
-  --auth-in query --auth-name api_key --auth-format '{secret}'
-```
-
-**A whole skill with several credentials:** `treg skill scaffold ~/.claude/skills/google-ads --out
-gads.json` captures SKILL.md as the recipe and every `.secret/*` file as a secret; complete each
-binding in `gads.json` (google-ads needs `Authorization: Bearer {access_token}` from an `oauth`
-secret and `developer-token: {secret}` from an `env` one), then `treg skill push gads.json`.
-
-A teammate's agent then calls the tool without ever holding the credential, and each call is logged
-against its own token. `treg skill install <name>` (or `--all`) writes a shared skill's recipe into
-`.claude/skills/<name>/SKILL.md`.
-
-**Credential shapes**, one per binding: `env` (a plain string), `secret_file` (a JSON file, of which
-`secret_field` is injected), `oauth` (a JSON token, refreshed automatically) and `cli_auth` (a token
-the human copied from a CLI they are signed into). Every binding of a tool applies to every call.
-An oauth secret carrying `refresh_token`, `client_id` and `client_secret` is refreshed before it
-expires; a bare token is injected as it is and re-uploaded when it expires. To get a first OAuth
-token, either run the flow yourself and `treg secret add gsc --file token.json --kind oauth`, or let
-treg host it: `treg oauth connect gsc --client-secret client_secret.json --scopes <scope>` prints a
-consent URL, and `{BASE}/oauth/callback` must be among the OAuth app's redirect URIs.
+A teammate's agent then calls the tool without holding the credential, and each call is logged
+against its own token. `treg skill install <name>` writes a shared skill into the agent's skills
+folder.
 
 ## Run the team
 
-```bash
-treg tool ls · treg secret ls · treg skill ls   # what the active team has
-treg calls · treg audit                         # who called what, with results and costs
-treg health [--run]                             # every credential: ok, invalid or unknown; --run re-checks now
-treg tool update <id> --health '{"path":"me"}'  # the probe treg health uses for a tool
-treg org create "Team A"                        # you become its owner
-treg org invite bob@company.com --role member   # admin+
-treg org members · treg org ls · treg org use <slug>
-treg org pin <capability> --provider <p>        # admin+: this job uses this provider only
-```
+`treg calls` and `treg audit` show who called what, with results and costs; `treg health --run`
+re-checks every credential. `treg org --help` lists the team commands (create, invite, members, use,
+pin). Roles: a viewer calls tools and reads; a member also registers and manages their own; an admin
+manages anyone's and invites; an owner also changes roles and deletes the team.
 
-**Roles:** a viewer calls tools and reads the inventory; a member also registers secrets, tools and
-skills and manages their own; an admin also invites and manages anyone's; an owner also changes
-roles and deletes the team. An account can own up to 10 teams; joining others does not count.
-`treg secret rm` is refused while a tool binds the secret.
-
-**Give an agent its own identity** (admin+) instead of the human's token. Every call it makes is then
-capped, scoped and logged as itself:
-
-```bash
-treg org agent-new ci-bot                                # prints the token once (run again to rotate)
-treg org agent-new ci-bot --tools stripe,gh --cap 500    # only these tools, 500 calls a day
-treg org agent-new customer-bot --pin customer=cust_A    # bills and reads only that customer's calls
-treg org agents · treg org agent-rm <user_id>            # who they are and today's use; revoke
-```
-
-Put that token in the agent's `TREG_TOKEN`. An agent token calls the team's tools and reads; it can
-never sign in, create a team or own one. If you are an agent with a token of your own, use it rather
-than the machine owner's: your calls then appear under your own name.
+**Give an agent its own token** (admin+) instead of the human's: `treg org agent-new <name>` prints
+it once, and `--tools`, `--cap` and `--pin` limit it (`treg org agent-new --help`). Put it in the
+agent's `TREG_TOKEN`. An agent token calls the team's tools and reads; it can never sign in, create
+a team or own one. If you are an agent with a token of your own, use it rather than the machine
+owner's: your calls then appear under your own name.
 
 ## Feedback and reviews
 
