@@ -1131,17 +1131,21 @@ async def oauth_token(
 
 @app.get("/.well-known/oauth-protected-resource", include_in_schema=False)
 @app.get("/.well-known/oauth-protected-resource/mcp", include_in_schema=False)
+@app.get("/.well-known/oauth-protected-resource/mcp/", include_in_schema=False)
 async def oauth_protected_resource():
     """Tells an MCP client which authorization server guards /mcp/ and what it may ask for.
 
-    Two paths for one document: the spec has clients look it up either at the host root or under the
-    resource's own path, and which one a given client tries is not something we get to choose.
+    Several paths for one document: the spec has clients look it up either at the host root or under
+    the resource's own path, and which one a given client tries is not something we get to choose.
+    The resource is `/mcp/`, so RFC 9728's path insertion yields the trailing-slash form; it is
+    served directly because some clients do not follow a redirect during discovery.
     """
     return JSONResponse(mcp_oauth.protected_resource_metadata(),
                         headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/.well-known/oauth-protected-resource/mcp/v2", include_in_schema=False)
+@app.get("/.well-known/oauth-protected-resource/mcp/v2/", include_in_schema=False)
 async def oauth_protected_resource_v2():
     """Protected-resource metadata for the catalog-only connector."""
     if not get_settings().claude_connector_enabled:

@@ -421,7 +421,9 @@ _DATAPLANE_ROUTE_KEYS: frozenset[RouteKey] = frozenset({
     # MCP is calling traffic, so its mount and its RFC 9728 resource metadata belong to the
     # dataplane. Token issuance (consent, /oauth/*) stays on control; the dataplane only validates.
     ('/.well-known/oauth-protected-resource/mcp', ('GET',), 'oauth_protected_resource'),
+    ('/.well-known/oauth-protected-resource/mcp/', ('GET',), 'oauth_protected_resource'),
     ('/.well-known/oauth-protected-resource/mcp/v2', ('GET',), 'oauth_protected_resource_v2'),
+    ('/.well-known/oauth-protected-resource/mcp/v2/', ('GET',), 'oauth_protected_resource_v2'),
 })
 
 ROLE_BACKGROUND_TASKS: dict[AppRole, tuple[str, ...]] = {
