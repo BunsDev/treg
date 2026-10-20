@@ -229,3 +229,16 @@ async def test_an_ordinary_call_cancelled_mid_relay_is_still_refunded(clients: A
     with pytest.raises(BaseException):
         await clients.post(f"/call/{EP}?label={call_resolution.team_label(org_id)}", json={"credits": 1000, "ref": "p8"})
     assert (await _team(clients))[1] == before
+async def test_tool_details_tell_a_signed_in_team_its_own_values(clients: AsyncClient, budget_row, monkeypatch):
+    """catalog detail adds `your_values` for a row's team_label and caller_email fields when the
+    reader is a signed-in team, and nothing for an anonymous reader."""
+    cat = catalog_store.load()
+    monkeypatch.setitem(cat.by_id, EP, {**budget_row, "caller_email": ["body.ref"]})
+    org_id, _ = await _team(clients)
+    r = await clients.get(f"/catalog/endpoints/{EP}")
+    assert r.headers["cache-control"] == "private, no-store" and "X-Treg-Token" in r.headers["vary"]
+    body = r.json()
+    assert body["endpoint"]["your_values"] == {"pathParams.label": call_resolution.team_label(org_id),
+                                               "body.ref": "tim@superdesign.dev"}
+    anonymous = (await clients.get(f"/catalog/endpoints/{EP}", headers={"X-Treg-Token": ""})).json()
+    assert "your_values" not in anonymous["endpoint"]
