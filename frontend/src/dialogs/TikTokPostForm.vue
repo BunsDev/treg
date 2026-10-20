@@ -28,6 +28,7 @@ const err = ref('')
 const progress = ref('')
 const postId = ref('')
 let ticket = 0
+let poll = 0  // a status loop runs only while its number is current
 let timer: ReturnType<typeof setTimeout> | null = null
 
 const fileErr = computed(() => file.value ? fileProblem(file.value) : '')
@@ -99,7 +100,7 @@ async function post() {
       if (!put.ok) throw new Error(`TikTok refused the upload (${put.status}).`)
     }
     phase.value = 'processing'
-    follow(init.publish_id, Date.now())
+    follow(init.publish_id, Date.now(), ++poll)
   } catch (e: any) {
     err.value = e.message || String(e)
     phase.value = 'details'
@@ -107,22 +108,26 @@ async function post() {
 }
 
 // TikTok processes the video after the upload; ask every 5 seconds for up to 10 minutes.
-function follow(publishId: string, since: number) {
+function follow(publishId: string, since: number, mine: number) {
   timer = setTimeout(async () => {
     try {
       const s = await tiktok('v2/post/publish/status/fetch/', { publish_id: publishId })
+      if (mine !== poll) return
       if (s.status === 'PUBLISH_COMPLETE') {
         postId.value = (s.publicaly_available_post_id || [])[0] || ''
         phase.value = 'done'; return
       }
       if (s.status === 'FAILED') { err.value = tiktokWords({ code: s.fail_reason }); phase.value = 'failed'; return }
     } catch { /* ask again */ }
-    if (Date.now() - since < 600_000) follow(publishId, since)
+    if (mine === poll && Date.now() - since < 600_000) follow(publishId, since, mine)
   }, 5000)
 }
 
 function again() {
+  poll++
   if (timer) clearTimeout(timer)
+  if (preview.value) URL.revokeObjectURL(preview.value)
+  file.value = null; preview.value = ''; seconds.value = null
   form.value = emptyForm(''); postId.value = ''; err.value = ''; phase.value = 'pick'
 }
 
@@ -131,6 +136,7 @@ watch(accounts, list => {
 }, { immediate: true })
 watch(account, () => { form.value = emptyForm(form.value.title); void loadCreator() }, { immediate: true })
 onBeforeUnmount(() => {
+  poll++
   if (timer) clearTimeout(timer)
   if (preview.value) URL.revokeObjectURL(preview.value)
 })
@@ -217,7 +223,7 @@ onBeforeUnmount(() => {
           <span><strong>AI-generated content</strong><br><span class="muted">Turn on if this video was made or changed with AI. TikTok labels it.</span></span>
         </label>
 
-        <p class="consent" data-testid="tt-consent">{{ declaration(form) }}</p>
+        <p class="consent" data-testid="tt-consent"><template v-for="part in declaration(form)" :key="part.text"><a v-if="part.href" :href="part.href" target="_blank" rel="noopener">{{ part.text }}</a><template v-else>{{ part.text }}</template></template></p>
         <p class="muted small">After you post, it can take a few minutes for TikTok to process the video and show it on your profile.</p>
         <div class="actions">
           <button class="btn" type="button" :disabled="phase !== 'details'" @click="phase = 'pick'">Back</button>

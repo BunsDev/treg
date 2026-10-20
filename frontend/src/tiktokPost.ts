@@ -66,10 +66,16 @@ export function labelPrompt(form: Form) {
   return ''
 }
 
-export function declaration(form: Form) {
+// The consent line names TikTok's own pages; the form links each name to it.
+export const MUSIC_URL = 'https://www.tiktok.com/legal/page/global/music-usage-confirmation/en'
+export const BRANDED_URL = 'https://www.tiktok.com/legal/page/global/bc-policy/en'
+
+// The consent line, as text parts; a part with an href is a link to that TikTok page.
+export function declaration(form: Form): { text: string, href?: string }[] {
+  const music = { text: 'Music Usage Confirmation', href: MUSIC_URL }
   return form.disclose && form.branded_content
-    ? "By posting, you agree to TikTok's Branded Content Policy and Music Usage Confirmation"
-    : "By posting, you agree to TikTok's Music Usage Confirmation"
+    ? [{ text: "By posting, you agree to TikTok's " }, { text: 'Branded Content Policy', href: BRANDED_URL }, { text: ' and ' }, music]
+    : [{ text: "By posting, you agree to TikTok's " }, music]
 }
 
 export function tooLong(creator: Creator, seconds: number | null) {

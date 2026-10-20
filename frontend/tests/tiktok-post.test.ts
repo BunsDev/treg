@@ -1,9 +1,11 @@
 import { expect, test } from 'vitest'
 import {
-  blocker, brandedDisabled, BRANDED_PRIVATE, chunkPlan, declaration, emptyForm, fileProblem,
-  interactions, labelPrompt, PICK_ONE, postInfo, privacyOptions, tiktokWords, uploadUrlOk,
+  blocker, brandedDisabled, BRANDED_PRIVATE, BRANDED_URL, chunkPlan, declaration, emptyForm, fileProblem,
+  interactions, labelPrompt, MUSIC_URL, PICK_ONE, postInfo, privacyOptions, tiktokWords, uploadUrlOk,
   type Creator,
 } from '../src/tiktokPost'
+
+const said = (parts: { text: string }[]) => parts.map(p => p.text).join('')
 
 const creator: Creator = {
   ok: true, creator_nickname: 'Taus', privacy_level_options: ['PUBLIC_TO_EVERYONE', 'SELF_ONLY'],
@@ -39,13 +41,14 @@ test('a creator who cannot post blocks the button', () => {
 test('commercial disclosure needs one box and changes the label and declaration', () => {
   const f = { ...emptyForm(''), privacy_level: 'PUBLIC_TO_EVERYONE', disclose: true }
   expect(blocker(creator, f, 1)).toBe(PICK_ONE)
-  expect(declaration(f)).toBe("By posting, you agree to TikTok's Music Usage Confirmation")
+  expect(said(declaration(f))).toBe("By posting, you agree to TikTok's Music Usage Confirmation")
   f.your_brand = true
   expect(labelPrompt(f)).toBe("Your video will be labeled as 'Promotional content'")
-  expect(declaration(f)).toBe("By posting, you agree to TikTok's Music Usage Confirmation")
+  expect(said(declaration(f))).toBe("By posting, you agree to TikTok's Music Usage Confirmation")
   f.branded_content = true
   expect(labelPrompt(f)).toBe("Your video will be labeled as 'Paid partnership'")
-  expect(declaration(f)).toBe("By posting, you agree to TikTok's Branded Content Policy and Music Usage Confirmation")
+  expect(said(declaration(f))).toBe("By posting, you agree to TikTok's Branded Content Policy and Music Usage Confirmation")
+  expect(declaration(f).filter(p => p.href).map(p => p.href)).toEqual([BRANDED_URL, MUSIC_URL])
   expect(blocker(creator, f, 1)).toBe('')
 })
 
