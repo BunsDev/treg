@@ -250,6 +250,12 @@ sent on the shared key, may only carry the caller's own verified email, compared
 another address is a 400 before reserve, and leaving the field out is fine. `_enforce_caller_email`
 checks without rewriting, so a shared provider account sends alerts only to the person who asked.
 
+For a signed-in reader, `GET /catalog/endpoints/{id}` (and so MCP `catalog_get`) adds
+`your_values` on rows with `team_label` or `caller_email` fields: the exact values that reader may
+send (its team's label, its own email), so an agent gets its first call right without a bounce. An
+anonymous reader gets nothing extra; the route is not cached at the edge. MCP `my_tools` also
+returns the team's `team_label`.
+
 `cost.quantity` prices a call by a whole number the caller chooses (a budget of provider credits):
 `{field, max}` names a declared integer body or query field and its ceiling. A missing or
 out-of-range value is a 400 before reserve, the hold is `quantity x price`, and `settle: quantity`
