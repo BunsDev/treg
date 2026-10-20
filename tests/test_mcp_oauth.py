@@ -40,18 +40,21 @@ async def test_protected_resource_metadata_names_the_mcp_endpoint(clients):
     assert body["authorization_servers"], "a client must be told who issues tokens for us"
 
 
-async def test_the_metadata_is_served_at_BOTH_lookup_paths(clients):
+async def test_the_metadata_is_served_at_every_lookup_path(clients):
     """The spec has clients look this up either at the host root or under the resource's own path,
     and which one a given client tries is not ours to choose."""
     a = await clients.get("/.well-known/oauth-protected-resource")
     b = await clients.get("/.well-known/oauth-protected-resource/mcp")
-    assert a.status_code == b.status_code == 200
-    assert a.json() == b.json()
+    c = await clients.get("/.well-known/oauth-protected-resource/mcp/")
+    assert a.status_code == b.status_code == c.status_code == 200
+    assert a.json() == b.json() == c.json()
 
 
 async def test_v2_metadata_names_only_the_directory_resource(clients):
     response = await clients.get("/.well-known/oauth-protected-resource/mcp/v2")
     assert response.status_code == 200
+    slash = await clients.get("/.well-known/oauth-protected-resource/mcp/v2/")
+    assert slash.status_code == 200 and slash.json() == response.json()
     assert response.json()["resource"] == mcp_oauth.mcp_resource_url("v2")
     assert response.json()["resource"].endswith("/mcp/v2/")
     assert response.json()["resource"] != mcp_oauth.mcp_resource_url("v1")

@@ -353,6 +353,12 @@ AuthKit MCP servers all do this; FastMCP tracks a 401-free `initialize` as a bug
 now fires for **every id-bearing JSON-RPC request** — `initialize`, `tools/list`, `tools/call`. Only
 **notifications** (no id, no response expected) and **`ping`** (liveness) pass without a credential;
 `.well-known/*` discovery is separate GET routes, untouched — that IS the discovery the client needs.
+Any **non-POST** request (a GET probe included) is challenged the same way (missing or dead token),
+and otherwise refused with **405** `Allow: POST`: the transport is stateless, so the SDK's standalone
+GET stream has no session to carry anything, and letting a GET through left a client that probes
+with one waiting on keep-alive pings instead of a 401. The protected-resource metadata is also served at the
+trailing-slash paths RFC 9728 derives from `/mcp/` and `/mcp/v2/`, since some clients do not follow
+a redirect during discovery.
 The challenge also carries `scope` (spec SHOULD) so a client requests least-privilege scopes up front.
 
 The middleware judges two cases, not one. **No credential** → the plain challenge above. **A dead

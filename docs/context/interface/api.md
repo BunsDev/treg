@@ -970,9 +970,9 @@ why that widening must be kept out of the schema.
 treg is an OAuth authorization server for its own MCP endpoint. Detail in
 `architecture/mcp-oauth.md`; this is the surface.
 
-    GET  /.well-known/oauth-protected-resource      what guards /mcp/ (served at BOTH v1 lookup paths)
+    GET  /.well-known/oauth-protected-resource      what guards /mcp/ (also at /mcp and /mcp/ below it)
     GET  /.well-known/oauth-protected-resource/mcp/v2
-                                                    distinct metadata for /mcp/v2/
+                                                    distinct metadata for /mcp/v2/ (also at .../v2/)
     GET  /.well-known/oauth-authorization-server    endpoints, S256, DCR + CIMD support
     POST /oauth/register                            dynamic client registration (RFC 7591)
     GET  /oauth/authorize                           the consent screen (JSON with Accept: application/json)
