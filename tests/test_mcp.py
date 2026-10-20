@@ -1621,3 +1621,19 @@ async def test_a_lone_surrogate_in_an_upstream_body_still_returns_the_paid_answe
     assert out["status"] == 200
     assert out["body"] == {"elements": [{"content": "\U0001d401old � cut"}]}
     assert out["call_id"] and out["cost_usd"] > 0
+
+
+async def test_catalog_get_gives_the_caller_its_own_team_values(clients, monkeypatch):
+    """MCP catalog_get on a row with team_label fields returns `your_values` for the calling team,
+    and names that team on the internal read, so a person in several teams still gets them."""
+    from treg.application.call import resolve as call_resolution
+    from treg.domain.catalog import store as catalog_store
+    cat = catalog_store.load()
+    ep = dict(cat.by_id["crawl4ai.watch.list"])
+    monkeypatch.setitem(cat.by_id, "crawl4ai.watch.list", ep)
+    token = (await clients.post("/users", json={"email": "watcher@superdesign.dev"})).json()["token"]
+    clients.headers["X-Treg-Token"] = token
+    org_id = (await clients.get("/orgs")).json()[0]["org_id"]
+    async with mcp_session(clients) as c:
+        out = await _call_tool(c, "catalog_get", {"endpoint_id": "crawl4ai.watch.list"}, token=token)
+    assert out["endpoint"]["your_values"] == {"queryParams.agent": call_resolution.team_label(org_id)}

@@ -1224,7 +1224,14 @@ async def _catalog_get_impl(
     api_context = (_api(token) if surface is _TEAM_SURFACE
                    else _api(token, client_name=surface.client_name))
     async with api_context as client:
-        r = await client.get(f"/catalog/endpoints/{endpoint_id}")
+        headers = {}
+        if token and ep is not None and (ep.get("team_label") or ep.get("caller_email")):
+            # Name the team, so a person signed in to several teams still gets its own values
+            # (`your_values`): an identity token alone does not say which team is asking.
+            _, slug, problem = await _resolve_org(client)
+            if slug and not problem:
+                headers["X-Treg-Org"] = slug
+        r = await client.get(f"/catalog/endpoints/{endpoint_id}", headers=headers)
     if r.status_code == 404:
         cat = catalog_store.load()
         return {"error": f"unknown endpoint {endpoint_id!r}",
