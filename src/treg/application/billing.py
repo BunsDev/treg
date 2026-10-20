@@ -1245,7 +1245,8 @@ async def _run_autotopup(org_id: int) -> None:
         async with session_maker() as db:
             result = await attempt_auto_topup(db, org_id)
         if not result.get("ok") and result.get("reason") not in (
-                "above_threshold", "cooldown", "disabled", "no_consent", "no_card", "not_configured"):
+                "above_threshold", "cooldown", "disabled", "no_consent", "no_card", "not_configured",
+                "stripe_busy"):  # stripe_busy already logged its warning
             log.info("billing: auto top-up for org %s did not fund: %s", org_id, result)
     except Exception as e:  # noqa: BLE001 — a background task's exception must not vanish silently
         log.warning("billing: auto top-up task for org %s crashed: %s", org_id, e)
