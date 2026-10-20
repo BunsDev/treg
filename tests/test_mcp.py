@@ -734,34 +734,44 @@ async def test_a_notification_and_ping_pass_without_a_token(clients):
         assert r.status_code == 200, r.text
 
 
-async def test_a_non_POST_is_challenged_like_a_POST_then_refused_not_streamed(clients):
+async def test_a_non_POST_without_a_live_credential_is_challenged_not_streamed(clients):
     """Issue #1064: a GET probe used to open an SSE stream that never answered."""
     from treg.domain.identity import mcp_oauth
     dead = mcp_oauth.make_access_token(user_id=7, org_id=3, audience=mcp_oauth.mcp_resource_url(),
                                        scope="treg:call", ttl=-60)
-    live = mcp_oauth.make_access_token(user_id=7, org_id=3, audience=mcp_oauth.mcp_resource_url(),
-                                       scope="treg:call")
     sse = {"Accept": "text/event-stream"}
     async with mcp_session(clients) as c:
         missing = await c.get("http://localhost/mcp/", headers=sse)
         expired = await c.get("http://localhost/mcp/",
                               headers={**sse, "Authorization": f"Bearer {dead}"})
-        credentialed = [await c.get("http://localhost/mcp/",
-                                    headers={**sse, "Authorization": f"Bearer {token}"})
-                        for token in (live, "treg_per_org_token")]
         delete = await c.delete("http://localhost/mcp/")
-        head = await c.head("http://localhost/mcp/", headers={"Authorization": f"Bearer {live}"})
     assert missing.status_code == 401, missing.text
     assert "resource_metadata=" in missing.headers["www-authenticate"]
     assert 'error="invalid_token"' not in missing.headers["www-authenticate"]
     assert expired.status_code == 401, expired.text
     assert 'error="invalid_token"' in expired.headers["www-authenticate"]
-    for r in credentialed:
-        assert r.status_code == 405, r.text
-        assert r.headers["allow"] == "POST"
-        assert r.headers["content-type"] == "application/json"
     assert delete.status_code == 401
-    assert head.status_code == 405 and head.headers["allow"] == "POST"
+
+
+async def test_a_credentialed_non_POST_reaches_the_transport() -> None:
+    """Grok Bot sends the Cursor plugin's `${env:TREG_TOKEN}` header unresolved; a 405 on its GET
+    probe stopped installs at "Finish plugin setup", so any credential goes on as it did before."""
+    from treg.domain.identity import mcp_oauth
+    from treg.mcp import RequireAuthForProtectedTools
+
+    live = mcp_oauth.make_access_token(user_id=7, org_id=3, audience=mcp_oauth.mcp_resource_url(),
+                                       scope="treg:call")
+    for method, token in [("GET", live), ("GET", "treg_per_org_token"),
+                          ("GET", "${env:TREG_TOKEN}"), ("HEAD", live)]:
+        reached = []
+
+        async def transport(scope, receive, send):
+            reached.append(scope["method"])
+
+        scope = {"type": "http", "method": method,
+                 "headers": [(b"authorization", f"Bearer {token}".encode())]}
+        await RequireAuthForProtectedTools(transport)(scope, None, None)
+        assert reached == [method], (method, token)
 
 
 async def test_auth_body_replay_waits_for_the_real_disconnect_on_a_long_response() -> None:
