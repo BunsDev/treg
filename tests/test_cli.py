@@ -1076,23 +1076,25 @@ def test_catalog_search_explains_routing_once(monkeypatch, capsys):
     assert "serpstat.web.anchors.list" in out
 
 
-def _home_registry(monkeypatch, *, me=None, orgs=None, balance_micro=1_000_000, tools=()):
-    """A fake registry for bare `treg`. `me` is /auth/me's answer: an httpx.Response, a body, or an
-    exception to raise. TREG_TOKEN is cleared so only the test's config decides who is signed in."""
+def _home_registry(monkeypatch, *, me=None, orgs=None, balance_micro=1_000_000, balance=None, tools=(),
+                   fail=None):
+    """A fake registry for bare `treg`. `me` is /auth/me's answer (an httpx.Response or a body);
+    `orgs=None` is refused, as the server refuses an agent key; `fail` maps a path to an exception.
+    TREG_TOKEN is cleared so only the test's config decides who is signed in."""
     monkeypatch.delenv("TREG_TOKEN", raising=False)
     seen = []
 
     def handle(request):
         seen.append(request.url.path)
         path = request.url.path
-        if isinstance(me, Exception):
-            raise me
+        if path in (fail or {}):
+            raise fail[path]
         if path == "/auth/me":
             return me if isinstance(me, httpx.Response) else httpx.Response(200, json=me)
         if path == "/orgs":
-            return httpx.Response(200, json=orgs or [])
+            return httpx.Response(403, json={"detail": "agent key"}) if orgs is None else httpx.Response(200, json=orgs)
         if path.endswith("/balance"):
-            return httpx.Response(200, json={"balance_micro": balance_micro, "entries": {"items": []}})
+            return balance or httpx.Response(200, json={"balance_micro": balance_micro, "entries": {"items": []}})
         if path == "/tools":
             return httpx.Response(200, json=[{"name": n} for n in tools])
         return httpx.Response(500, json={"detail": f"unexpected {path}"})
@@ -1121,12 +1123,13 @@ def test_bare_treg_shows_live_state_and_next_commands(monkeypatch, capsys):
     assert "help[4]:" in out and "Run `treg call <tool>/<path>`" in out and "treg topup" not in out
 
 
-def test_bare_treg_with_a_team_key_needs_no_org_lookup(monkeypatch, capsys):
+def test_bare_treg_with_a_team_key_takes_its_team_from_auth_me(monkeypatch, capsys):
+    """/orgs refuses an agent key; /auth/me names its one team, as `treg balance` resolves it."""
     seen = _home_registry(monkeypatch, me={"email": "a@example.com", "org_id": 7, "org": "acme",
                                            "role": "member"}, balance_micro=0)
     _home({"token": "t"})
     out = capsys.readouterr().out
-    assert "/orgs" not in seen and "team: acme (member)" in out
+    assert "/orgs/7/balance" in seen and "team: acme (member)" in out
     assert "own_tools: none registered" in out
     help_lines = out.split("help[", 1)[1]
     assert help_lines.index("treg topup") < help_lines.index("treg catalog search"), "the blocker leads"
@@ -1135,21 +1138,65 @@ def test_bare_treg_with_a_team_key_needs_no_org_lookup(monkeypatch, capsys):
 @pytest.mark.parametrize("cfg, me, expect", [
     ({}, None, "Run `treg login`"),
     ({"token": "t"}, httpx.Response(401, json={"detail": "no session"}), "(token rejected)"),
-    ({"token": "t"}, {"email": "a@example.com"}, "Run `treg org create"),
+    ({"token": "t"}, {"email": "a@example.com"}, "Run `treg org create"),  # signed in, in no team
 ])
 def test_bare_treg_names_what_is_missing(monkeypatch, capsys, cfg, me, expect):
-    _home_registry(monkeypatch, me=me)
+    _home_registry(monkeypatch, me=me, orgs=[])
     _home(cfg)
     out = capsys.readouterr().out
     assert expect in out and "Run `treg catalog search" in out and "balance:" not in out
 
 
 def test_bare_treg_survives_an_unreachable_registry(monkeypatch, capsys):
-    _home_registry(monkeypatch, me=httpx.ConnectError("refused"))
+    _home_registry(monkeypatch, fail={"/auth/me": httpx.ConnectError("refused")})
     _home({"token": "t"})
     out = capsys.readouterr().out
     assert "(ConnectError reaching the registry)" in out and "account:" not in out
     assert "Run `treg config`" in out
+
+
+@pytest.mark.parametrize("me, shown, first_help", [
+    # a host that answers 200 with a page, not a registry: a wrong base URL, not a crash
+    (httpx.Response(200, text="<html>portal</html>"), "is not a treg answer", "Run `treg config`"),
+    # the right registry having a bad moment: retry, do not rewrite a correct base URL
+    (httpx.Response(503, json={"detail": "deploying"}), "(HTTP 503 from /auth/me)", "Run `treg` again"),
+])
+def test_bare_treg_tells_a_wrong_registry_from_a_failing_one(monkeypatch, capsys, me, shown, first_help):
+    _home_registry(monkeypatch, me=me)
+    _home({"token": "t"})
+    out = capsys.readouterr().out
+    assert shown in out and "account:" not in out
+    assert out.split("help[", 1)[1].split("\n")[1].strip().startswith(first_help)
+
+
+def test_bare_treg_leaves_out_only_the_line_that_failed(monkeypatch, capsys):
+    """A late read timing out, or a balance body of the wrong shape, drops its own line only."""
+    _home_registry(monkeypatch, me={"email": "a@example.com", "org_id": 7, "org": "acme", "role": "owner"},
+                   balance=httpx.Response(200, json=[1, 2]), fail={"/tools": httpx.ReadTimeout("slow")})
+    _home({"token": "t"})
+    out = capsys.readouterr().out
+    assert "account: a@example.com" in out and "team: acme (owner)" in out
+    assert "balance:" not in out and "own_tools" not in out and "registry: https://registry.example.test\n" in out
+
+
+def test_bare_treg_resolves_the_team_like_balance_does(monkeypatch, capsys):
+    """/orgs honors --org/TREG_ORG; a team claim in /auth/me must not override it, or `treg` and
+    `treg balance` would name different teams."""
+    seen = _home_registry(monkeypatch, me={"email": "a@example.com", "org_id": 1, "org": "claimed", "role": "owner"},
+                          orgs=[{"org_id": 1, "slug": "claimed", "role": "owner"},
+                                {"org_id": 7, "slug": "chosen", "role": "member"}])
+    _home({"token": "t", "active_org": "chosen"})
+    out = capsys.readouterr().out
+    assert "team: chosen (member)" in out and "/orgs/7/balance" in seen
+
+
+def test_bare_treg_with_teams_but_none_active_points_at_org_use(monkeypatch, capsys):
+    """A stale active team is not "no team": creating one would make a duplicate."""
+    _home_registry(monkeypatch, me={"email": "a@example.com"},
+                   orgs=[{"org_id": 3, "slug": "kept", "role": "member"}])
+    _home({"token": "t", "active_org": "left-long-ago"})
+    out = capsys.readouterr().out
+    assert "team: none" in out and "Run `treg org ls`" in out and "org create" not in out
 
 
 def test_bare_treg_json_and_dispatch(monkeypatch, capsys):
