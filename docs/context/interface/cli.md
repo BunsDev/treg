@@ -57,10 +57,11 @@ retain the existing `_show` formatting on stdout, including pretty-printed JSON.
 ## Bare `treg`: the home view
 
 Nearly every caller is an agent, so `treg` with no arguments answers with live state instead of a
-usage error that costs it a turn on `--help`. `_main` rewrites an empty argv to the hidden `__home`
-subcommand (`cmd_home`), so `--org` and `--json` apply as everywhere else. `_home_state` reads
-`/auth/me` (a team key names its team there), then `/orgs` for an identity token (the effective org,
-else the active one), `/orgs/{id}/balance?limit=0` and `/tools`, under a short timeout; a line the
+usage error that costs it a turn on `--help`. The top-level subparsers are not required and the
+parser's default `fn` is `cmd_home`, so `--org` and `--json` apply as everywhere else. `_home_state`
+reads `/auth/me` (a team key names its team there), then `/orgs` for an identity token through
+`_active_org_row` (the effective org, else the active one; `whoami` and `_team_line` share it),
+`/orgs/{id}/balance?limit=1` and `/tools`, under a short timeout; a line the
 server will not answer is left out and the command always exits 0. The output is plain `key: value`
 lines (`bin`, `version`, `description`, `registry`, `account`, `team`, `balance`, `own_tools[N]`)
 ending in `help[N]`, runnable next commands with runtime values as `<placeholders>` (`_home_help`).

@@ -1077,12 +1077,16 @@ def test_catalog_search_explains_routing_once(monkeypatch, capsys):
 
 
 def _home_registry(monkeypatch, *, me=None, orgs=None, balance_micro=1_000_000, tools=()):
-    """A fake registry for bare `treg`. `me` is /auth/me's answer (an httpx.Response or a body)."""
+    """A fake registry for bare `treg`. `me` is /auth/me's answer: an httpx.Response, a body, or an
+    exception to raise. TREG_TOKEN is cleared so only the test's config decides who is signed in."""
+    monkeypatch.delenv("TREG_TOKEN", raising=False)
     seen = []
 
     def handle(request):
         seen.append(request.url.path)
         path = request.url.path
+        if isinstance(me, Exception):
+            raise me
         if path == "/auth/me":
             return me if isinstance(me, httpx.Response) else httpx.Response(200, json=me)
         if path == "/orgs":
@@ -1105,7 +1109,6 @@ def _home(cfg=None):
 def test_bare_treg_shows_live_state_and_next_commands(monkeypatch, capsys):
     """Content first: an agent that runs bare `treg` gets its team, balance and own tools, then
     runnable next steps, instead of a usage error that costs it a turn on `--help`."""
-    monkeypatch.delenv("TREG_TOKEN", raising=False)
     seen = _home_registry(monkeypatch, me={"email": "a@example.com"},
                           orgs=[{"org_id": 3, "slug": "other", "role": "member"},
                                 {"org_id": 7, "slug": "acme", "role": "admin"}],
@@ -1119,7 +1122,6 @@ def test_bare_treg_shows_live_state_and_next_commands(monkeypatch, capsys):
 
 
 def test_bare_treg_with_a_team_key_needs_no_org_lookup(monkeypatch, capsys):
-    monkeypatch.delenv("TREG_TOKEN", raising=False)
     seen = _home_registry(monkeypatch, me={"email": "a@example.com", "org_id": 7, "org": "acme",
                                            "role": "member"}, balance_micro=0)
     _home({"token": "t"})
@@ -1136,7 +1138,6 @@ def test_bare_treg_with_a_team_key_needs_no_org_lookup(monkeypatch, capsys):
     ({"token": "t"}, {"email": "a@example.com"}, "Run `treg org create"),
 ])
 def test_bare_treg_names_what_is_missing(monkeypatch, capsys, cfg, me, expect):
-    monkeypatch.delenv("TREG_TOKEN", raising=False)
     _home_registry(monkeypatch, me=me)
     _home(cfg)
     out = capsys.readouterr().out
@@ -1144,12 +1145,7 @@ def test_bare_treg_names_what_is_missing(monkeypatch, capsys, cfg, me, expect):
 
 
 def test_bare_treg_survives_an_unreachable_registry(monkeypatch, capsys):
-    monkeypatch.delenv("TREG_TOKEN", raising=False)
-
-    def refuse(request):
-        raise httpx.ConnectError("refused", request=request)
-    monkeypatch.setattr(cli, "_client", lambda cfg, auth=True: httpx.Client(
-        transport=httpx.MockTransport(refuse), base_url="https://registry.example.test"))
+    _home_registry(monkeypatch, me=httpx.ConnectError("refused"))
     _home({"token": "t"})
     out = capsys.readouterr().out
     assert "(ConnectError reaching the registry)" in out and "account:" not in out
@@ -1158,11 +1154,10 @@ def test_bare_treg_survives_an_unreachable_registry(monkeypatch, capsys):
 
 def test_bare_treg_json_and_dispatch(monkeypatch, capsys):
     """`treg` and `treg --json` both reach the home view through `main`; JSON keeps micro-USD."""
-    monkeypatch.delenv("TREG_TOKEN", raising=False)
+    _home_registry(monkeypatch, me={"email": "a@example.com", "org_id": 7, "org": "acme", "role": "owner"})
     monkeypatch.setattr(cli, "_load_config", lambda: {"base_url": "https://registry.example.test",
                                                       "token": "t"})
     monkeypatch.setattr("treg.cli_analytics.track_command", lambda **kw: None)
-    _home_registry(monkeypatch, me={"email": "a@example.com", "org_id": 7, "org": "acme", "role": "owner"})
     cli.main(["--json"])
     body = json.loads(capsys.readouterr().out)
     assert body["team"] == "acme" and body["balance_micro"] == 1_000_000 and body["help"]
