@@ -1162,7 +1162,9 @@ that slice: it bills one whole credit (~$0.0245) for one email or ten (observed 
 `usd_per_call`. Settlement still reads `usd` and the derived email-count rule — display only.
 `Catalog.cost_view` reads the provider-neutral `cost.display` flags: `unit` names the shown unit,
 `grouped` shows the price for `cost.per` units, `round_up` labels a started block, `variable` adds
-a plus sign for selected additions, and `maximum` labels a validated reserve ceiling as "up to"
+a plus sign for selected additions, `value` shows the price of one `unit` when that is not the reserve
+unit (a job held at its full size but billed per page shows the page price; the hold still reads `usd`),
+and `maximum` labels a validated reserve ceiling as "up to"
 (it may wrap a price table, whose fallback is already the global upper bound). The result is
 display USD / unit / prefix / suffix fields only; `usd` and settlement are untouched. The validator
 checks the flags, requires a grouped price to declare a positive integer `per`, and refuses a table

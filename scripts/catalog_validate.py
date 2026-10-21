@@ -913,12 +913,15 @@ def check_cost(cost: dict, where: str, errors: list[str], warnings: list[str],
         display = cost["display"]
         if (not isinstance(display, dict) or not isinstance(display.get("unit"), str)
                 or not display["unit"].strip() or len(display["unit"]) > 40
-                or set(display) - {"unit", "grouped", "round_up", "variable", "maximum"}):
-            fail(errors, where, "cost.display requires a short unit and optional grouped/round_up/variable/maximum flags")
+                or set(display) - {"unit", "grouped", "round_up", "variable", "maximum", "value"}):
+            fail(errors, where, "cost.display requires a short unit and optional grouped/round_up/variable/maximum flags and value")
         else:
             for flag in {"grouped", "round_up", "variable", "maximum"} & set(display):
                 if type(display[flag]) is not bool:
                     fail(errors, where, f"cost.display.{flag} must be boolean")
+            if "value" in display and (type(display["value"]) not in (int, float) or display["value"] <= 0
+                                       or display.get("grouped")):
+                fail(errors, where, "cost.display.value is a positive price of one unit, in the cost's currency, and not grouped")
             if display.get("round_up") and not display.get("grouped"):
                 fail(errors, where, "cost.display.round_up requires grouped")
             if display.get("grouped") and (type(cost.get("per")) is not int or cost["per"] <= 0):
