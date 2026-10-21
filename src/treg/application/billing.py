@@ -520,6 +520,9 @@ async def create_setup_checkout(db: AsyncSession, org: Org, *, return_base: str 
         stripe_adapter.CHECKOUT_SESSION_CREATE,
         mode="setup",
         customer=customer,
+        # Required in setup mode when `payment_method_types` is unset; the cards it lets the payer
+        # save are the ones that can pay our USD invoices. The account's default is AUD.
+        currency="usd",
         # Checkout's setup-mode SetupIntent is already `usage=off_session`, so the bank collects the SCA
         # mandate now. Checkout rejects `setup_intent_data[usage]`; it accepts only description,
         # metadata and on_behalf_of there.
