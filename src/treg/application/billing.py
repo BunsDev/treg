@@ -249,9 +249,14 @@ def autotopup_prefs(org: Org) -> dict:
     return {
         "threshold_micro": int(org.autotopup_threshold_micro or usd_to_micro(s.autotopup_default_threshold_usd)),
         "amount_micro": int(org.autotopup_amount_micro or usd_to_micro(s.autotopup_default_amount_usd)),
-        "monthly_cap_micro": int(org.autotopup_monthly_cap_micro or usd_to_micro(s.autotopup_monthly_cap_usd)),
+        "monthly_cap_micro": int(org.autotopup_monthly_cap_micro or usd_to_micro(TOPUP_MAX_USD)),
         "per_hour": int(org.autotopup_max_per_hour or s.autotopup_default_per_hour),
     }
+
+
+def autotopup_cap_reached(prefs: dict, month_spend_micro: int) -> bool:
+    """Whether the next automatic charge would pass the monthly cap, so none fires."""
+    return month_spend_micro + prefs["amount_micro"] > prefs["monthly_cap_micro"]
 
 
 def autotopup_wait_s(org: Org) -> int:
@@ -1025,7 +1030,7 @@ async def attempt_auto_topup(db: AsyncSession, org_id: int) -> dict:
 
         amount_micro = prefs["amount_micro"]
         spent = await monthly_autotopup_spend(db, org_id)
-        if spent + amount_micro > prefs["monthly_cap_micro"]:
+        if autotopup_cap_reached(prefs, spent):
             return {"ok": False, "reason": "monthly_cap", "spent_micro": spent,
                     "cap_micro": prefs["monthly_cap_micro"]}
 
@@ -1190,12 +1195,17 @@ async def attempt_auto_topup(db: AsyncSession, org_id: int) -> dict:
         # A pause recorded while this attempt was paying is resolved by this payment. Blanking the
         # reason without re-arming left the policy off with no reason, like a deliberate off.
         _arm_if_waiting_for_card(org, card_proven=True, paid=True, auto_paid=True)
+        org_slug = org.slug
         db.add(org)
         await db.commit()
-        if to and not already:
+        if not already and (to or analytics.enabled()):
             balance_after = await ledger.balance_of(db, org_id)
             await db.rollback()  # release the read connection before sending the receipt
-            await email_mod.send_topup_receipt(to, org_name, credited, balance_after, auto=True)
+            if to:
+                await email_mod.send_topup_receipt(to, org_name, credited, balance_after, auto=True)
+            # The only emitter for an inline auto credit: the webhook finds it credited.
+            _capture_topup_completed(to, org_id, org_slug, {"amount_micro": credited, "auto": True,
+                                                            "balance_after_micro": balance_after})
         return {"ok": True, "payment_intent": pi["id"], "amount_micro": credited}
 
 
@@ -1348,6 +1358,17 @@ async def handle_webhook_event(db: AsyncSession, event: dict) -> dict:
     return {"handled": False, "type": kind}
 
 
+def _capture_topup_completed(to: str | None, org_id: int, org_slug: str, props: dict) -> None:
+    """One `topup_completed` shape for the webhook credit and the inline auto-top-up credit."""
+    analytics.capture(to or f"org:{org_id}", "topup_completed",
+                      {"entry_surface": analytics.funnel_surface(""),
+                       "checkout_source": analytics.funnel_surface(""),
+                       "bonus_micro": 0, "bonus_pct": 0, **props,
+                       "amount_usd": props["amount_micro"] / 1_000_000,  # display-only, never computed against
+                       "org": org_slug},
+                      groups={"team": org_slug})
+
+
 async def _credit(db: AsyncSession, org_id: int, amount_micro: int, pi_id: str, *, auto: bool,
                   fingerprint: str | None = None, attribution: dict | None = None) -> dict:
     """Credit a paid PaymentIntent to the org's balance, once. Emails a receipt only when this
@@ -1412,13 +1433,10 @@ async def _credit(db: AsyncSession, org_id: int, amount_micro: int, pi_id: str, 
         # is org-scoped, so the owner's email is the best available person (the payer may differ);
         # the `team` group is what makes org-level revenue exact. capture() never raises — an
         # exception here would 500 the webhook and make Stripe retry an already-credited payment.
-        analytics.capture(to or f"org:{org_id}", "topup_completed",
-                          {**attribution, "amount_micro": amount_micro,
-                           "amount_usd": amount_micro / 1_000_000,  # display-only, never computed against
-                           "auto": auto, "balance_after_micro": after,
-                           "bonus_micro": bonus_micro, "bonus_pct": bonus_pct,
-                           "org": org.slug if org else ""},
-                          groups={"team": org.slug if org else ""})
+        _capture_topup_completed(to, org_id, org.slug if org else "",
+                                 {**attribution, "amount_micro": amount_micro, "auto": auto,
+                                  "balance_after_micro": after, "bonus_micro": bonus_micro,
+                                  "bonus_pct": bonus_pct})
         # First top-up only: `fresh` is already the "this delivery moved money" branch, and the
         # outbox's unique (org_id, action) makes a second top-up a silent no-op. We measure becoming
         # a payer, not revenue — value-based bidding needs volume treg does not have yet. Guarded like
@@ -1662,6 +1680,7 @@ async def billing_state(db: AsyncSession, org: Org) -> dict:
             "monthly_cap_usd": ledger.usd(prefs["monthly_cap_micro"]),
             "month_spend_micro": spent,
             "month_spend_usd": ledger.usd(spent),
+            "cap_reached": autotopup_cap_reached(prefs, spent),
             "disabled_reason": org.autotopup_disabled_reason,
             "failures": int(org.autotopup_failures or 0),
             "last_attempt_at": org.autotopup_last_attempt_at.isoformat() if org.autotopup_last_attempt_at else None,
@@ -1690,9 +1709,15 @@ async def set_autotopup(
     if amount_usd is not None:
         org.autotopup_amount_micro = usd_to_micro(validate_topup_usd(amount_usd))
     if monthly_cap_usd is not None:
-        org.autotopup_monthly_cap_micro = usd_to_micro(validate_topup_usd(monthly_cap_usd))
+        # 0 clears a chosen cap back to the default (`autotopup_prefs`).
+        org.autotopup_monthly_cap_micro = (
+            0 if monthly_cap_usd == 0 else usd_to_micro(validate_topup_usd(monthly_cap_usd)))
     if per_hour is not None:
         org.autotopup_max_per_hour = validate_per_hour(per_hour)
+    prefs = autotopup_prefs(org)
+    if prefs["monthly_cap_micro"] < prefs["amount_micro"]:
+        raise TopupRejected(f"the monthly limit (${ledger.usd(prefs['monthly_cap_micro']):g}) is below one "
+                            f"refill (${ledger.usd(prefs['amount_micro']):g}), so auto top-up could never charge")
     if enabled:
         if consent:
             org.autotopup_consented_at = _now()
