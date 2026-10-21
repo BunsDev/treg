@@ -144,7 +144,7 @@ async def send_autotopup_disabled(email: str, org_name: str, reason: str,
                                    "while you're away from the keyboard",
         "max_attempts": "the card was declined too many times in a row",
         "stripe_unconfirmed": "we could not confirm whether Stripe collected the payment",
-        "no_card": "the saved card is no longer on file",
+        "no_card": "Stripe can no longer charge the saved card",
     }.get(reason.split(":")[0], f"of a payment problem ({_esc(reason)})")
     if reason == "authentication_required" and not recovery_pi:
         fix = ("The attempted auto top-up was cancelled. Make a manual top-up in the dashboard "

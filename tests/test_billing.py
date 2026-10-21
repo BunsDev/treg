@@ -1062,6 +1062,40 @@ async def test_a_removed_card_pauses_as_no_card_not_unconfirmed(c: AsyncClient, 
     assert state["enabled"] is True and state["disabled_reason"] is None
 
 
+@pytest.mark.parametrize("meanwhile, enabled, reason, card", [
+    ({"stripe_default_pm": "pm_new"}, True, None, True),           # a new card is already the fix
+    ({"autotopup_enabled": False}, False, None, False),            # a deliberate off stays one
+])
+async def test_a_removed_card_respects_what_changed_while_stripe_answered(
+        c: AsyncClient, monkeypatch, meanwhile, enabled, reason, card):
+    org_id, owner = await _org(c)
+    await _armed(org_id)
+    gone = stripe.InvalidRequestError(
+        "The customer does not have a payment method with the ID pm_armed.", param="payment_method",
+        http_status=400)
+
+    async def refused(fn, /, **kw):
+        if fn == billing.stripe_adapter.INVOICE_CREATE:
+            await _set_org(org_id, **meanwhile)
+            raise gone
+        return await _invoice_sdk()(fn, **kw)
+
+    monkeypatch.setattr(billing, "_sdk", refused)
+    notices = []
+
+    async def disabled_notice(*args, **kwargs):
+        notices.append(args)
+
+    monkeypatch.setattr(billing.email_mod, "send_autotopup_disabled", disabled_notice)
+    assert (await _attempt(org_id))["reason"] == "no_card"
+    body = (await c.get("/billing", headers=_h(owner))).json()
+    assert body["card_on_file"] is card and not notices
+    assert body["autotopup"]["enabled"] is enabled
+    assert body["autotopup"]["disabled_reason"] is reason
+    await _setup(c, org_id, "pm_later")
+    assert (await c.get("/billing", headers=_h(owner))).json()["autotopup"]["enabled"] is enabled
+
+
 async def test_invoice_lookup_starts_before_last_auto_credit_not_later_manual_credit(
         c: AsyncClient, monkeypatch):
     org_id, _ = await _org(c)
