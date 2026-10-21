@@ -489,8 +489,9 @@ pays the aggregator's real price, 0% markup, disclosed in-band when it ships (st
 - **`infra/upstream/aggregators/`** — the envelopes, and nothing else: `build()` wraps the
   vendor request (Orthogonal `POST /run {api, path, query, body}`; Monid `POST /run {provider,
   endpoint, input}`), `parse()` unwraps the vendor status + body + the real in-band charge, and
-  `build()` restores JSON scalar types that Monid validates and converts Akta enrichment's native
-  comma-separated `sections` query value to Monid's array-shaped envelope field, and
+  `build()` restores JSON scalar types that Monid validates, converts Akta enrichment's native
+  comma-separated `sections` query value to Monid's array-shaped envelope field, moves PDL's four
+  core GET enrichment/search query fields into the `input.body` Monid requires, and
   names who to blame when the aggregator itself refused (`AGGREGATOR_SIDE` = `aggregator_auth`,
   `aggregator_balance`, `malformed` - the call path marks the aggregator unhealthy for everyone, the
   verifier leaves the route alone; `contract` - the aggregator's own per-request refusal, including

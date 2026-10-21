@@ -56,7 +56,7 @@ CASES = [
      {"apollo.companies.jobs", "apify.linkedin.search.jobs", "leadmagic.x.jobs-search-v3"}),
     ("sentence", "company search filter by location industry headcount growth",
      {"apollo.companies.search", "pdl.companies.search", "crunchbase.companies.search",
-      "thecompaniesapi.companies.search", "pdl.x.company-search-post"}),
+      "thecompaniesapi.companies.search"}),
     ("sentence", "find work email address from person name and company domain",
      {"hunter.people.email.find", "leadmagic.people.email.find"}),
     ("sentence", "verify if an email address is valid and deliverable",

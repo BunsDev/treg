@@ -134,6 +134,49 @@ async def test_findymail_shaped_402_on_tier4_runs_one_child_cycle(clients: Async
     assert (line["status"], line["credential_tier"], line["refused_by"]) == (200, "platform-overflow", None)
 
 
+@pytest.mark.parametrize("endpoint,operation,params,price,unit", [
+    ("pdl.people.enrich", "person_enrich", {"email": "sean@peopledatalabs.com"}, 280_000, "call"),
+    ("pdl.companies.enrich", "company_enrich", {"website": "peopledatalabs.com"}, 100_000, "call"),
+    ("pdl.companies.search", "company_search", {"sql": "SELECT * FROM company WHERE name='people data labs'", "size": "1"}, 100_000, "result"),
+])
+async def test_pdl_operation_quota_402_uses_monid_for_eligible_routes(
+    clients: AsyncClient, overflow_on, monkeypatch, endpoint, operation, params, price, unit,
+):
+    monkeypatch.setenv("TREG_PLATFORM_KEY_PDL", "PLATFORM-PDL-KEY")
+    monkeypatch.setenv("TREG_PLATFORM_PROVIDERS", get_settings().platform_providers + ",pdl")
+    get_settings.cache_clear()
+    path = "/" + endpoint.split(".")[1].replace("people", "person").replace("companies", "company")
+    path += "/" + endpoint.split(".")[2]
+    async with session_maker() as db:
+        db.add(OverflowRoute(endpoint_id=endpoint, aggregator="monid", provider="pdl", method="GET", path=path,
+                             agg_slug="pdl", agg_path="/v5" + path, agg_price_micro=price, agg_unit=unit,
+                             ratio=1.0, enabled=True, last_verified_at=utcnow_naive()))
+        await db.commit()
+    routes_view.invalidate()
+    capacity_view.invalidate()
+    exhausted = json.dumps({"status": 402, "error": {"message":
+        f"You have hit your account maximum for {operation} (all matches used)"}}).encode()
+    monkeypatch.setattr(call_service, "relay", _fake_relay(402, exhausted))
+    output = {"data": [{"id": "company"}], "total": 1} if unit == "result" else {"id": "matched"}
+    envelope = {"runId": "pdl-test", "status": "COMPLETED", "output": output,
+                "providerResponse": {"httpStatus": 200},
+                "billing": {"reportedCost": {"value": price, "unit": "MICRO_DOLLAR"}}}
+    seen = []
+    monkeypatch.setattr(O, "_send", _orthogonal([(200, envelope)], seen))
+
+    response = await clients.get(f"/call/{endpoint}", params=params)
+
+    assert response.status_code == 200, response.text
+    assert response.json() == output
+    assert response.headers["X-Treg-Served-Via"] == "overflow:monid"
+    assert response.headers["X-Treg-Cost-Micro"] == str(price)
+    assert len(seen) == 1
+    assert seen[0].json["endpoint"] == "/v5" + path
+    assert seen[0].json["input"]["queryParams"] == {}
+    assert seen[0].json["input"]["body"] == {k: int(v) if k == "size" else v for k, v in params.items()}
+    assert await _holds() == []
+
+
 async def test_overflow_budget_reconciles_the_estimate_to_the_actual_cost(
     clients: AsyncClient, overflow_on, monkeypatch,
 ):

@@ -92,8 +92,9 @@ An empty list means every team.
 `recipe.json` (the manifest), `run.js` (script recipes), `check.json`, `README.md`, and
 optionally `data.csv`. `treg hub init <name> [--script]` writes a vendor-neutral skeleton.
 `docs/hub-recipes/` holds three worked recipes, each with a matrix test: a public sheet served as a
-tool, an uploaded CSV, and `engineering-team-size`, a script ladder over three catalog tools
-(free identity resolution, CrustData's role headcount, PDL's R&D class) with a $0.15 `ctx.charge` fee.
+tool, an uploaded CSV, and `engineering-team-size`, a script ladder over two catalog tools
+(company enrichment for identity and a possible R&D class fallback, plus CrustData's role headcount)
+with a $0.15 `ctx.charge` fee.
 Four more, one per road, chosen from what customers call most and ask for, are live-verified but
 carry no matrix test yet: `seo-domain-snapshot` (JSON steps, a fixed price), `brand-mentions` (a script
 over Reddit and routed X search that drops loose matches, charged per mention), `email-list-hygiene`

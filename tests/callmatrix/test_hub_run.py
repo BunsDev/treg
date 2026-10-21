@@ -595,8 +595,8 @@ async def test_the_uploaded_csv_recipe_serves_its_own_data_with_no_call(
 async def test_the_engineering_team_size_recipe_reads_the_crustdata_role_headcount(
     matrix_clients: AsyncClient, fake_provider: FakeProvider, platform_on, hub_on, monkeypatch,
 ):
-    """docs/hub-recipes/engineering-team-size: the ladder's free identity step, then CrustData's
-    Engineering role bucket; PDL is not reached when CrustData answers. The price is per_call."""
+    """docs/hub-recipes/engineering-team-size: company enrichment supplies identity, then
+    CrustData's Engineering role bucket. The PDL response is reused if fallback is needed."""
     import json as _json
     from pathlib import Path
     folder = Path(__file__).resolve().parents[2] / "docs" / "hub-recipes" / "engineering-team-size"
@@ -612,9 +612,8 @@ async def test_the_engineering_team_size_recipe_reads_the_crustdata_role_headcou
             return _json.dumps([{"matched_on": "x", "matches": [{"confidence_score": 1.0, "company_data": {
                 "headcount": {"total": 200, "by_role_absolute": {"Engineering": 80, "Sales": 50},
                               "by_role_growth_yoy_pct": {"Engineering": 12.5}}}}]}]).encode()
-        if request.url.path.endswith("/company/clean"):                 # pdl.x.company-clean, free
-            return _json.dumps({"status": 200, "name": "acme", "linkedin_url": "linkedin.com/company/acme"}).encode()
-        return _json.dumps({"status": 200, "employee_count": 200}).encode()   # pdl.companies.enrich, no class data
+        return _json.dumps({"status": 200, "name": "acme", "linkedin_url": "linkedin.com/company/acme",
+                            "employee_count": 200}).encode()                  # pdl.companies.enrich, no class data
     monkeypatch.setattr(FakeProvider, "_response_body", staticmethod(body))
     from treg.domain import money as ledger
     from treg.infra.db import session_maker
@@ -633,12 +632,12 @@ async def test_the_engineering_team_size_recipe_reads_the_crustdata_role_headcou
     assert out["domain"] == "acme.com" and out["estimated_engineering_count"] == 80 and out["estimated_range"] == "51-100"
     assert out["confidence"] == "medium" and out["selected_method"] == "crust_company_engineering_headcount"
     assert out["engineering_growth_yoy_pct"] == 12.5 and out["review_reasons"] == []
-    assert r.json()["usage"]["steps"] == 2                              # clean + crustdata; PDL never reached
+    assert r.json()["usage"]["steps"] == 2                              # PDL identity + CrustData
     hit = fake_provider.hits[-1]
     assert hit.method == "POST" and _json.loads(hit.body)["professional_network_profile_urls"] == ["https://www.linkedin.com/company/acme"]
     # validate runs every tier and reports the disagreement column
     r = await matrix_clients.post(f"/call/{pub.json()['tool_id']}", json={"domain": "acme.com", "method": "validate"}, headers=ceiling)
-    assert r.status_code == 200 and r.json()["usage"]["steps"] == 3, r.text
+    assert r.status_code == 200 and r.json()["usage"]["steps"] == 2, r.text
     assert [a["status"] for a in r.json()["output"]["provider_attempts"]] == ["answered", "no_answer"]
 
 
