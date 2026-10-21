@@ -200,6 +200,10 @@ class Catalog:
         if usd is not None and display:
             grouped = display.get("grouped", False)
             out["display_usd"] = round(usd * per, 9) if grouped else usd
+            if isinstance(display.get("value"), (int, float)):
+                # The price of one `unit` when it is not the reserve unit: a job held at its
+                # 500-page maximum but billed per page shows the page price. Billing reads `usd`.
+                out["display_usd"] = round(display["value"] * rate, 9)
             unit = display["unit"]
             if grouped and per == 1_000_000:
                 out["display_unit"] = f"1M {unit}"
