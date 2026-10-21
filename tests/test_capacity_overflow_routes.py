@@ -419,6 +419,11 @@ def test_monid_build_and_parse_fixtures():
     }, "Monid's Akta schema models the vendor's comma-separated sections parameter as an array"
     alt = monid.build(r, "K", {"domain": "stripe.com"}, None, params_as_body=True)
     assert alt.json["input"] == {"queryParams": {}, "body": {"domain": "stripe.com"}, "pathParams": {}}
+    for path in ("/v5/person/enrich", "/v5/company/enrich", "/v5/person/search", "/v5/company/search"):
+        pdl = _route(aggregator="monid", agg_slug="pdl", agg_path=path)
+        request = monid.build(pdl, "K", {"size": "1", "name": "Example"}, None)
+        assert request.json["input"] == {"queryParams": {}, "body": {"size": 1, "name": "Example"},
+                                          "pathParams": {}}
     ok = _fixture("monid_ok_sync")
     res = monid.parse(ok["status"], json.dumps(ok["body"]).encode())
     assert res.ok and res.upstream_status == 200 and res.cost_micro == 23_920

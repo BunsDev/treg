@@ -60,6 +60,8 @@ sources:
   - src/treg/catalog/examples/linkup.web.answer.json
   - src/treg/catalog/examples/linkup.web.answer.status.json
   - src/treg/catalog/parallel.yaml
+  - src/treg/catalog/pdl.yaml
+  - src/treg/catalog/pdl.extended.yaml
   - src/treg/web/logos/parallel.svg
   - src/treg/catalog/examples/parallel.web.search.json
   - src/treg/catalog/examples/parallel.web.search.advanced.json

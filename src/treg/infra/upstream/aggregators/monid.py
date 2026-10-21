@@ -30,6 +30,14 @@ _ARRAY_QUERY_PARAMS = {
     ("akta", "/v1/company/enrichment"): frozenset({"sections"}),
 }
 
+# Monid models these PDL GET endpoint identifiers and search filters as input.body.
+_BODY_QUERY_ENDPOINTS = frozenset({
+    ("pdl", "/v5/person/enrich"),
+    ("pdl", "/v5/company/enrich"),
+    ("pdl", "/v5/person/search"),
+    ("pdl", "/v5/company/search"),
+})
+
 
 def _typed(v):
     """Monid validates `input` against the vendor's JSON schema, so a numeric query value must be a
@@ -63,6 +71,7 @@ def _query_params(route, query: list[tuple[str, str]] | dict) -> dict:
 def build(route, key: str, query: list[tuple[str, str]] | dict, body: bytes | None,
           path_params: dict | None = None, *, params_as_body: bool = False) -> AggregatorRequest:
     items = _query_params(route, query)
+    params_as_body = params_as_body or (route.agg_slug, route.agg_path.rstrip("/")) in _BODY_QUERY_ENDPOINTS
     parsed: dict = {}
     if body:
         try:

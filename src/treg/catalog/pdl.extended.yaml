@@ -9,8 +9,9 @@ source:
 
 # PARTIALLY VERIFIED 2026-07-28 — transcribed from PDL's OpenAPI spec (v5) plus prose docs for the
 # routes the spec omits (ip/enrich, the three cleaner APIs). The core file (pdl.yaml) already
-# curates person/enrich, person/search, company/enrich, company/search and autocomplete — those
-# (method, path) pairs are excluded here per core-wins dedup.
+# defines person/enrich, person/search, company/enrich, company/search and autocomplete — those
+# (method, path) pairs are excluded here per core-wins dedup. These extended rows are retained
+# as retired definitions.
 #
 # Of the 9 entries carrying a test_request, 8 were called live and passed (examples captured under
 # examples/); person-enrich-preview returned http 402 (this account's Preview allotment is
@@ -24,6 +25,8 @@ source:
 
 endpoints:
   - id: pdl.x.person-enrich-preview
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     added: '2026-07-28'
     domain: contacts
     tier: extended
@@ -64,6 +67,8 @@ endpoints:
     capability: people.enrich
 
   - id: pdl.x.person-identify
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     domain: contacts
     tier: extended
     platform: people
@@ -106,6 +111,8 @@ endpoints:
     capability: people.identity.resolve
 
   - id: pdl.x.person-retrieve-by-id
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     added: '2026-07-28'
     domain: contacts
     tier: extended
@@ -127,6 +134,8 @@ endpoints:
     capability: people.enrich
 
   - id: pdl.x.person-retrieve-bulk
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     added: '2026-07-28'
     domain: contacts
     tier: extended
@@ -149,6 +158,8 @@ endpoints:
     capability: people.enrich
 
   - id: pdl.x.person-search-post
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     domain: contacts
     tier: extended
     capability: people.search
@@ -177,6 +188,8 @@ endpoints:
     example_response: examples/pdl.x.person-search-post.json
 
   - id: pdl.x.company-search-post
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     domain: companies
     tier: extended
     capability: companies.search
@@ -204,6 +217,8 @@ endpoints:
     example_response: examples/pdl.x.company-search-post.json
 
   - id: pdl.x.job-title-enrich
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     kind: utility
     tier: extended
     platform: people
@@ -225,6 +240,8 @@ endpoints:
     capability: people.title.enrich
 
   - id: pdl.x.ip-enrich
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     tier: extended
     platform: web
     method: GET
@@ -250,6 +267,8 @@ endpoints:
     example_response: examples/pdl.x.ip-enrich.json
 
   - id: pdl.x.company-clean
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     kind: utility
     tier: extended
     platform: companies
@@ -273,6 +292,8 @@ endpoints:
     example_response: examples/pdl.x.company-clean.json
 
   - id: pdl.x.location-clean
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     kind: utility
     tier: extended
     platform: people
@@ -293,6 +314,8 @@ endpoints:
     example_response: examples/pdl.x.location-clean.json
 
   - id: pdl.x.school-clean
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     kind: utility
     tier: extended
     platform: people
@@ -317,6 +340,8 @@ endpoints:
     capability: people.school.clean
 
   - id: pdl.x.subscription-list
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     added: '2026-07-28'
     kind: account
     tier: extended
@@ -335,6 +360,8 @@ endpoints:
     docs_url: https://docs.peopledatalabs.com/docs/reference-subscriptions-api
 
   - id: pdl.x.subscription-create
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     added: '2026-07-28'
     kind: account
     tier: extended
@@ -347,6 +374,8 @@ endpoints:
     docs_url: https://docs.peopledatalabs.com/docs/reference-subscriptions-api
 
   - id: pdl.x.subscription-get
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     added: '2026-07-28'
     kind: account
     tier: extended
@@ -362,6 +391,8 @@ endpoints:
     docs_url: https://docs.peopledatalabs.com/docs/reference-subscriptions-api
 
   - id: pdl.x.subscription-update
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     added: '2026-07-28'
     kind: account
     tier: extended
@@ -377,6 +408,8 @@ endpoints:
     docs_url: https://docs.peopledatalabs.com/docs/reference-subscriptions-api
 
   - id: pdl.x.subscription-delete
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     added: '2026-07-28'
     kind: account
     tier: extended
@@ -392,6 +425,8 @@ endpoints:
     docs_url: https://docs.peopledatalabs.com/docs/reference-subscriptions-api
 
   - id: pdl.x.person-subjectrequest
+    status: retired
+    status_note: "Hidden from treg's PDL catalog; definition retained for later review."
     added: '2026-07-28'
     kind: utility
     tier: extended
