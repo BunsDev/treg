@@ -336,10 +336,9 @@ async def get_or_create_customer(db: AsyncSession, org: Org, *, email: str = "")
 
 
 async def _set_default_pm(db: AsyncSession, org_id: int, payment_method: str | None, *,
-                          paid: bool = False, auto_paid: bool = False) -> bool:
+                          paid: bool = False) -> bool:
     """Remember which saved card to charge off-session. An opaque `pm_…` reference — no card data
-    ever reaches our database. Returns True when something changed. `paid`: this card just paid;
-    `auto_paid`: the payment was an automatic top-up."""
+    ever reaches our database. Returns True when something changed. `paid`: this card just paid."""
     if not payment_method:
         return False
     org = await db.get(Org, org_id)
@@ -353,8 +352,7 @@ async def _set_default_pm(db: AsyncSession, org_id: int, payment_method: str | N
     # the pm is unchanged (a redelivered webhook after a crash between the two commits). Declines
     # re-arm on a card that just paid or a newly saved one. A manual payment also resolves a 3DS
     # pause; merely saving a card does not. A deliberate off stays off.
-    armed = _arm_if_waiting_for_card(org, card_proven=paid or changed, paid=paid,
-                                     auto_paid=auto_paid)
+    armed = _arm_if_waiting_for_card(org, card_proven=paid or changed, paid=paid)
     if changed or armed:
         db.add(org)
         await db.commit()
@@ -368,17 +366,18 @@ def _arm_if_waiting_for_card(org: Org, *, card_proven: bool = False, paid: bool 
     `no_card`: a card now exists. `max_attempts:*` (repeated declines): only when `card_proven`, a
     card that just paid or a newly saved one. Before this a decline never re-armed, so a team paying
     by hand with a working card kept auto top-up off and kept getting balance refusals.
-    `stripe_unconfirmed`: only when an automatic top-up was confirmed paid (`auto_paid`), which
-    answers the doubt the pause was waiting on. A manual payment does not.
+    `auto_paid`: an automatic top-up was confirmed paid, which ends any pause: the saved card works
+    off-session and Stripe collected, which also answers `stripe_unconfirmed`. A manual payment
+    does not answer that doubt.
     """
     if not (org.stripe_default_pm and org.autotopup_consented_at) or org.autotopup_enabled:
         return False
     # A deliberate off leaves the reason None with consent still on file, and a later (or
     # redelivered) payment must not switch it back on.
     reason = org.autotopup_disabled_reason or ""
-    if not (reason == "no_card" or (card_proven and reason.startswith("max_attempts:"))
-            or (paid and reason == "authentication_required")
-            or (auto_paid and reason == "stripe_unconfirmed")):
+    if not ((auto_paid and reason) or reason == "no_card"
+            or (card_proven and reason.startswith("max_attempts:"))
+            or (paid and reason == "authentication_required")):
         return False
     org.autotopup_enabled = True
     org.autotopup_disabled_reason = None
@@ -1139,16 +1138,14 @@ async def attempt_auto_topup(db: AsyncSession, org_id: int) -> dict:
                 return await _pause_for_auth(db, org_id, invoice_id, pi_id)
             await _stop_failed_invoice(invoice_id, key)
             return await _record_failure(db, org_id, code or "card_declined")
-        except stripe_adapter.InvalidRequestError as e:
-            if getattr(e, "param", None) != "payment_method":
-                return await _record_unconfirmed(
-                    db, org_id, getattr(e, "invoice_id", invoice_id), type(e).__name__)
-            # Stripe refused the saved card itself (removed from the customer, usually through the
-            # portal), so nothing was charged. A new card is the fix and re-arms from `no_card`.
-            if invoice_id:  # set only after `key`; a refused invoice create leaves nothing to stop
-                await _stop_failed_invoice(invoice_id, key)
-            return await _card_gone(db, org_id, payment_method)
         except Exception as e:  # noqa: BLE001 — a Stripe outage must not surface as a 500 elsewhere
+            if isinstance(e, stripe_adapter.InvalidRequestError) and e.param == "payment_method":
+                # Stripe refused the saved card itself (removed from the customer, usually through
+                # the portal), so nothing was charged. A new card is the fix and re-arms from
+                # `no_card`. `key` exists only once `invoice_id` does.
+                if invoice_id:
+                    await _stop_failed_invoice(invoice_id, key)
+                return await _card_gone(db, org_id, payment_method)
             # A timeout can arrive after Stripe charged. Keep the same attempt key and the invoice
             # available for the next lookup; auto_advance=False prevents autonomous collection.
             if getattr(e, "http_status", None) == 409:
@@ -1188,7 +1185,7 @@ async def attempt_auto_topup(db: AsyncSession, org_id: int) -> dict:
         org.autotopup_failures = 0
         # A pause recorded while this attempt was paying is resolved by this payment. Blanking the
         # reason without re-arming left the policy off with no reason, like a deliberate off.
-        _arm_if_waiting_for_card(org, card_proven=True, paid=True, auto_paid=True)
+        _arm_if_waiting_for_card(org, auto_paid=True)
         db.add(org)
         await db.commit()
         if to and not already:
@@ -1390,8 +1387,11 @@ async def _credit(db: AsyncSession, org_id: int, amount_micro: int, pi_id: str, 
         org = await db.get(Org, org_id)
         if org is not None and (org.autotopup_failures or org.autotopup_disabled_reason):
             # A payment that went through clears the failure history: whatever was wrong with the card
-            # isn't wrong now. (The disabled FLAG is left alone — re-arming is the org's decision.)
+            # isn't wrong now. A confirmed automatic charge also ends its pause; after a manual one the
+            # disabled FLAG is left to `_set_default_pm`'s rules.
             org.autotopup_failures = 0
+            if auto:
+                _arm_if_waiting_for_card(org, auto_paid=True)
             db.add(org)
             await db.commit()
         to = await owner_email(db, org_id)
@@ -1511,8 +1511,7 @@ async def _on_payment_succeeded(db: AsyncSession, pi: dict) -> dict:
         return {"handled": False, "reason": "zero amount"}
     result = await _credit(db, org_id, amount_micro, pi["id"], auto=meta.get("treg_auto") == "1", attribution=meta)
     pm = pi.get("payment_method")
-    await _set_default_pm(db, org_id, pm if isinstance(pm, str) else (pm or {}).get("id"), paid=True,
-                          auto_paid=meta.get("treg_auto") == "1")
+    await _set_default_pm(db, org_id, pm if isinstance(pm, str) else (pm or {}).get("id"), paid=True)
     return result
 
 

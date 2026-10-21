@@ -1025,18 +1025,20 @@ async def test_a_paid_auto_invoice_re_arms_an_unconfirmed_pause(c: AsyncClient, 
     assert state["disabled_reason"] == (None if enabled else "stripe_unconfirmed")
 
 
-async def test_a_removed_card_pauses_as_no_card_not_unconfirmed(c: AsyncClient, monkeypatch):
-    """Stripe refuses an invoice for a card no longer attached to the customer, so nothing was
-    charged. Calling it unconfirmed sent teams to support; the fix is a new card, which re-arms."""
+@pytest.mark.parametrize("refused_at", ["create", "pay"])
+async def test_a_removed_card_pauses_as_no_card_not_unconfirmed(c: AsyncClient, monkeypatch,
+                                                                refused_at):
+    """Stripe refuses a card no longer attached to the customer, so nothing was charged. Calling
+    it unconfirmed sent teams to support; the fix is a new card, which re-arms."""
     org_id, owner = await _org(c)
     await _armed(org_id)
     gone = stripe.InvalidRequestError(
         "The customer does not have a payment method with the ID pm_armed.", param="payment_method",
         http_status=400)
-    sdk = _invoice_sdk()
+    sdk = _invoice_sdk(pay_error=gone if refused_at == "pay" else None)
 
     async def detached(fn, /, **kw):
-        if fn == billing.stripe_adapter.INVOICE_CREATE:
+        if refused_at == "create" and fn == billing.stripe_adapter.INVOICE_CREATE:
             raise gone
         return await sdk(fn, **kw)
 
@@ -1053,6 +1055,8 @@ async def test_a_removed_card_pauses_as_no_card_not_unconfirmed(c: AsyncClient, 
     assert body["autotopup"]["enabled"] is False and body["autotopup"]["disabled_reason"] == "no_card"
     assert body["autotopup"]["failures"] == 0
     assert len(notices) == 1 and notices[0][2] == "no_card"
+    assert sdk.state["charge_count"] == 0
+    assert sdk.state["status"] == ("void" if refused_at == "pay" else "draft")
     await _setup(c, org_id, "pm_new")
     state = (await c.get("/billing", headers=_h(owner))).json()["autotopup"]
     assert state["enabled"] is True and state["disabled_reason"] is None
