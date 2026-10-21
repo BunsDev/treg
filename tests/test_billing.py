@@ -24,6 +24,10 @@ import pytest
 import stripe
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import update
+from stripe.params.checkout._session_create_params import (
+    SessionCreateParams,
+    SessionCreateParamsSetupIntentData,
+)
 from sqlmodel import select
 
 from conftest import make_upstream, verified_signup
@@ -544,8 +548,9 @@ async def test_disabling_autotopup_clears_the_failure_banner(c: AsyncClient, mon
 
 
 async def test_setup_checkout_sends_valid_stripe_params(c: AsyncClient, monkeypatch):
-    """mode=setup Checkout must NOT pass `usage` under setup_intent_data: Stripe rejects it with
-    InvalidRequestError, and Checkout's SetupIntent is already off_session by default."""
+    """The fake cannot reject what Stripe rejects, so the call is checked against the SDK's own
+    parameter types: an unknown key (`setup_intent_data.usage`) and a missing `currency` in setup
+    mode each made every card-less enable fail with 422."""
     org_id, owner = await _org(c)
     captured: list[dict] = []
 
@@ -565,8 +570,11 @@ async def test_setup_checkout_sends_valid_stripe_params(c: AsyncClient, monkeypa
     assert len(captured) == 1, "expected one Checkout session create call"
     session_kw = captured[0]
     assert session_kw["mode"] == "setup"
+    assert set(session_kw) <= set(SessionCreateParams.__annotations__)
+    # Required in setup mode without `payment_method_types`; the account default is not USD.
+    assert session_kw["currency"] == "usd"
     setup_data = session_kw.get("setup_intent_data", {})
-    assert "usage" not in setup_data, "setup_intent_data must not contain 'usage' — Stripe rejects it"
+    assert set(setup_data) <= set(SessionCreateParamsSetupIntentData.__annotations__)
     assert setup_data.get("metadata", {}).get("treg_org_id") == str(org_id)
     assert session_kw.get("metadata", {}).get("treg_org_id") == str(org_id)
 
