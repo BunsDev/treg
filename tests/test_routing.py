@@ -2104,3 +2104,32 @@ async def test_a_missed_child_releases_its_hold_before_the_next_child_reserves(
     assert sorted((e.call_id, e.kind) for e in entries if (e.call_id or "").startswith(call_id)) == [
         (f"{call_id}:r0", "release"), (f"{call_id}:r0", "reserve"),
         (f"{call_id}:r1", "reserve"), (f"{call_id}:r1", "settle")]
+
+
+async def test_a_provider_that_caps_a_filter_is_skipped_above_the_cap(clients: AsyncClient, monkeypatch):
+    """`max: {limit: N}` on an adapter: a request asking for more than N skips that provider with a
+    named drop instead of answering less than was asked; at or under N it stays a candidate."""
+    monkeypatch.setenv("TREG_PLATFORM_PROVIDERS", "akta,predictleads")
+    monkeypatch.setenv("TREG_PLATFORM_KEY_AKTA", "AKTA-KEY")
+    monkeypatch.setenv("TREG_PLATFORM_KEY_PREDICTLEADS", "PREDICTLEADS-KEY")
+    get_settings.cache_clear()
+    cat = catalog_store.load()
+    import dataclasses
+    monkeypatch.setitem(cat.adapters, "akta.companies.news",
+                        dataclasses.replace(cat.adapters["akta.companies.news"], filter_max={"limit": 3}))
+
+    class _Org:
+        id = 1
+        platform_overflow_disabled = False
+
+    class _Caller:
+        org_id = 1
+        org = _Org()
+
+    ep = cat.by_id["treg.companies.news"]
+    options = call_route.RouteOptions.from_headers(lambda key: None)
+    over = await call_route.build_plan(ep, {"domain": "canva.com", "limit": 5}, _Caller(), options)
+    assert all(c.endpoint["id"] != "akta.companies.news" for c in over.candidates)
+    assert {"endpoint_id": "akta.companies.news", "why": "needs limit <= 3"} in over.dropped
+    under = await call_route.build_plan(ep, {"domain": "canva.com", "limit": 3}, _Caller(), options)
+    assert any(c.endpoint["id"] == "akta.companies.news" for c in under.candidates)

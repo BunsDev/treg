@@ -2196,6 +2196,8 @@ to choose (`docs/CAPABILITY-ROUTING-PLAN.md`). Everything else in the catalog st
   expresses an upper bound in catalog-priced units (for example, fixed-page billing). Both the
   public quote and call-time plan use it through `routing/plan.py::cost_at`; invalid unit values
   remain unpriced. It does not replace the child's normal reserve/settle rules.
+  Optional adapter `max` (`{limit: 8}`) names a filter the provider caps: `build_plan` drops that
+  child for a request above the cap (`needs limit <= 8`) instead of letting it answer less than was asked.
 - **Verified at load, or absent** — `routing/contracts.py::verify`: `in` must reproduce the
   endpoint's own `test_request` and `out` must fill every required core field from its
   `example_response` (an example that is itself a miss passes with the hit half unverified).

@@ -95,6 +95,7 @@ class Adapter:
     body_array: bool = False                   # the provider wants `[body]` (DataForSEO's task list)
     test_identity: dict[str, Any] = field(default_factory=dict)  # what the endpoint's test_request stands for, when `in` cannot read it back
     cost_units: str = ""                      # optional upper-bound chargeable units for a routed request
+    filter_max: dict[str, int] = field(default_factory=dict)  # `max:` a filter this provider caps (`limit: 8`); a request above it skips the provider
     additional_capabilities: tuple[str, ...] = ()  # opt-in reuse of the same request/output mapping
     route: bool = True                        # False: hit/miss evidence only, never a router candidate
     verified_capabilities: tuple[str, ...] = ()
@@ -262,6 +263,7 @@ def parse_adapters(doc: dict) -> dict[str, Adapter]:
             in_expr=dict(a.get("in_expr") or {}), body_array=bool(a.get("body_array")),
             test_identity=dict(a.get("test_identity") or {}),
             cost_units=str(a.get("cost_units") or ""),
+            filter_max={str(k): int(v) for k, v in (a.get("max") or {}).items()},
             additional_capabilities=tuple(a.get("additional_capabilities") or ()),
             route=a.get("route", True) is not False,
             const=dict(a.get("const") or {}), out_map=dict(a.get("out") or {}), miss=str(a.get("miss") or ""),
