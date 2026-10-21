@@ -268,6 +268,17 @@ async def build_plan(ep: dict, identity_given: dict, caller, options: RouteOptio
                        + " | ".join("{" + ", ".join(v) + "}" for v in contract.identity),
             "variants": [list(v) for v in contract.identity]})
     raw, dropped = candidates_for(contract, cat.for_capability(ep["capability"]), cat.adapters, identity)
+    # A provider that caps a filter (`max: {limit: 8}`) is skipped for a request above the cap
+    # rather than answering less than was asked; the drop says so.
+    capped = []
+    for e, ad, v in raw:
+        over = [f"{k} <= {m}" for k, m in (getattr(ad, "filter_max", None) or {}).items()
+                if isinstance(identity.get(k), (int, float)) and not isinstance(identity.get(k), bool) and identity[k] > m]
+        if over:
+            dropped.append({"endpoint_id": e["id"], "why": "needs " + ", ".join(over)})
+        else:
+            capped.append((e, ad, v))
+    raw = capped
     scoped = []
     for e, ad, v in raw:
         if missing := unscoped(ad, contract, identity):
