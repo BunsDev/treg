@@ -1974,10 +1974,11 @@ endpoints:
     path: /recipes/google-maps-reviews
     name: Reviews of a place on Google Maps
     summary: 'The reviews Google Maps shows for one place, one row per review: stars, text, date, the reviewer, likes,
-      the owner''s reply and the review''s own link. Google shows a visitor 5 to 8 reviews per order, so a run gives
-      at most 8. `place` is the place''s Google Maps link, its place id (ChIJ...) or its cid (the number in a maps?cid=
-      link); `sort` is relevant (Google''s order) or newest; `limit` how many reviews (default 5, at most 8). About
-      1 to 3 s. Columns: review_id, place_id, rating, text, date, author, likes, owner_reply, url.'
+      the owner''s reply and the review''s own link. `place` is the place''s Google Maps link, its place id (ChIJ...)
+      or its cid (the number in a maps?cid= link); `sort` is relevant (Google''s order) or newest; `limit` how many
+      reviews (default 5, up to 100), one price a call at any limit. About 1 to 3 s for a few reviews, 8 to 16 s for
+      100. A reply with fewer than asked and meta.partial true gives the rest when retried a little later. Columns:
+      review_id, place_id, rating, text, date, author, likes, owner_reply, url.'
     body_allowlist: true
     input:
       bodyType: json
@@ -1985,7 +1986,7 @@ endpoints:
         limit:
           type: integer
           required: false
-          note: default 5
+          note: default 5, up to 100
         place:
           type: string
           required: true
