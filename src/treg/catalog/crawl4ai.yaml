@@ -426,6 +426,7 @@ endpoints:
       source_url: https://api.crawl4ai.com/v1/prices
       checked: '2026-10-05'
       confidence: verified
+      display: {unit: URL, value: 0.15}
       note: "A job costs a flat 0.15 credits per URL on treg's account (usage.unit_cost 0.150, observed 2026-10-08); the finished job's usage.cost (after refunds for failed URLs) settles the call. The 75-credit hold is 500 URLs. Job ids may name their region (j_sin-…) and can be read from any region."
     verified: '2026-10-05'
     added: '2026-10-06'
@@ -513,6 +514,7 @@ endpoints:
       source_url: https://crawl4ai.com/llms.txt
       checked: '2026-10-11'
       confidence: verified
+      display: {unit: page, value: 0.15, variable: true}
       note: "Each page fetched at treg's scrape price of 0.15 credits; the finished job's usage.cost settles the call (0.150 observed 2026-10-11 for a one-page job). The 75.15-credit hold is the 500-page maximum."
     verified: '2026-10-11'
     added: '2026-10-11'
