@@ -3494,7 +3494,7 @@ adapters:
     accepts: [[place_id]]
     in: {place_id: body.place}
     in_expr: {body.limit: limit, body.sort: sort}
-    max: {limit: 8}
+    max: {limit: 100}
     out: {reviews: rows, count: "len(rows)"}
     miss: "coalesce(rows, []) == []"
   anyapi.google.maps.reviews:
