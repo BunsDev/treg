@@ -933,6 +933,21 @@ contracts:
     idempotent: true
     prefer: [crawl4ai]
 
+  google.maps.reviews:
+    summary: "The reviews Google Maps shows for one place, by place id — provider-native review rows in `reviews`"
+    identity:
+      - {place_id: str}
+    filters:
+      limit: {type: int, default: 5, note: "reviews to return; a provider that returns fewer is skipped for a bigger request"}
+      sort: {type: str, default: null, note: "newest, or the provider's relevant order when empty"}
+    output:
+      reviews: {type: list, required: true, note: "the provider's own review rows (stars, text, date, reviewer…) — shapes differ per provider; raw is the same body"}
+      count: {type: int}
+      next_cursor: {type: str}
+    miss: "reviews == []"
+    idempotent: true
+    prefer: [crawl4ai]
+
   facebook.user.profile:
     summary: "A public Facebook profile or page by URL or profile id — treg picks the provider and names the one that served"
     identity:

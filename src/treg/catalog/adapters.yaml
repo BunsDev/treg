@@ -3490,6 +3490,25 @@ adapters:
           followers: "rows[0].followers", following: "rows[0].following", posts_count: "rows[0].tweets",
           is_verified: "rows[0].verified", description: "rows[0].bio"}
     miss: "coalesce(rows, []) == []"
+  crawl4ai.google.maps.reviews:
+    accepts: [[place_id]]
+    in: {place_id: body.place}
+    in_expr: {body.limit: limit, body.sort: sort}
+    max: {limit: 8}
+    out: {reviews: rows, count: "len(rows)"}
+    miss: "coalesce(rows, []) == []"
+  anyapi.google.maps.reviews:
+    accepts: [[place_id]]
+    in: {place_id: body.placeId}
+    in_expr: {body.limit: "at_most(limit, 100)", body.sort: sort}
+    out: {reviews: output.data.items, count: "len(output.data.items)"}
+    miss: "coalesce(output.data.items, []) == []"
+  litescrape.google.maps.reviews:
+    accepts: [[place_id]]
+    in: {place_id: queryParams.place_id}
+    in_expr: {queryParams.num: "at_most(limit, 100)"}
+    out: {reviews: reviews, count: "len(reviews)", next_cursor: pagination.next_page_token}
+    miss: "coalesce(reviews, []) == []"
   crawl4ai.meta-ads.library.advertiser:
     accepts: [[page_id], [company_name], [company_domain], [facebook_url]]
     in: {}
