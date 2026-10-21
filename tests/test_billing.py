@@ -989,6 +989,75 @@ async def test_stripe_conflict_is_not_a_failed_attempt(c: AsyncClient, monkeypat
     assert sdk.state["invoice_count"] == 1 and sdk.state["charge_count"] == 0
 
 
+async def test_a_paid_attempt_re_arms_a_policy_paused_while_it_ran(c: AsyncClient, monkeypatch):
+    """A rival paused the policy as `stripe_unconfirmed` while this attempt was paying the same
+    invoice. The payment that resolves the doubt must switch it back on, not leave it off with no
+    reason, which reads as a deliberate off."""
+    org_id, owner = await _org(c)
+    await _armed(org_id)
+    monkeypatch.setattr(billing, "_sdk", _invoice_sdk(payment_method="pm_armed"))
+    find = billing._attempt_invoice
+
+    async def rival_pauses(*args, **kwargs):
+        await _set_org(org_id, autotopup_enabled=False, autotopup_disabled_reason="stripe_unconfirmed",
+                       autotopup_failures=3)
+        return await find(*args, **kwargs)
+
+    monkeypatch.setattr(billing, "_attempt_invoice", rival_pauses)
+    assert (await _attempt(org_id))["ok"] is True
+    state = (await c.get("/billing", headers=_h(owner))).json()["autotopup"]
+    assert state["enabled"] is True and state["disabled_reason"] is None and state["failures"] == 0
+
+
+@pytest.mark.parametrize("auto, enabled", [("1", True), ("0", False)])
+async def test_a_paid_auto_invoice_re_arms_an_unconfirmed_pause(c: AsyncClient, monkeypatch,
+                                                                auto, enabled):
+    """`stripe_unconfirmed` asks whether an automatic charge went through. Its payment webhook
+    answers that; a manual payment does not, so the pause stays for support to check."""
+    org_id, owner = await _org(c)
+    monkeypatch.setattr(billing, "_sdk", _no_sdk)
+    await _set_org(org_id, **_declined(autotopup_disabled_reason="stripe_unconfirmed",
+                                       stripe_default_pm="pm_card_visa"))
+    r = await _deliver(c, _pi_event(org_id, pi="pi_auto_resolved", auto=auto))
+    assert r.status_code == 200, r.text
+    state = (await c.get("/billing", headers=_h(owner))).json()["autotopup"]
+    assert state["enabled"] is enabled
+    assert state["disabled_reason"] == (None if enabled else "stripe_unconfirmed")
+
+
+async def test_a_removed_card_pauses_as_no_card_not_unconfirmed(c: AsyncClient, monkeypatch):
+    """Stripe refuses an invoice for a card no longer attached to the customer, so nothing was
+    charged. Calling it unconfirmed sent teams to support; the fix is a new card, which re-arms."""
+    org_id, owner = await _org(c)
+    await _armed(org_id)
+    gone = stripe.InvalidRequestError(
+        "The customer does not have a payment method with the ID pm_armed.", param="payment_method",
+        http_status=400)
+    sdk = _invoice_sdk()
+
+    async def detached(fn, /, **kw):
+        if fn == billing.stripe_adapter.INVOICE_CREATE:
+            raise gone
+        return await sdk(fn, **kw)
+
+    monkeypatch.setattr(billing, "_sdk", detached)
+    notices = []
+
+    async def disabled_notice(*args, **kwargs):
+        notices.append(args)
+
+    monkeypatch.setattr(billing.email_mod, "send_autotopup_disabled", disabled_notice)
+    assert (await _attempt(org_id))["reason"] == "no_card"
+    body = (await c.get("/billing", headers=_h(owner))).json()
+    assert body["card_on_file"] is False
+    assert body["autotopup"]["enabled"] is False and body["autotopup"]["disabled_reason"] == "no_card"
+    assert body["autotopup"]["failures"] == 0
+    assert len(notices) == 1 and notices[0][2] == "no_card"
+    await _setup(c, org_id, "pm_new")
+    state = (await c.get("/billing", headers=_h(owner))).json()["autotopup"]
+    assert state["enabled"] is True and state["disabled_reason"] is None
+
+
 async def test_invoice_lookup_starts_before_last_auto_credit_not_later_manual_credit(
         c: AsyncClient, monkeypatch):
     org_id, _ = await _org(c)
