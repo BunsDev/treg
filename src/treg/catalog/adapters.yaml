@@ -3468,6 +3468,7 @@ adapters:
   crawl4ai.instagram.user.reels:
     accepts: [[username], [user_id]]
     in: {username: body.username, user_id: body.user_id}
+    max: {limit: 12}
     out: {reels: rows}
     miss: "coalesce(rows, []) == []"
   crawl4ai.tiktok.user.profile:
