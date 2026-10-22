@@ -10,6 +10,7 @@ from treg import crypto
 from treg.application import arena
 from treg.application.call import service
 from treg.domain import arena as rules
+from treg.domain.catalog import store as catalog_store
 from treg.infra.db import session_maker
 from treg.models import ArenaEvaluation, ArenaRun, AsyncTaskRecord, Hold, LedgerEntry
 from treg.timeutil import utcnow_naive
@@ -1369,8 +1370,15 @@ def test_issue_requires_completed_explicit_negative_email_verdict(task,state,sta
     assert rules.verification_rejected_email(attempt,'people.email.find') is expected
     assert not rules.verification_rejected_email(attempt,'people.phone.find')
 
+def _serve_contactout_verify(monkeypatch):
+    """The catalog blocks ContactOut's verifier on treg's key; these tests need a free verifier
+    first in the routed fallback, and it is the only free one."""
+    ep = catalog_store.load().by_id['contactout.people.email.verify']
+    monkeypatch.setitem(ep, 'platform_blocked', '')
+
 async def test_new_free_verifier_is_selected_for_auto_verification(clients, enrichment_on, monkeypatch):
     from treg.config import get_settings
+    _serve_contactout_verify(monkeypatch)
     monkeypatch.setenv('TREG_PLATFORM_PROVIDERS','tomba,contactout,trykitt,millionverifier')
     for name in ['CONTACTOUT','TRYKITT','MILLIONVERIFIER']:
         monkeypatch.setenv('TREG_PLATFORM_KEY_'+name,'SYNTHETIC-VERIFICATION-KEY')
@@ -1393,6 +1401,7 @@ async def test_new_free_verifier_is_selected_for_auto_verification(clients, enri
 @pytest.mark.parametrize('verdict', ['valid', 'invalid', 'catch_all'])
 async def test_email_verification_uses_routed_fallback_and_accounts_for_children(clients, enrichment_on, monkeypatch, automatic, first_response, verdict):
     from treg.config import get_settings
+    _serve_contactout_verify(monkeypatch)
     monkeypatch.setenv('TREG_PLATFORM_PROVIDERS','tomba,contactout,leadmagic')
     monkeypatch.setenv('TREG_PLATFORM_KEY_CONTACTOUT','SYNTHETIC-VERIFICATION-KEY')
     get_settings.cache_clear()
