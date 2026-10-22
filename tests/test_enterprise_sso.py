@@ -604,6 +604,50 @@ async def test_stripe_price_sets_displayed_bundle_amount(monkeypatch):
          "usd_monthly_cents": 29900, "directory_sync": True}]
 
 
+async def test_existing_subscription_status_does_not_call_stripe(clients, monkeypatch):
+    from treg.config import get_settings
+    settings = get_settings()
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_stripe_test")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_test")
+    monkeypatch.setattr(settings, "workos_api_key", "sk_workos_test")
+    monkeypatch.setattr(settings, "workos_client_id", "client_test")
+    monkeypatch.setattr(settings, "enterprise_sso_bundle_price_id", "price_bundle")
+    org_id = await team(clients, plan="sso_directory")
+    async def unavailable(*_args, **_kwargs):
+        raise AssertionError("an existing subscriber must not need Stripe's Price API")
+    monkeypatch.setattr(enterprise_billing.stripe_adapter, "call", unavailable)
+    for subscription_status in ("active", "trialing", "past_due"):
+        async with session_maker() as db:
+            row = await db.get(EnterpriseSSO, org_id)
+            row.subscription_status = subscription_status
+            await db.commit()
+        status = (await clients.get(f"/orgs/{org_id}/sso")).json()
+        assert status["subscription_status"] == subscription_status
+        assert status["billing_configured"] is True
+        assert status["plans"] == []
+
+
+async def test_stripe_price_floor_hides_offer_and_blocks_checkout(clients, monkeypatch):
+    from treg.config import get_settings
+    settings = get_settings()
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_stripe_test")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_test")
+    monkeypatch.setattr(settings, "workos_api_key", "sk_workos_test")
+    monkeypatch.setattr(settings, "workos_client_id", "client_test")
+    monkeypatch.setattr(settings, "enterprise_sso_bundle_only", True)
+    monkeypatch.setattr(settings, "enterprise_sso_bundle_price_id", "price_bundle")
+    monkeypatch.setattr(settings, "enterprise_sso_bundle_min_price_usd", 250)
+    async def cheap_price(operation, *, api_key, **kwargs):
+        assert operation == enterprise_billing.stripe_adapter.PRICE_RETRIEVE
+        return stripe_price("price_bundle", 2900)
+    monkeypatch.setattr(enterprise_billing.stripe_adapter, "call", cheap_price)
+    assert await enterprise_billing.catalog() == []
+    org_id = (await clients.get("/orgs")).json()[0]["org_id"]
+    with pytest.raises(enterprise_billing.EnterpriseBillingError, match="configured minimum"):
+        await enterprise_billing.start_checkout(org_id, "sso_directory",
+            price_id="price_bundle", base="https://treg.example", email="owner@example.com")
+
+
 async def test_browser_callback_requires_company_proof_for_enforced_team(clients, monkeypatch):
     from treg.config import get_settings
     settings = get_settings()

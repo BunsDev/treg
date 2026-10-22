@@ -1861,7 +1861,8 @@ async def catalog() -> list[dict]:
         try:
             price = await stripe_adapter.call(stripe_adapter.PRICE_RETRIEVE,
                 api_key=settings.stripe_secret_key, id=price_id)
-            amount_cents = _validate_enterprise_price(price, price_id=price_id)
+            amount_cents = _validate_enterprise_price(price, price_id=price_id,
+                minimum_cents=_enterprise_min_price_cents(plan, settings))
         except (stripe_adapter.StripeError, EnterpriseBillingError):
             log.warning("SSO plan %s has no usable Stripe Price", plan, exc_info=True)
             continue
@@ -1875,7 +1876,13 @@ def _enterprise_price_id(plan: str, settings) -> str:
             else settings.enterprise_sso_only_price_id if plan == "sso" else "")
 
 
-def _validate_enterprise_price(price: dict, *, price_id: str) -> int:
+def _enterprise_min_price_cents(plan: str, settings) -> int:
+    minimum_usd = (settings.enterprise_sso_bundle_min_price_usd if plan == "sso_directory"
+                   else settings.enterprise_sso_only_min_price_usd)
+    return max(0, minimum_usd) * 100
+
+
+def _validate_enterprise_price(price: dict, *, price_id: str, minimum_cents: int = 0) -> int:
     recurring = price.get("recurring") or {}
     amount_cents = price.get("unit_amount")
     if (price.get("id") != price_id or price.get("active") is not True
@@ -1884,18 +1891,18 @@ def _validate_enterprise_price(price: dict, *, price_id: str) -> int:
             or recurring.get("interval") != "month" or recurring.get("interval_count", 1) != 1
             or recurring.get("usage_type") != "licensed"):
         raise EnterpriseBillingError("SSO Stripe price must be an active flat monthly USD price")
+    if amount_cents < minimum_cents:
+        raise EnterpriseBillingError("SSO Stripe price is below the configured minimum")
     return amount_cents
 
 
 async def status(org_id: int) -> dict:
     settings = get_settings()
-    plans = await catalog()  # Stripe I/O must finish before the database session opens.
     async with session_maker() as db:
         row = await db.get(EnterpriseSSO, org_id)
-        return {"configured": bool(settings.workos_api_key and settings.workos_client_id),
-                "billing_configured": bool(settings.stripe_secret_key and settings.stripe_webhook_secret
-                                           and plans),
-                "plans": plans, "plan": row.plan if row else None,
+        result = {"configured": bool(settings.workos_api_key and settings.workos_client_id),
+                "billing_configured": bool(settings.stripe_secret_key and settings.stripe_webhook_secret),
+                "plan": row.plan if row else None,
                 "subscription_status": row.subscription_status if row else None,
                 "sso_ready": bool(row and row.connection_id),
                 "directory_ready": bool(row and row.directory_id and row.directory_active),
@@ -1903,6 +1910,10 @@ async def status(org_id: int) -> dict:
                 "cleanup_pending": bool(row and row.subscription_status in {"canceled", "incomplete_expired"}
                                         and row.workos_org_id and row.workos_cleanup_completed_at is None),
                 "cancel_at_period_end": bool(row and row.cancel_at_period_end)}
+    # Existing subscribers need management even when Stripe's Price API is unavailable. Only
+    # teams shopping for a plan need live sale prices, and no DB connection spans that call.
+    result["plans"] = [] if result["subscription_status"] in ENTITLED else await catalog()
+    return result
 
 
 async def start_checkout(org_id: int, plan: str, *, price_id: str, base: str, email: str) -> dict:
@@ -1956,7 +1967,8 @@ async def start_checkout(org_id: int, plan: str, *, price_id: str, base: str, em
                 api_key=settings.stripe_secret_key, id=price_id)
         except stripe_adapter.StripeError as exc:
             raise EnterpriseBillingError("SSO Stripe price is unavailable") from exc
-        _validate_enterprise_price(price, price_id=price_id)
+        _validate_enterprise_price(price, price_id=price_id,
+            minimum_cents=_enterprise_min_price_cents(plan, settings))
         if not customer_id:
             customer = await stripe_adapter.call(stripe_adapter.CUSTOMER_CREATE,
                 api_key=settings.stripe_secret_key, name=name or slug, email=email,

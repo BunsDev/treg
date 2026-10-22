@@ -74,7 +74,10 @@ The team dashboard displays the amount of each active flat monthly USD Stripe Pr
 Each offered plan needs a reusable Stripe Price ID
 (`TREG_ENTERPRISE_SSO_BUNDLE_PRICE_ID`, or `TREG_ENTERPRISE_SSO_ONLY_PRICE_ID` when enabled).
 `billing.catalog` reads Prices outside a database session and hides unusable or unconfigured plans;
-the API returns integer cents and the Price ID for display. `billing.start_checkout` rejects a
+the API returns integer cents and the Price ID for display. A deployment may set separate minimum
+monthly USD prices for the two plans; a cheaper Price is hidden and rejected at checkout.
+`billing.status` reads existing subscription state without Stripe I/O for entitled teams, so a
+Price API failure cannot hide their setup or cancellation controls. `billing.start_checkout` rejects a
 stale Price ID from an older page, then retrieves the configured Price again
 outside a database session and verifies its active state, flat fee, USD currency, and monthly interval
 before sending that Price ID to Checkout. This avoids creating a new Stripe

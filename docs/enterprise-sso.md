@@ -34,7 +34,11 @@ link if email discovery returns no match or several teams. Email is a routing hi
    only if SSO-only is offered, `TREG_ENTERPRISE_SSO_ONLY_PRICE_ID`. An unset Price hides that
    plan. treg reads the Price to display its amount and refuses an inactive, non-flat, non-USD,
    or non-monthly Price before opening Checkout. If the configured Price changed since the owner
-   opened the page, Checkout asks them to refresh. A price change requires a new Price ID;
+   opened the page, Checkout asks them to refresh. Optional
+   `TREG_ENTERPRISE_SSO_BUNDLE_MIN_PRICE_USD` and `TREG_ENTERPRISE_SSO_ONLY_MIN_PRICE_USD`
+   reject a Stripe Price below each plan's deployment-specific minimum; both default to zero.
+   Existing subscribers can manage SSO when Stripe's Price API is temporarily unavailable.
+   A price change requires a new Price ID;
    existing subscriptions keep their old
    Price until explicitly migrated. Send
    `checkout.session.completed`, `customer.subscription.created`,
@@ -58,9 +62,10 @@ Stripe. The default
 `TREG_ENTERPRISE_SSO_BUNDLE_ONLY=true` displays only the bundle; set it to `false` to offer both.
 Each checkout uses the configured reusable Stripe Price rather than creating a new Product and
 Price for every team.
-After Stripe reports an active subscription, the owner opens **Set up or manage SSO**. On the
-bundle, they can also open **Set up Directory Sync**. The owner should complete a real test sign-in
-before clicking **Require SSO for team**. That control only becomes available after a successful
+After Stripe reports an active subscription, the owner follows the checked setup cards in
+**Team → SSO**. **Set up company SSO** opens WorkOS; on the bundle, **Set up Directory Sync**
+opens the directory setup. The owner should complete a real test sign-in before clicking
+**Require SSO**. That control only becomes available after a successful
 WorkOS sign-in.
 
 The owner may enter an IT admin email to have WorkOS send setup instructions; the recipient does

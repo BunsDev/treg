@@ -2,7 +2,7 @@
 // The tab slugs an address may carry, per view: internal tab name → what the address says.
 const TAB_SLUGS = {
   activity: { feed: 'calls', usage: 'usage' },
-  orgs: { members: 'members', keys: 'keys', projects: 'projects', policy: 'policy', billing: 'billing', showcase: 'showcase', danger: 'settings' },
+  orgs: { members: 'members', keys: 'keys', projects: 'projects', policy: 'policy', billing: 'billing', showcase: 'showcase', sso: 'sso', danger: 'settings' },
 }
 
 // A plain function, not only a method: the page preloader (views.ts) reads the address before the
