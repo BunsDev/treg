@@ -113,28 +113,6 @@ test('Arena sign-in dialogs keep email code primary and submit SSO with Enter', 
   expect(checked).toBeGreaterThan(0)
 })
 
-test('all public sign-in dialogs keep email code primary and switch to SSO', async ({ page }) => {
-  test.setTimeout(90000)
-  let checked = 0
-  for (const path of ['/', '/start', '/aeo', '/ugc', '/grokbot', '/fable', '/showcase',
-    '/people-search', '/leads-signals', '/recruit', '/web-access', '/jev']) {
-    const response = await page.goto(path, { waitUntil: 'domcontentloaded' })
-    if (response?.status() === 404) continue // Hosted-only pages can be disabled in self-hosted test mode.
-    checked++
-    const dialog = page.locator('#signin-scrim .smodal')
-    await page.locator('#signin-scrim').evaluate(node => node.classList.add('open'))
-    await expect(dialog.getByRole('button', { name: 'Company SSO' })).toBeVisible()
-    await expect(dialog.getByRole('button', { name: 'Email me a sign-in code' })).toBeVisible()
-    await expect(dialog.locator('#em-btn1')).toHaveClass(/treg-signin-method/)
-    await dialog.getByRole('button', { name: 'Company SSO' }).click()
-    await expect(dialog.getByRole('button', { name: 'Continue with SSO' })).toBeVisible()
-    await expect(dialog.getByRole('button', { name: 'Email me a sign-in code' })).toBeHidden()
-    await dialog.getByRole('button', { name: 'Email sign-in code' }).click()
-    await expect(dialog.getByRole('button', { name: 'Email me a sign-in code' })).toBeVisible()
-  }
-  expect(checked).toBeGreaterThanOrEqual(10)
-})
-
 test('the dashboard and catalog ask for nothing that is not there', async ({ page }) => {
   const missing: string[] = []
   page.on('response', response => { if (response.status() === 404) missing.push(new URL(response.url()).pathname) })

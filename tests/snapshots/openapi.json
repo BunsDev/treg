@@ -4857,6 +4857,16 @@
               "title": "Org Slug",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "return_to",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Return To",
+              "type": "string"
+            }
           }
         ],
         "responses": {
