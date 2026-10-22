@@ -99,6 +99,9 @@ removes only SSO-created memberships and their keys. Pre-existing members
 keep their memberships. Team deletion
 waits until the subscription has ended. This subscription never credits or debits the
 prepaid tool-call balance, so the five ledger entry kinds remain unchanged.
+Payment history combines prepaid top-ups and SSO subscription invoices. A paid SSO invoice can
+also link to its Stripe receipt when its successful Charge has a receipt URL. A missing receipt
+never hides the invoice; zero-amount or non-card invoices may have no receipt.
 After the paid period ends, the enterprise cleanup worker deletes every WorkOS connection and
 directory belonging to the team's verified WorkOS organization. It retries failures and prevents
 a new checkout or team deletion until cleanup finishes, without holding a database connection

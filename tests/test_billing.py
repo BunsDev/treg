@@ -399,14 +399,15 @@ async def test_history_merges_and_pages_topups_with_sso_invoices(c: AsyncClient,
     async def fake_sdk(fn, /, **kw):
         seen.append((fn, kw))
         if fn == billing.stripe_adapter.CHARGE_LIST:
+            if kw.get("payment_intent") == "pi_sso":
+                return {"data": [{"status": "succeeded", "receipt_url": "https://pay.stripe.test/sso-receipt"}]}
             return {"data": [_charge("pi_manual")]}
         if fn == billing.stripe_adapter.INVOICE_LIST:
             assert kw["customer"] == "cus_one_team"
-            if kw.get("expand"):
-                return {"data": []}
             return {"data": [{**_invoice("in_sso"), "created": int(time.time()) + 3600,
                               "total": 29900, "currency": "usd", "status": "paid",
-                              "parent": {"subscription_details": {"subscription": "sub_one_team"}}}],
+                              "parent": {"subscription_details": {"subscription": "sub_one_team"}},
+                              "payments": {"data": [{"payment": {"payment_intent": "pi_sso"}}]}}],
                     "has_more": False} if not kw.get("starting_after") else {"data": [], "has_more": False}
         pytest.fail(f"unexpected Stripe call: {fn}")
 
@@ -416,6 +417,7 @@ async def test_history_merges_and_pages_topups_with_sso_invoices(c: AsyncClient,
     assert first["items"][0]["kind"] == "subscription"
     assert first["items"][0]["amount_micro"] == 299_000_000
     assert first["items"][0]["invoice_pdf"].endswith("/pdf")
+    assert first["items"][0]["receipt_url"] == "https://pay.stripe.test/sso-receipt"
     assert first["next_cursor"]
     second = (await c.get("/billing/history", params={"limit": 1, "cursor": first["next_cursor"]},
                           headers=_h(owner))).json()

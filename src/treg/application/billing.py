@@ -705,6 +705,7 @@ async def _subscription_invoices(
     subscription ID also covers an invoice that has not yet received that metadata snapshot.
     """
     rows = []
+    payment_intents: dict[str, str] = {}
     scan_after = after
     more = False
     try:
@@ -712,7 +713,7 @@ async def _subscription_invoices(
             kw = {"customer": customer_id, "limit": 100}
             if scan_after:
                 kw["starting_after"] = scan_after
-            page = await _sdk(stripe_adapter.INVOICE_LIST, **kw)
+            page = await _sdk(stripe_adapter.INVOICE_LIST, expand=["data.payments"], **kw)
             invoices = page.get("data") or []
             for inv in invoices:
                 if not inv.get("id"):
@@ -732,7 +733,16 @@ async def _subscription_invoices(
                     "status": inv.get("status") or "",
                     "invoice_pdf": inv.get("invoice_pdf") or "",
                     "hosted_invoice_url": inv.get("hosted_invoice_url") or "",
+                    "receipt_url": "",
                 })
+                if inv.get("status") == "paid":
+                    for entry in (inv.get("payments") or {}).get("data") or []:
+                        payment = entry.get("payment") or {}
+                        pi = payment.get("payment_intent")
+                        pi_id = pi if isinstance(pi, str) else (pi or {}).get("id")
+                        if pi_id:
+                            payment_intents[inv["id"]] = pi_id
+                            break
                 if len(rows) == limit:
                     break
             if len(rows) == limit:
@@ -744,6 +754,24 @@ async def _subscription_invoices(
     except Exception as e:  # noqa: BLE001 — keep the billing page usable during a Stripe outage
         log.warning("billing: could not load SSO invoices for org %s: %s", org_id, e)
         return [], False, False
+    # A receipt belongs to the successful Charge, not the Invoice. Query by that invoice's
+    # PaymentIntent so even an older renewal has its own receipt; missing/failed lookups keep the
+    # invoice visible. The semaphore prevents a history page from bursting Stripe with requests.
+    async def receipt_for(row: dict) -> None:
+        pi_id = payment_intents.get(row["id"])
+        if not pi_id:
+            return
+        async with receipt_slots:
+            try:
+                charges = await _sdk(stripe_adapter.CHARGE_LIST, customer=customer_id,
+                                     payment_intent=pi_id, limit=1)
+                row["receipt_url"] = next((charge.get("receipt_url") or ""
+                    for charge in charges.get("data") or [] if charge.get("status") == "succeeded"), "")
+            except Exception as e:  # noqa: BLE001 — a receipt is optional; the invoice remains
+                log.warning("billing: could not load SSO receipt for org %s: %s", org_id, e)
+
+    receipt_slots = asyncio.Semaphore(5)
+    await asyncio.gather(*(receipt_for(row) for row in rows))
     return rows, True, more
 
 
