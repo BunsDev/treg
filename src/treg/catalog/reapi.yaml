@@ -13,6 +13,7 @@ async:
     path: status
     success: [completed]
     failure: [failed]
+    progress: [processing]
   result:
     path: output.video_urls
     ttl_note: "7d"
@@ -154,6 +155,7 @@ endpoints:
         path: status
         success: [completed]
         failure: [failed]
+        progress: [processing]
       result:
         path: output.image_urls
         ttl_note: "7d"
@@ -229,6 +231,7 @@ endpoints:
         path: status
         success: [completed]
         failure: [failed]
+        progress: [processing]
       result:
         path: output.image_urls
         ttl_note: "7d"
@@ -280,6 +283,7 @@ endpoints:
         path: status
         success: [completed]
         failure: [failed]
+        progress: [processing]
       result:
         path: output.image_urls
         ttl_note: "7d"
