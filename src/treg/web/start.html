@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Connect your agent to real data | treg.to</title>
+<title>treg.to: Connect your agent to real data</title>
 <meta name="description" content="One prompt to paste into Claude Code, Codex or Cursor. Your agent sets treg.to up, signs you in, and comes back with real data: lead lists, AI search visibility, competitor ads, X posts. $1 free credit.">
 <meta name="robots" content="noindex">
 <link rel="icon" href="/favicon.svg">
@@ -53,86 +53,153 @@ a{color:inherit;text-decoration:none}
 .kicker{display:inline-block;font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--muted);border:1px solid var(--line2);border-radius:999px;padding:5px 15px;background:var(--surface)}
 .hero-h1{font-family:var(--display);font-weight:400;letter-spacing:0;margin:28px 0 0;font-size:clamp(30px,4.6vw,58px);line-height:1.16}
 .hero-h1 .l2{font-size:.58em;display:block;margin-top:.42em;color:var(--muted)}
-p.sub{font-size:15px;line-height:1.65;color:var(--muted);max-width:600px;margin:22px auto 0}
-p.sub b{color:var(--ink);font-weight:600}
 
-/* the prompt pane: what the visitor sees is exactly what they copy */
-.givebox{max-width:680px;margin:34px auto 0;border-radius:var(--r);background:var(--surface);box-shadow:var(--shadow-lg);padding:14px 14px 12px;text-align:left}
+/* the agent picker: the four most picked, the rest behind More */
+.givebox{max-width:860px;margin:44px auto 0;border-radius:var(--r);background:var(--surface);box-shadow:var(--shadow-lg);padding:16px 16px 16px;text-align:left}
 .gb-h{display:flex;align-items:center;justify-content:center;gap:10px;font-size:13.5px;font-weight:600;color:var(--ink);padding:2px 4px 12px}
-.agents{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;padding:0 4px 14px}
-.agents button{display:inline-flex;align-items:center;gap:7px;font-family:var(--sans);font-size:13px;font-weight:550;letter-spacing:-.1px;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:99px;padding:7px 13px 7px 9px;cursor:pointer;transition:color .2s var(--ease),background .2s var(--ease),box-shadow .2s var(--ease),border-color .2s}
+.agents{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding:0 4px 16px}
+.agents button{display:inline-flex;align-items:center;gap:8px;font-family:var(--sans);font-size:13.5px;font-weight:550;letter-spacing:-.1px;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:99px;padding:8px 15px 8px 10px;cursor:pointer;transition:color .2s var(--ease),background .2s var(--ease),box-shadow .2s var(--ease),border-color .2s}
 .agents button img{width:18px;height:18px;display:block;border-radius:4px}
+.agents>button,.more>button{height:38px}
 .agents button:hover{color:var(--ink);border-color:var(--line2)}
 .agents button[aria-pressed="true"]{color:var(--ink);background:var(--panel2);border-color:transparent;box-shadow:var(--shadow-sm)}
-.gb-steps{background:var(--panel);border-radius:var(--rb);padding:4px 18px 16px}
-.gb-steps ol{margin:0;padding:0 0 0 22px;counter-reset:s}
-.gb-steps li{margin:14px 0 0;font-size:14.5px;color:var(--ink);line-height:1.55}
+.agents .caret{width:10px;height:10px;margin-left:-2px;opacity:.7;transition:transform .2s var(--ease)}
+.agents #moreBtn{padding-left:15px}
+.agents #moreBtn.has-icon{padding-left:10px}
+.agents #moreBtn[aria-expanded="true"] .caret{transform:rotate(180deg)}
+.more{position:relative}
+.more-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:20;min-width:190px;background:var(--surface);border-radius:12px;box-shadow:0 0 0 1px var(--line),var(--shadow-lg);padding:6px;display:none}
+.more-menu.open{display:block}
+.agents .more-menu button{display:flex;width:100%;border:0;border-radius:8px;padding:8px 10px;color:var(--ink);font-weight:500}
+.agents .more-menu button:hover,.agents .more-menu button:focus-visible{background:var(--panel2);box-shadow:none}
+.agents .more-menu button[aria-checked="true"]{background:var(--panel2)}
+.agents .more-menu .blank{width:18px;height:18px;flex:none}
+
+/* connector steps (Claude.ai, ChatGPT, Grok Bot) */
+.gb-steps{background:var(--panel);border-radius:var(--rb);padding:4px 20px 18px}
+.gb-steps ol{margin:0;padding:0 0 0 22px}
+.gb-steps li{margin:16px 0 0;font-size:14.5px;color:var(--ink);line-height:1.55}
 .gb-steps li::marker{font-family:var(--mono);font-size:12px;color:var(--muted2)}
-.gb-steps .candy{margin:6px 8px 4px 0;padding:10px 20px;font-size:13.5px;vertical-align:middle}
-.gb-steps .urlchip{display:inline-flex;align-items:center;gap:10px;margin:6px 0 2px;background:var(--surface);border:1px solid var(--line2);border-radius:8px;padding:6px 6px 6px 12px;font-family:var(--mono);font-size:12.5px;color:var(--ink);cursor:pointer;max-width:100%}
-.gb-steps .urlchip span{font-family:var(--sans);font-size:11.5px;color:var(--muted);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;flex:none}
-.gb-steps .urlchip.done span{color:var(--green);border-color:var(--green)}
-.gb-steps .fine{font-size:12.5px;color:var(--muted);margin:4px 0 0}
-.gb-steps .then{margin:2px 0 0}
-.gb-prompt.ask-only{margin-top:8px}
-.gb-prompt{background:var(--inverse);border-radius:var(--rb);padding:16px 18px 14px;color:var(--inverse-ink)}
-.gb-prompt pre{margin:0;font:400 14px/1.6 var(--sans);white-space:pre-wrap;overflow-wrap:anywhere;color:var(--inverse-ink)}
+.step-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
+.step-row .then{color:var(--muted);font-size:13.5px}
+.connect{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line2);border-radius:999px;padding:7px 16px 7px 10px;font:550 14px var(--sans);color:var(--ink);box-shadow:var(--shadow-sm);transition:border-color .12s,box-shadow .24s var(--ease)}
+.connect:hover{border-color:var(--muted);box-shadow:var(--shadow-md)}
+.connect img{width:18px;height:18px;border-radius:4px}
+.connect svg{width:12px;height:12px;color:var(--muted)}
+#stepAsk .gb-prompt{margin-top:10px}
+
+/* the prompt pane: one line to read, one button to press; the full text is one click away */
+.gb-prompt{background:var(--inverse);border-radius:12px;padding:22px 22px 18px;color:var(--inverse-ink)}
+.gb-task{font:600 19px/1.45 var(--sans);letter-spacing:-.25px;color:#fff;margin:0;text-wrap:pretty}
+.gb-setup{display:flex;align-items:center;gap:8px;margin-top:9px;font:400 12px/1.4 var(--mono);color:#a7a7a3;min-width:0}
+.gb-setup[hidden]{display:none}
+.gb-setup b{flex:none;font-weight:500;color:#7fdcae}
+.gb-setup code{font:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gb-prompt pre{margin:16px 0 0;padding-top:14px;border-top:1px solid #ffffff1f;font:400 13.5px/1.6 var(--sans);white-space:pre-wrap;overflow-wrap:anywhere;color:var(--inverse-ink)}
+.js .gb-prompt:not(.full) pre{display:none}
 .gb-prompt pre .cmd{display:block;font-family:var(--mono);font-size:12.5px;color:#7fdcae;margin:4px 0}
 .gb-prompt pre .dim{color:#a7a7a3}
 .gb-prompt pre .ask{color:#fff}
-.gb-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid #ffffff1f}
-.gb-foot .note{font-family:var(--mono);font-size:11px;color:#a7a7a3}
-.gb-foot button{flex:none;border:1px solid #ffffff33;background:transparent;color:#d9d9d6;font-family:var(--sans);font-weight:500;font-size:12px;letter-spacing:.04em;border-radius:7px;padding:7px 14px;cursor:pointer;transition:color .12s,border-color .12s}
-.gb-foot button:hover{color:#fff;border-color:#ffffff66}
-.gb-foot button.done{color:#7fdcae;border-color:#7fdcae66}
-.after{margin:18px auto 0;max-width:600px;font-size:13.5px;color:var(--muted);line-height:1.6}
+.gb-foot{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:18px}
+.toggle{display:none;background:none;border:0;padding:0;font:500 12.5px var(--sans);color:#d9d9d6;cursor:pointer;text-decoration:underline;text-decoration-color:#ffffff4d;text-underline-offset:3px}
+.js .toggle{display:inline}
+.toggle:hover{color:#fff;text-decoration-color:#fff}
+.copy-cta{flex:none;display:inline-flex;align-items:center;gap:9px;background:#fff;color:var(--ink);border:0;border-radius:999px;padding:13px 24px 13px 20px;font:600 15px var(--sans);letter-spacing:-.1px;cursor:pointer;box-shadow:0 0 0 4px #ffffff17;transition:transform .12s var(--ease-out),box-shadow .24s var(--ease),background .2s}
+.copy-cta svg{width:16px;height:16px}
+.copy-cta:hover{transform:translateY(-1px);box-shadow:0 0 0 6px #ffffff24}
+.copy-cta.done{background:#7fdcae}
+.after{margin:18px auto 0;max-width:640px;font-size:13.5px;color:var(--muted);line-height:1.6;text-wrap:balance}
 .after code{font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--panel2);padding:1px 6px;border-radius:5px}
 .after button{background:none;border:0;padding:0;font:inherit;color:var(--teal);cursor:pointer}
 .after button:hover{text-decoration:underline;text-underline-offset:3px}
 
-/* the use cases: what your agent comes back with */
+/* the use cases: a bento of real runs. Spans go by position, so the visitor's own card can lead. */
 .uses{margin-top:110px}
-.seclab{text-align:center;font-family:var(--mono);font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted2)}
-.uses h2{text-align:center;font-weight:650;letter-spacing:-.4px;font-size:clamp(26px,3.2vw,36px);margin:16px 0 8px;line-height:1.15}
+.uses h2{text-align:center;font-weight:650;letter-spacing:-.4px;font-size:clamp(26px,3.2vw,36px);margin:0 0 8px;line-height:1.15}
 .uses .lede{text-align:center;color:var(--muted);margin:0 auto 36px;max-width:36em}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
-.use{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-md);overflow:hidden}
-.use-top{padding:24px 24px 0}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:18px}
+.swipe{display:none;justify-content:center;gap:6px;margin-top:4px}
+.swipe i{width:6px;height:6px;border-radius:50%;background:var(--line2);transition:background .2s,width .2s var(--ease)}
+.swipe i.on{width:16px;border-radius:3px;background:var(--ink)}
+.grid>.use:nth-child(4n+1),.grid>.use:nth-child(4n){grid-column:span 7}
+.grid>.use:nth-child(4n+2),.grid>.use:nth-child(4n+3){grid-column:span 5}
+.use{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-md);overflow:hidden;display:flex;flex-direction:column}
+.use-top{padding:26px 26px 0}
 .cat{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted2)}
 .cat .ic{display:flex}
-.cat .ic img,.cat .ic svg{width:20px;height:20px;padding:3px;border-radius:50%;background:#fff;box-shadow:var(--shadow-sm);margin-right:-5px}
+.cat .ic img{width:22px;height:22px;padding:3px;border-radius:50%;background:#fff;box-shadow:var(--shadow-sm);margin-right:-5px}
 .cat .ic+span{margin-left:5px}
-.use h3{font-weight:650;letter-spacing:-.3px;font-size:21px;line-height:1.2;margin:14px 0 6px}
-.use .what{color:var(--muted);margin:0 0 18px;font-size:14.5px}
-.bubble-row{position:relative;display:flex;justify-content:flex-end;padding:0 18px}
+.use h3{font-weight:650;letter-spacing:-.4px;font-size:22px;line-height:1.2;margin:14px 0 20px;text-wrap:balance}
+.bubble-row{position:relative;display:flex;justify-content:flex-end;padding:0 20px}
 .bubble-row::before{content:"";position:absolute;left:0;right:0;top:50%;border-top:1px solid var(--line)}
 .bubble{position:relative;display:inline-flex;gap:9px;align-items:flex-start;max-width:94%;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 13px;font:400 14px/1.45 var(--sans);color:var(--ink);text-align:left;cursor:pointer;transition:border-color .12s,background .12s}
 .bubble:hover{border-color:var(--line2);background:#eaeae7}
 .bubble svg,.chip svg{width:14px;height:14px;flex:none;margin-top:3px;color:var(--muted2)}
+.bubble .hint{display:none;font:500 11px/1.9 var(--mono);color:var(--muted2);margin-left:4px}
+.bubble:hover .hint{display:inline}
 .bubble.done,.chip.done{border-color:var(--green)}
 .bubble.done svg,.chip.done svg{color:var(--green)}
-.use-body{background:var(--panel);padding:20px 18px 18px}
-.data{background:var(--surface);border-radius:var(--rb);box-shadow:var(--shadow-sm);overflow:hidden}
-.data-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:13.5px;font-weight:600}
-.data-h small{font:400 11px var(--mono);color:var(--muted2)}
-.data table{width:100%;border-collapse:collapse;font-size:13.5px}
-.data td{padding:9px 14px;border-bottom:1px solid var(--line);vertical-align:top}
-.data tr:last-child td{border-bottom:0}
-.data td.n{font-family:var(--mono);font-size:12px;text-align:right;white-space:nowrap;color:var(--muted)}
-.data td.k{font-family:var(--mono);font-size:12px;color:var(--muted2);width:1%;white-space:nowrap}
-.data tr.hi td{background:#1184530f}
-.data tr.hi td.n{color:var(--green);font-weight:500}
-.data .note{padding:9px 14px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line)}
-.cost{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;font-size:12.5px;color:var(--muted)}
-.cost b{font-family:var(--mono);font-weight:500;color:var(--green)}
-.cost s{text-decoration-color:var(--red);text-decoration-thickness:2px}
-.ghostbtn{display:inline-flex;align-items:center;gap:8px;font-family:var(--sans);font-size:13px;font-weight:500;color:var(--ink);background:var(--surface);border:1px solid var(--line2);border-radius:999px;padding:8px 16px;cursor:pointer;transition:border-color .12s var(--ease),box-shadow .24s var(--ease)}
-.ghostbtn:hover{border-color:var(--muted);box-shadow:var(--shadow-sm)}
-.ghostbtn.done{color:var(--green);border-color:var(--green)}
+.use-body{flex:1;display:flex;flex-direction:column;background:var(--panel);padding:22px 20px 18px}
+.use-body>.viz{flex:1;display:flex;flex-direction:column;justify-content:center}
+.tally{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding-top:16px;font-size:12.5px;color:var(--muted)}
+.tally b{font-family:var(--mono);font-weight:500;color:var(--green)}
+.tally s{text-decoration-color:var(--red);text-decoration-thickness:2px}
+
+/* the runs, drawn the way the agent's answer reads */
+.box{background:var(--surface);border-radius:var(--rb);box-shadow:var(--shadow-sm);overflow:hidden}
+.box-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600}
+.box-h .t{display:flex;align-items:center;gap:8px;min-width:0}
+.box-h .t img{width:16px;height:16px}
+.box-h small{flex:none;font:400 11px var(--mono);color:var(--muted2)}
+.person{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:11px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line)}
+.person:last-child{border-bottom:0}
+.person img{width:22px;height:22px;border-radius:6px;box-shadow:0 0 0 1px var(--line)}
+.person .who{font-size:13.5px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.person .who small{display:block;font-size:12px;color:var(--muted)}
+.person .em{font:400 12px var(--mono);color:var(--green);white-space:nowrap}
+.person .em::before{content:"✓ ";font-weight:600}
+.chat{background:var(--surface);border-radius:var(--rb);box-shadow:var(--shadow-sm);padding:16px}
+.chat .q{width:fit-content;max-width:85%;margin-left:auto;background:var(--panel2);border-radius:14px 14px 4px 14px;padding:8px 13px;font-size:13.5px}
+.chat .a{display:grid;grid-template-columns:24px minmax(0,1fr);gap:10px;margin-top:14px}
+.chat .a>img{width:24px;height:24px;border-radius:50%;box-shadow:0 0 0 1px var(--line);padding:3px;background:#fff}
+.chat ol{margin:0;padding:0;list-style:none;counter-reset:r}
+.chat li{counter-increment:r;display:flex;align-items:center;gap:8px;padding:5px 8px;margin:0 -8px;border-radius:7px;font-size:13.5px}
+.chat li::before{content:counter(r);font:400 11.5px var(--mono);color:var(--muted2);width:12px}
+.chat li small{margin-left:auto;font:400 11.5px var(--mono);color:var(--muted2)}
+.chat li.you{background:#11845314}
+.chat li.you small{color:var(--green)}
+.chat .src{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px;font-size:11.5px;color:var(--muted)}
+.chat .src span{font-family:var(--mono);background:var(--panel2);border-radius:99px;padding:2px 9px}
+.fan{display:grid;place-items:center;padding:6px 0 4px}
+.fan>*{grid-area:1/1}
+.ad{width:min(46%,236px);background:var(--surface);border-radius:11px;box-shadow:var(--shadow-lg),0 0 0 1px var(--line);overflow:hidden;transition:transform .35s var(--ease)}
+.ad .hd{display:flex;align-items:center;gap:7px;padding:8px 10px;font-size:12px;font-weight:600}
+.ad .hd img{width:18px;height:18px;border-radius:50%}
+.ad .hd small{font-weight:400;color:var(--muted2);font-size:11px}
+.ad .cr{display:block;width:100%;aspect-ratio:1;object-fit:cover;background:var(--panel2)}
+.ad .ft{display:flex;justify-content:space-between;gap:6px;padding:7px 10px;font:400 10.5px var(--mono);color:var(--muted)}
+.fan .l{transform:translateX(-60%) rotate(-5deg) scale(.84)}
+.fan .r{transform:translateX(60%) rotate(5deg) scale(.84)}
+.fan .c{z-index:1}
+.use:hover .fan .l{transform:translateX(-66%) rotate(-6deg) scale(.86)}
+.use:hover .fan .r{transform:translateX(66%) rotate(6deg) scale(.86)}
+.angles{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:14px}
+.angles span{font-size:12px;background:var(--surface);box-shadow:0 0 0 1px var(--line);border-radius:99px;padding:3px 10px;color:var(--ink)}
+.angles span::before{content:attr(data-n);font:400 11px var(--mono);color:var(--muted2);margin-right:6px}
+.tw{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;background:var(--surface);border-radius:12px;box-shadow:var(--shadow-sm);padding:12px 14px}
+.tw+.tw{margin-top:10px}
+.tw .av{width:34px;height:34px;border-radius:50%}
+.tw .by{display:flex;align-items:center;gap:4px;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden}
+.tw .by svg{width:14px;height:14px;flex:none}
+.tw .by span{font-weight:400;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
+.tw p{margin:2px 0 0;font-size:13.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tw .media{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;margin-top:8px;box-shadow:0 0 0 1px var(--line)}
+.tw .m{display:flex;gap:14px;margin-top:6px;font:400 11.5px var(--mono);color:var(--muted)}
+.tw .m b{font-weight:500;color:var(--ink)}
 
 /* more things to ask */
 .asks{margin-top:90px;text-align:center}
-.asks h2{font-weight:650;letter-spacing:-.4px;font-size:clamp(24px,3vw,32px);margin:16px 0 8px}
+.asks h2{font-weight:650;letter-spacing:-.4px;font-size:clamp(24px,3vw,32px);margin:0 0 22px}
 .asks>p{color:var(--muted);margin:0 auto 24px;max-width:34em}
 .chips{display:flex;flex-wrap:wrap;justify-content:center;gap:9px;max-width:960px;margin:0 auto}
 .chip{display:inline-flex;gap:8px;align-items:flex-start;text-align:left;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:9px 13px;font:400 14px/1.45 var(--sans);color:var(--ink);box-shadow:var(--shadow-sm);transition:border-color .12s}
@@ -165,24 +232,36 @@ footer a:hover{color:var(--ink)}
 .smodal .err{color:var(--red);font-size:12px;margin-top:10px;min-height:14px}
 
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;transform:none!important}}
-@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr);max-width:600px;margin:0 auto}}
+@media (max-width:900px){
+  .grid{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -24px;padding:2px 24px 14px;scrollbar-width:none;overscroll-behavior-x:contain}
+  .grid::-webkit-scrollbar{display:none}
+  .grid>.use{flex:0 0 min(86%,520px);scroll-snap-align:center;box-shadow:var(--shadow-sm)}
+  .swipe{display:flex}
+}
 @media (max-width:640px){
   .wrap{padding:0 16px}
   .nav{padding-left:16px;padding-right:16px}
   .hero{padding-top:44px}
+  .kicker{font-size:10.5px;letter-spacing:.02em;padding:5px 12px}
   .hero-h1{font-size:29px}
-  .givebox{padding:10px 10px 8px}
-  .gb-prompt{padding:14px 14px 12px}
-  .gb-foot{flex-direction:column;align-items:stretch}
-  .gb-foot button{padding:11px 14px;font-size:13px}
-  .gb-foot .note{text-align:center}
+  .givebox{padding:12px 10px 10px}
+  .gb-prompt{padding:18px 16px 14px}
+  .gb-task{font-size:17px}
+  .gb-foot{flex-direction:column-reverse;align-items:stretch}
+  .toggle{align-self:center}
+  .copy-cta{justify-content:center;padding:14px 20px}
+  .agents{gap:6px}
   .agents button{padding:7px 11px 7px 8px;font-size:12.5px}
   .gb-steps{padding:2px 12px 14px}
   .gb-steps ol{padding-left:18px}
   .uses{margin-top:80px}
-  .use-top{padding:20px 18px 0}
-  .use-body{padding:16px 12px 14px}
+  .grid{margin:0 -16px;padding:2px 16px 14px}
+  .use-top{padding:22px 18px 0}
+  .use-body{padding:18px 12px 14px}
   .bubble-row{padding:0 12px}
+  .ad{width:min(60%,236px)}
+  .ad .ft{white-space:nowrap}
+  .person .em{display:none}
   footer a{margin:0 16px 0 0}
 }
 </style>
@@ -201,146 +280,143 @@ footer a:hover{color:var(--ink)}
 <section class="hero" aria-labelledby="heroH1">
   <span class="kicker" id="heroKicker">{ENDPOINTS} tools · {PROVIDERS} providers · $1 free</span>
   <h1 class="hero-h1" id="heroH1">Connect your agent to real data</h1>
-  <p class="sub" id="heroSub"></p>
 
   <div class="givebox">
-    <div class="gb-h">Which agent do you use?</div>
-    <div class="agents" id="agents" aria-label="Your agent"></div>
+    <div class="gb-h" id="agentsH">Which agent do you use?</div>
+    <div class="agents" id="agents" role="group" aria-labelledby="agentsH"></div>
+
+    <!-- connector agents (Claude.ai, ChatGPT, Grok Bot): connect once, then paste the ask; the script
+         moves the prompt pane into step 3 -->
+    <div class="gb-steps" id="paneConnector" hidden>
+      <ol>
+        <li><div class="step-row" id="stepConnect"></div></li>
+        <li>Sign in when it asks. <b>$1 free</b>, no card.</li>
+        <li id="stepAsk">Then paste this into the chat:</li>
+      </ol>
+    </div>
 
     <!-- terminal agents (Claude Code, Codex, Cursor, other): one paste, setup included -->
-    <div class="gb-prompt" id="paneTerminal">
-      <pre id="heroPrompt"><span class="dim">Set up treg if this agent does not have it yet. Run
+    <div id="paneSlot">
+      <div class="gb-prompt" id="pane">
+        <p class="gb-task" id="paneTask">Propose three things you can do for us with real data, then run the one I pick.</p>
+        <div class="gb-setup" id="paneSetup"><b>+ setup included</b><code>curl -fsSL https://treg.to/install.sh | sh &amp;&amp; treg login</code></div>
+        <pre id="heroPrompt"><span class="dim">Set up treg if this agent does not have it yet. Run
 </span><span class="cmd">curl -fsSL https://treg.to/install.sh | sh &amp;&amp; treg login</span><span class="dim">
 and let me sign in when the browser opens (new accounts get $1 free). How it works: https://treg.to/llms.txt
 
 Then: </span><span class="ask">Look at what we are working on and propose three things you could do for us right now with real data (lead lists with work emails, whether AI assistants recommend us, a competitor's live ads, what is working on X), with the price of each. Then run the one I pick and tell me what it cost.</span></pre>
-      <div class="gb-foot">
-        <span class="note" id="termNote">paste into claude code · this is the whole prompt</span>
-        <button type="button" id="copyBtn" aria-label="Copy the prompt">copy prompt</button>
+        <div class="gb-foot">
+          <button type="button" class="toggle" id="paneToggle" aria-expanded="false" aria-controls="heroPrompt">See the full prompt</button>
+          <button type="button" class="copy-cta" id="copyBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span>Copy prompt</span></button>
+        </div>
       </div>
-    </div>
-
-    <!-- connector agents (Claude.ai, ChatGPT, Grok Bot): connect once, then paste the ask -->
-    <div class="gb-steps" id="paneConnector" hidden>
-      <ol>
-        <li id="stepConnect"></li>
-        <li>Sign in when it asks. Your first sign-in creates your account with <b>$1 free</b>, no card.</li>
-        <li>Then paste this into the chat:
-          <div class="gb-prompt ask-only">
-            <pre id="askPrompt"></pre>
-            <div class="gb-foot"><span class="note">your agent does the rest</span><button type="button" id="copyAsk" aria-label="Copy the ask">copy prompt</button></div>
-          </div>
-        </li>
-      </ol>
     </div>
   </div>
   <p class="after" id="after"><noscript>Select the prompt above and copy it. To pick a different agent, or to sign in, enable JavaScript or go to <a href="/app">treg.to/app</a>.</noscript></p>
 </section>
 
 <section class="uses" aria-labelledby="usesH">
-  <div class="seclab">use cases · real runs · real prices</div>
   <h2 id="usesH">What your agent can do with real data</h2>
-  <p class="lede">Ask once. Your agent comes back with the data and what it cost. Every prompt below copies ready for the agent you picked above.</p>
+  <p class="lede">Click a prompt to copy it for your agent.</p>
   <div class="grid" id="grid">
 
     <article class="use" data-job="leads">
       <div class="use-top">
-        <div class="cat"><span class="ic"><img src="https://unpkg.com/@lobehub/icons-static-png@latest/light/linkedin.png" alt=""></span><span>leads</span></div>
+        <div class="cat"><span class="ic"><img src="/logos/platforms/linkedin.svg" alt=""></span><span>leads</span></div>
         <h3>Find the people you want to reach, with work emails</h3>
-        <p class="what">Search people by role, company and place, then find their work emails. You pay per person found, not a monthly seat.</p>
       </div>
-      <div class="bubble-row"><button type="button" class="bubble" data-ask="Find heads of marketing at financial services companies in London, with work emails" title="Copy this prompt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span>Find heads of marketing at financial services companies in London, with work emails</span></button></div>
+      <div class="bubble-row"><button type="button" class="bubble" data-ask="Find heads of marketing at financial services companies in London, with work emails"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span>Find heads of marketing at financial services companies in London, with work emails<span class="hint">copy</span></span></button></div>
       <div class="use-body">
-        <div class="data">
-          <div class="data-h"><span>People search</span><small>50 people</small></div>
-          <table>
-            <tr><td>50 heads of marketing, name, title, company, LinkedIn</td><td class="n">$0.019</td></tr>
-            <tr><td>Sales Navigator Core seat</td><td class="n">$119.99/mo</td></tr>
-          </table>
-          <div class="data-h" style="border-top:1px solid var(--line)"><span>Work emails, the same 24 people</span><small>found</small></div>
-          <table>
-            <tr class="hi"><td>treg.to</td><td class="n">20 for $0.17</td></tr>
-            <tr><td>Clay</td><td class="n">18 for $0.88</td></tr>
-          </table>
+        <div class="viz">
+          <div class="box">
+            <div class="box-h"><span class="t">Heads of marketing · financial services · London</span><small>458 found</small></div>
+            <div class="person"><img src="/media/start/co-lseg.png" alt=""><div class="who">Group Head of Marketing<small>LSEG</small></div><span class="em">a•••@lseg.com</span></div>
+            <div class="person"><img src="/media/start/co-barclaycard.png" alt=""><div class="who">Director, Head of Marketing Operations<small>Barclaycard Payments</small></div><span class="em">g•••@barclayscorp.com</span></div>
+            <div class="person"><img src="/media/start/co-elwood.png" alt=""><div class="who">Head of Marketing<small>Elwood</small></div><span class="em">t•••@elwood.io</span></div>
+          </div>
         </div>
-        <div class="cost"><span>Real runs, 13 to 14 Oct 2026 · Clay on 15 Sep 2026</span><button class="ghostbtn" type="button" data-copy-job="leads">Copy this prompt</button></div>
+        <div class="tally"><span><b>$0.0076</b> for 20 people · 6 of 6 work emails <b>$0.036</b></span><span><s>Sales Navigator $119.99/mo</s></span></div>
       </div>
     </article>
 
     <article class="use" data-job="seo">
       <div class="use-top">
-        <div class="cat"><span class="ic"><img src="https://unpkg.com/@lobehub/icons-static-png@latest/light/openai.png" alt=""><img src="https://unpkg.com/@lobehub/icons-static-png@latest/light/perplexity-color.png" alt=""><img src="https://unpkg.com/@lobehub/icons-static-png@latest/light/gemini-color.png" alt=""></span><span>ai answers</span></div>
+        <div class="cat"><span class="ic"><img src="/logos/platforms/chatgpt.svg" alt=""><img src="/logos/platforms/perplexity.svg" alt=""><img src="/logos/platforms/gemini.svg" alt=""></span><span>ai answers</span></div>
         <h3>See whether ChatGPT, Perplexity and Google AI recommend you</h3>
-        <p class="what">Check whether AI assistants recommend you for the questions your buyers ask, who they name instead, and which pages they cite.</p>
       </div>
-      <div class="bubble-row"><button type="button" class="bubble" data-ask="Does ChatGPT recommend us for &quot;best CRM for a startup&quot;? Who does it name instead, and which pages does it cite?" title="Copy this prompt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span>Does ChatGPT recommend us for "best CRM for a startup"?</span></button></div>
+      <div class="bubble-row"><button type="button" class="bubble" data-ask="Does ChatGPT recommend us for &quot;best CRM for a startup&quot;? Who does it name instead, and which pages does it cite?"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span>Does ChatGPT recommend us for "best CRM for a startup"?<span class="hint">copy</span></span></button></div>
       <div class="use-body">
-        <div class="data">
-          <div class="data-h"><span>ChatGPT · "What is the best CRM for a startup?"</span><small>US</small></div>
-          <table>
-            <tr><td class="k">1</td><td>HubSpot CRM</td><td class="n">best overall</td></tr>
-            <tr class="hi"><td class="k">2</td><td>Attio</td><td class="n">you, if you're Attio</td></tr>
-            <tr><td class="k">3</td><td>Pipedrive</td><td class="n"></td></tr>
-            <tr><td class="k">4</td><td>Zoho CRM</td><td class="n"></td></tr>
-            <tr><td class="k">5</td><td>Close CRM</td><td class="n"></td></tr>
-          </table>
-          <div class="note">Pages it cited: parlel.com, emergent.sh, spotsaas.com</div>
+        <div class="viz">
+          <div class="chat">
+            <div class="q">What is the best CRM for a startup?</div>
+            <div class="a"><img src="/logos/platforms/chatgpt.svg" alt="ChatGPT">
+              <div>
+                <ol>
+                  <li>HubSpot CRM<small>best overall</small></li>
+                  <li class="you">Attio<small>you, if you're Attio</small></li>
+                  <li>Pipedrive</li>
+                  <li>Zoho CRM</li>
+                  <li>Close CRM</li>
+                </ol>
+                <div class="src">Cited<span>parlel.com</span><span>emergent.sh</span><span>spotsaas.com</span></div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="cost"><span>Real run, 22 Oct 2026 · <b>$0.0036</b> · <s>Semrush AI Visibility $99/mo</s></span><button class="ghostbtn" type="button" data-copy-job="seo">Copy this prompt</button></div>
+        <div class="tally"><span><b>$0.0036</b> a check</span><span><s>Semrush AI Visibility $99/mo</s></span></div>
       </div>
     </article>
 
     <article class="use" data-job="ads">
       <div class="use-top">
-        <div class="cat"><span class="ic"><img src="https://unpkg.com/@lobehub/icons-static-png@latest/light/meta-color.png" alt=""></span><span>competitor ads</span></div>
+        <div class="cat"><span class="ic"><img src="/logos/platforms/meta-ads.svg" alt=""></span><span>competitor ads</span></div>
         <h3>See every ad a competitor is running</h3>
-        <p class="what">Pull a competitor's live Facebook and Instagram ads with copy, offer and start date, and see which angles they keep paying for.</p>
       </div>
-      <div class="bubble-row"><button type="button" class="bubble" data-ask="What ads is Notion running on Facebook and Instagram right now? Group them by angle and tell me which have run the longest." title="Copy this prompt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span>What ads is Notion running on Facebook and Instagram?</span></button></div>
+      <div class="bubble-row"><button type="button" class="bubble" data-ask="What ads is Notion running on Facebook and Instagram right now? Group them by angle and tell me which have run the longest."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span>What ads is Notion running on Facebook and Instagram?<span class="hint">copy</span></span></button></div>
       <div class="use-body">
-        <div class="data">
-          <div class="data-h"><span>Notion · live ads</span><small>201 running</small></div>
-          <table>
-            <tr><td>"Get your Notion Business Plan free for 3 months. Full AI suite, no credit card."</td><td class="n">since 31 Jul</td></tr>
-            <tr><td>"Create custom AI agents to automate your work."</td><td class="n">since 21 May</td></tr>
-            <tr><td>"Collaboration meets AI meets beautiful functionality."</td><td class="n">since 31 Jul</td></tr>
-          </table>
-          <div class="note">Three angles in the top 30: a free-months offer, AI agents, and AI plus collaboration.</div>
+        <div class="viz">
+          <div class="fan">
+            <div class="ad l"><div class="hd"><img src="/media/start/x-notion.jpg" alt="">Notion <small>Sponsored</small></div><img class="cr" src="/media/start/ad-2am.jpg" alt="Notion video ad: You at 2 a.m." loading="lazy"><div class="ft"><span>video</span><span>since 5 Aug</span></div></div>
+            <div class="ad r"><div class="hd"><img src="/media/start/x-notion.jpg" alt="">Notion <small>Sponsored</small></div><img class="cr" src="/media/start/ad-200-hours.jpg" alt="Notion video ad: We are saving up to 200 hours per month" loading="lazy"><div class="ft"><span>video</span><span>since 5 Aug</span></div></div>
+            <div class="ad c"><div class="hd"><img src="/media/start/x-notion.jpg" alt="">Notion <small>Sponsored</small></div><img class="cr" src="/media/start/ad-workspace.jpg" alt="Notion image ad: The connected AI workspace, free 3 month trial" loading="lazy"><div class="ft"><span>image · 9 ads</span><span>since 5 Aug</span></div></div>
+          </div>
+          <div class="angles"><span data-n="01">Free 3-month trial</span><span data-n="02">Custom AI agents</span><span data-n="03">Customer proof: 200 hours saved</span></div>
         </div>
-        <div class="cost"><span>Real run, 22 Oct 2026 · <b>$0.0019</b></span><button class="ghostbtn" type="button" data-copy-job="ads">Copy this prompt</button></div>
+        <div class="tally"><span><b>$0.00165</b> for Notion's 30 live ads</span></div>
       </div>
     </article>
 
     <article class="use" data-job="social">
       <div class="use-top">
-        <div class="cat"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#111" d="M17.75 3h3.07l-6.7 7.66L22 21h-6.17l-4.83-6.32L5.47 21H2.4l7.17-8.2L2 3h6.33l4.37 5.77L17.75 3Zm-1.08 16.2h1.7L7.4 4.73H5.57L16.67 19.2Z"/></svg></span><span>x posts</span></div>
+        <div class="cat"><span class="ic"><img src="/logos/platforms/x.svg" alt=""></span><span>x posts</span></div>
         <h3>Know what's working on X</h3>
-        <p class="what">Search X posts on any topic or account, with author, followers and likes, without paying for the X API.</p>
       </div>
-      <div class="bubble-row"><button type="button" class="bubble" data-ask="Find today's X posts about AI agents, with author, followers and likes" title="Copy this prompt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span>Find today's X posts about AI agents, with author, followers and likes</span></button></div>
+      <div class="bubble-row"><button type="button" class="bubble" data-ask="Find this week's most-liked X posts about AI agents, with author, followers and likes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span>Find this week's most-liked X posts about AI agents<span class="hint">copy</span></span></button></div>
       <div class="use-body">
-        <div class="data">
-          <div class="data-h"><span>X search</span><small>20 posts</small></div>
-          <table>
-            <tr class="hi"><td>20 posts, author, followers, likes, link</td><td class="n">$0.0006</td></tr>
-            <tr><td>The same 20 posts on the official X API</td><td class="n">$0.10</td></tr>
-          </table>
+        <div class="viz">
+          <div class="tw"><img class="av" src="/media/start/x-nvidiartxspark.jpg" alt=""><div>
+            <div class="by">NVIDIA RTX Spark <svg viewBox="0 0 24 24" aria-label="verified"><path fill="#1d9bf0" d="M22.5 12.5c0-1.58-.88-2.95-2.18-3.65.15-.44.23-.91.23-1.4 0-2.21-1.71-4-3.82-4-.47 0-.92.08-1.34.25C14.79 2.39 13.49 1.5 12 1.5s-2.79.89-3.39 2.2c-.42-.17-.87-.25-1.34-.25-2.11 0-3.82 1.79-3.82 4 0 .49.08.96.23 1.4C2.38 9.55 1.5 10.92 1.5 12.5c0 1.5.8 2.8 1.97 3.53-.03.2-.04.4-.04.6 0 2.21 1.71 4 3.82 4 .47 0 .92-.09 1.34-.25.6 1.31 1.9 2.2 3.39 2.2s2.79-.89 3.39-2.2c.42.16.87.25 1.34.25 2.11 0 3.82-1.79 3.82-4 0-.2-.01-.4-.04-.6 1.17-.73 1.97-2.03 1.97-3.53zm-12.4 4.06-3.6-3.6 1.4-1.42 2.2 2.2 5.1-5.25 1.42 1.4-6.52 6.67z"/></svg><span>@NVIDIARTXSpark · 21 Oct</span></div>
+            <p>When @jensenhuang asks for a somersault, you deliver. 🦆 See how AI agents on NVIDIA RTX Spark help bring @huggingface's Microduck from simulation to the real world.</p>
+            <img class="media" src="/media/start/x-media0.jpg" alt="" loading="lazy">
+            <div class="m"><span><b>6.7K</b> likes</span><span><b>901</b> reposts</span><span><b>356K</b> views</span></div>
+          </div></div>
         </div>
-        <div class="cost"><span>Real run, 12 Oct 2026 · 166x cheaper than the X API</span><button class="ghostbtn" type="button" data-copy-job="social">Copy this prompt</button></div>
+        <div class="tally"><span><b>$0.0006</b> for 20 posts</span><span><s>X API $0.10</s></span></div>
       </div>
     </article>
 
+
+
   </div>
+  <div class="swipe" id="swipe" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></div>
 
   <div class="asks">
-    <div class="seclab">more things to ask</div>
-    <h2>Click one to copy it</h2>
-    <p>Each one copies ready for the agent you picked. Say "us" and your agent works out who that is, or asks you.</p>
+    <h2>More things to ask</h2>
     <div class="chips" id="chips"></div>
   </div>
 
   <div class="trust"><span>$1 free credit, no card</span><span>Prepaid, so no surprise bills</span><span>Use your own keys at no extra charge</span><span>Open source</span></div>
-  <p class="fine">Prices are what treg.to charged on the real runs named on each card, with no markup; another provider can cost more. Vendor prices from their pricing pages on 13 and 14 Oct 2026: Semrush AI Visibility Base $99 a month per domain billed annually, LinkedIn Sales Navigator Core $119.99 a month billed monthly, X API $0.005 per post read. Clay: the same 24 people took 13.2 credits on 15 Sep 2026, $0.88 at the Launch plan's $0.0668 a credit.</p>
+  <p class="fine">Prices are what treg.to charged on the real runs shown, on 22 Oct 2026, with no markup; another provider can cost more. The people found are shown by role and company only. Work emails for the same 24 people on 14 Oct 2026: treg.to found 20 for $0.17, Clay 18 for $0.88 (13.2 credits at the Launch plan's $0.0668 a credit, 15 Sep 2026). Vendor prices from their pricing pages on 13 and 14 Oct 2026: Semrush AI Visibility Base $99 a month per domain billed annually, LinkedIn Sales Navigator Core $119.99 a month billed monthly, X API $0.005 per post read.</p>
 </section>
 </main>
 
@@ -377,16 +453,17 @@ Then: </span><span class="ask">Look at what we are working on and propose three 
 <script>
 (function () {
   'use strict';
+  document.documentElement.classList.add('js');
   function $(id) { return document.getElementById(id); }
   function track(ev, props) { try { if (window.TregTracking) window.TregTracking.capture(ev, props || {}); } catch (e) {} }
 
   /* ---------- one job per ad group (?job=); the visitor picks their agent and gets that agent's connection ----------
      Terminal agents (Claude Code, Codex, Cursor, anything with a shell) get ONE paste: the setup (install +
-     sign in) and then the task; what the pane shows is exactly what the clipboard gets. Connector agents
-     (Claude.ai, ChatGPT, Grok Bot) cannot run a shell, so they connect treg once (the Claude.ai
-     add-connector deep link the dashboard uses, the treg plugin listing on chatgpt.com, the Grok plugin)
-     and then paste the task alone, prefixed "Use treg to". The tasks say "us" and tell the agent to work
-     out who that is from the project, or ask one question. */
+     sign in) and then the task; the full prompt behind "See the full prompt" is exactly what the clipboard
+     gets. Connector agents (Claude.ai, ChatGPT, Grok Bot) cannot run a shell, so they connect treg once (the
+     Claude.ai add-connector deep link the dashboard uses, the treg plugin listing on chatgpt.com, the Grok
+     plugin) and then paste the task alone, prefixed "Use treg to". The tasks say "us" and tell the agent to
+     work out who that is from the project, or ask one question. `short` is the line the pane shows. */
   var MCP_URL = 'https://treg.to/mcp/';
   var SETUP_CMD = 'curl -fsSL https://treg.to/install.sh | sh && treg login';
   var SETUP_BEFORE = 'Set up treg if this agent does not have it yet. Run\n';
@@ -395,53 +472,56 @@ Then: </span><span class="ask">Look at what we are working on and propose three 
     general: {   /* bare /start, no ad group: the whole offer, and a task that lets the agent propose */
       kicker: '{ENDPOINTS} tools · {PROVIDERS} providers · $1 free',
       h1: 'Connect your agent to real data', l2: 'leads, AI answers, competitor ads, X posts · no subscriptions',
+      short: 'Propose three things you can do for us with real data, then run the one I pick.',
       task: 'look at what we are working on and propose three things you could do for us right now with real data (lead lists with work emails, whether AI assistants recommend us, a competitor\'s live ads, what is working on X), with the price of each. Then run the one I pick and tell me what it cost.'
     },
     leads: {
       kicker: 'lead lists · cents per person · $1 free',
       h1: 'A lead list from your agent', l2: 'with work emails, for cents',
+      short: 'Find 25 people we should sell to, with work emails, saved as leads.csv.',
       task: 'find 25 people we should sell to. Work out our ideal customer from what you can see, or ask me in one question. Search by role, company and location, then find each person\'s work email. Save them as leads.csv with name, title, company, LinkedIn URL and email, and tell me what it cost.'
     },
     seo: {
       kicker: 'ai search visibility · $0.0036 a check · $1 free',
       h1: 'Is AI recommending you?', l2: 'ChatGPT, Perplexity and Google AI, checked by your agent',
+      short: 'Check whether ChatGPT, Perplexity and Google AI recommend us, and what to fix first.',
       task: 'check whether ChatGPT, Perplexity and Google AI recommend us. Work out our brand and what we sell from what you can see, or ask me in one question. Write the 5 questions a buyer would ask and run each one. For every question show where we appear, which brands are named instead, and which pages are cited. Finish with the one thing to fix first, and tell me what the run cost.'
     },
     ads: {
-      kicker: 'competitor ads · $0.0019 a competitor · $1 free',
+      kicker: 'competitor ads · $0.00165 a competitor · $1 free',
       h1: 'Every ad your competitor runs', l2: 'Facebook and Instagram, live, from your agent',
+      short: 'Pull the live Facebook and Instagram ads of our top 3 competitors, grouped by angle.',
       task: 'find our top 3 competitors from what you can see, or ask me in one question. Pull the ads each one is running on Facebook and Instagram right now. Group them by angle and offer, tell me which have run the longest, and what it cost.'
     },
     social: {
       kicker: 'x data · 166x cheaper than the x api · $1 free',
       h1: "What's working on X", l2: 'posts, authors and likes, no X API plan',
+      short: "Find this week's most-liked X posts about our space, and what the top 10 share.",
       task: 'find the most-liked X posts from the last 7 days about our space. Work out the topic from what you can see, or ask me in one question. Include author, followers, likes and link. Tell me what the top 10 have in common, and what the search cost.'
     }
   };
-  /* ordered the way the dashboard orders them: by how many who pick each agent go on to make a call */
+  /* ordered the way the dashboard orders them: by how many who pick each agent go on to make a call.
+     The first PRIMARY show as buttons; the rest sit behind More. */
   var LOBE = 'https://unpkg.com/@lobehub/icons-static-png@latest/light/';
+  var PRIMARY = 4;
   var AGENTS = [
-    { id: 'claude-code', name: 'Claude Code', icon: '/media/landing/assets/claudecode-color.svg', kind: 'terminal', note: 'paste into claude code · this is the whole prompt' },
-    { id: 'codex', name: 'Codex', icon: '/media/landing/assets/codex-color.svg', kind: 'terminal', note: 'paste into codex · this is the whole prompt' },
+    { id: 'claude-code', name: 'Claude Code', icon: '/media/landing/assets/claudecode-color.svg', kind: 'terminal' },
+    { id: 'codex', name: 'Codex', icon: '/media/landing/assets/codex-color.svg', kind: 'terminal' },
     { id: 'claudeai', name: 'Claude.ai', icon: LOBE + 'claude-color.png', kind: 'connector',
-      connect: { button: 'Add treg.to to Claude.ai', href: 'https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Treg&connectorUrl=' + encodeURIComponent(MCP_URL), after: 'opens Claude.ai with the connector filled in. Click Connect.' } },
+      connect: { button: 'Add treg.to to Claude.ai', href: 'https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Treg&connectorUrl=' + encodeURIComponent(MCP_URL), after: 'then click Connect' } },
     { id: 'chatgpt', name: 'ChatGPT', icon: LOBE + 'openai.png', kind: 'connector',
-      connect: { button: 'Get the treg.to plugin', href: 'https://chatgpt.com/plugins/plugins_6a7fb961a34881918798681dade464ec?q=treg', after: 'opens the treg.to listing in ChatGPT. Click Install.' } },
-    { id: 'cursor', name: 'Cursor', icon: LOBE + 'cursor.png', kind: 'terminal', note: 'paste into cursor\'s agent chat · this is the whole prompt' },
+      connect: { button: 'Get the treg.to plugin', href: 'https://chatgpt.com/plugins/plugin_asdk_app_6ac4c2df9c548191b83ea0c156bd9b6a', after: 'then click Install' } },
+    { id: 'cursor', name: 'Cursor', icon: LOBE + 'cursor.png', kind: 'terminal' },
     { id: 'grokbot', name: 'Grok Bot', icon: '/logos/agents/grokbot.png', kind: 'connector',
-      connect: { button: 'Add the treg plugin', href: 'https://x.ai/bot/plugin/55647425', after: 'adds treg.to to your Grok Bot.' } },
-    { id: 'other', name: 'Other', icon: null, kind: 'terminal', note: 'any agent that can run a terminal · this is the whole prompt' }
+      connect: { button: 'Add the treg plugin', href: 'https://x.ai/bot/plugin/55647425', after: '' } },
+    { id: 'other', name: 'Other', icon: null, kind: 'terminal' }
   ];
   var MORE = [
-    'Which keywords do we rank 5 to 15 for that could reach page one?',
-    'Why did our Google traffic drop last week?',
     'Find Reddit threads from this month asking for a tool like ours',
     'Find 200 dentists in Leeds with phone number, website and email',
-    'Which TikTok and YouTube creators in our niche get the most views?',
+    'Which keywords do we rank 5 to 15 for that could reach page one?',
     'Who posted on LinkedIn this week about the problem we solve?',
-    'What ads is our top competitor running on Google?',
-    'Find the work email of the head of growth at Linear',
-    'What are people saying about us on X this week?'
+    'What ads is our top competitor running on Google?'
   ];
   var param = new URLSearchParams(location.search).get('job');
   var key = Object.prototype.hasOwnProperty.call(JOBS, param) ? param : null;
@@ -451,10 +531,16 @@ Then: </span><span class="ask">Look at what we are working on and propose three 
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
   function span(cls, text) { var s = document.createElement('span'); s.className = cls; s.textContent = text; return s; }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function icon(a) { if (!a.icon) return el('span', 'blank'); var im = el('img'); im.src = a.icon; im.alt = ''; im.onerror = function () { im.style.visibility = 'hidden'; }; return im; }
+  var CARET = '<svg class="caret" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
 
-  /* the agent: remembered per browser, Claude Code first time */
-  var agent = AGENTS[0];
-  try { var saved = localStorage.getItem('treg_start_agent'); AGENTS.forEach(function (a) { if (a.id === saved) agent = a; }); } catch (e) {}
+  /* the agent: remembered per browser. First time, Claude Code on a computer and ChatGPT on a phone,
+     where nobody has a terminal to paste into (paid traffic is mostly phones). */
+  var touch = matchMedia('(hover: none) and (pointer: coarse)').matches;
+  var first = touch ? 'chatgpt' : 'claude-code', saved = null, agent;
+  try { saved = localStorage.getItem('treg_start_agent'); } catch (e) {}
+  AGENTS.forEach(function (a) { if (a.id === first && !agent) agent = a; });
+  AGENTS.forEach(function (a) { if (a.id === saved) agent = a; });
   /* what the clipboard gets for a task, for the chosen agent */
   function promptFor(task) { return agent.kind === 'terminal' ? SETUP_BEFORE + SETUP_CMD + SETUP_AFTER + cap(task) : 'Use treg to ' + task.charAt(0).toLowerCase() + task.slice(1); }
 
@@ -462,50 +548,88 @@ Then: </span><span class="ask">Look at what we are working on and propose three 
   $('heroKicker').textContent = j.kicker;
   var h1 = $('heroH1'); h1.textContent = j.h1; h1.appendChild(span('l2', j.l2));
   var picker = $('agents');
-  AGENTS.forEach(function (a) {
+  function choose(a) { agent = a; try { localStorage.setItem('treg_start_agent', a.id); } catch (e) {} closeMore(); render(); track('start_agent_selected', { agent: a.id, job: cur }); }
+  AGENTS.slice(0, PRIMARY).forEach(function (a) {
     var btn = el('button', null); btn.type = 'button'; btn.setAttribute('data-agent', a.id);
-    if (a.icon) { var im = el('img'); im.src = a.icon; im.alt = ''; im.loading = 'lazy'; im.onerror = function () { im.style.visibility = 'hidden'; }; btn.appendChild(im); }
-    btn.appendChild(document.createTextNode(a.name));
-    btn.addEventListener('click', function () { agent = a; try { localStorage.setItem('treg_start_agent', a.id); } catch (e) {} render(); track('start_agent_selected', { agent: a.id, job: cur }); });
+    btn.appendChild(icon(a)); btn.appendChild(document.createTextNode(a.name));
+    btn.addEventListener('click', function () { choose(a); });
     picker.appendChild(btn);
   });
+  var more = el('div', 'more'), moreBtn = el('button'), menu = el('div', 'more-menu');
+  moreBtn.type = 'button'; moreBtn.id = 'moreBtn'; moreBtn.setAttribute('aria-haspopup', 'menu'); moreBtn.setAttribute('aria-expanded', 'false');
+  menu.setAttribute('role', 'menu'); menu.id = 'moreMenu'; moreBtn.setAttribute('aria-controls', 'moreMenu');
+  AGENTS.slice(PRIMARY).forEach(function (a) {
+    var it = el('button'); it.type = 'button'; it.setAttribute('role', 'menuitemradio'); it.setAttribute('data-agent', a.id);
+    it.appendChild(icon(a)); it.appendChild(document.createTextNode(a.name));
+    it.addEventListener('click', function () { choose(a); moreBtn.focus(); });
+    menu.appendChild(it);
+  });
+  more.appendChild(moreBtn); more.appendChild(menu); picker.appendChild(more);
+  function items() { return Array.prototype.slice.call(menu.querySelectorAll('button')); }
+  function openMore() { menu.classList.add('open'); moreBtn.setAttribute('aria-expanded', 'true'); var c = menu.querySelector('[aria-checked="true"]') || items()[0]; c.focus(); }
+  function closeMore() { menu.classList.remove('open'); moreBtn.setAttribute('aria-expanded', 'false'); }
+  moreBtn.addEventListener('click', function () { menu.classList.contains('open') ? closeMore() : openMore(); });
+  menu.addEventListener('keydown', function (e) {
+    var list = items(), i = list.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); list[(i + 1) % list.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); list[(i - 1 + list.length) % list.length].focus(); }
+    else if (e.key === 'Escape') { e.stopPropagation(); closeMore(); moreBtn.focus(); }
+    else if (e.key === 'Tab') closeMore();
+  });
+  document.addEventListener('click', function (e) { if (!more.contains(e.target)) closeMore(); });
+
+  var pane = $('pane');
+  function setFull(on) { pane.classList.toggle('full', on); $('paneToggle').setAttribute('aria-expanded', on ? 'true' : 'false'); $('paneToggle').textContent = on ? 'Hide the full prompt' : 'See the full prompt'; }
+  $('paneToggle').addEventListener('click', function () { setFull(!pane.classList.contains('full')); });
   function render() {
-    picker.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-agent') === agent.id ? 'true' : 'false'); });
-    /* one short plain line: the two-tone sentence read as clutter */
-    var who = agent.id === 'other' ? 'your agent' : agent.name;
-    $('heroSub').textContent = agent.kind === 'terminal' ? 'Paste one prompt into ' + who + '. It signs you in and does the job.' : 'Connect treg.to to ' + who + ' once. Then ask it.';
-    var term = $('paneTerminal'), conn = $('paneConnector'), after = $('after'); after.textContent = '';
+    picker.querySelectorAll('button[data-agent]').forEach(function (b) {
+      var on = b.getAttribute('data-agent') === agent.id;
+      b.setAttribute(b.getAttribute('role') === 'menuitemradio' ? 'aria-checked' : 'aria-pressed', on ? 'true' : 'false');
+    });
+    /* an agent from the menu takes the More button's place, so the choice stays visible */
+    var hidden = AGENTS.indexOf(agent) >= PRIMARY;
+    moreBtn.innerHTML = ''; moreBtn.classList.toggle('has-icon', hidden);
+    if (hidden) { moreBtn.appendChild(icon(agent)); moreBtn.appendChild(document.createTextNode(agent.name)); }
+    else moreBtn.appendChild(document.createTextNode('More'));
+    moreBtn.insertAdjacentHTML('beforeend', CARET);
+    moreBtn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+    moreBtn.setAttribute('aria-label', hidden ? agent.name + ', more agents' : 'More agents');
+
+    var conn = $('paneConnector'), after = $('after'); after.textContent = '';
+    $('paneTask').textContent = j.short;
+    var pre = $('heroPrompt'); pre.textContent = '';
     if (agent.kind === 'terminal') {
-      term.hidden = false; conn.hidden = true;
-      var pre = $('heroPrompt'); pre.textContent = '';
+      conn.hidden = true; $('paneSlot').appendChild(pane);
+      $('paneSetup').hidden = false;
       pre.appendChild(span('dim', SETUP_BEFORE)); pre.appendChild(span('cmd', SETUP_CMD)); pre.appendChild(span('dim', SETUP_AFTER)); pre.appendChild(span('ask', cap(j.task)));
-      $('termNote').textContent = agent.note;
-      after.appendChild(document.createTextNode('Your agent runs the two commands (approve them if it asks), opens a browser tab for you to sign in, then does the job. $1 free, no card. No agent yet? '));
+      after.appendChild(document.createTextNode('$1 free, no card. No agent yet? '));
     } else {
-      term.hidden = true; conn.hidden = false;
+      conn.hidden = false; $('stepAsk').appendChild(pane);
+      $('paneSetup').hidden = true;
+      pre.appendChild(span('ask', promptFor(j.task)));
       var step = $('stepConnect'); step.textContent = ''; var c = agent.connect;
-      if (c.href) {
-        var a = el('a', 'candy', c.button); a.href = c.href; a.target = '_blank'; a.rel = 'noopener';
-        a.addEventListener('click', function () { track('start_connect_clicked', { agent: agent.id, job: cur }); });
-        step.appendChild(a); step.appendChild(el('div', 'then', c.after));
-      } else {
-        step.appendChild(document.createTextNode(c.text + ' '));
-        var chip = el('button', 'urlchip'); chip.type = 'button'; chip.appendChild(el('code', null, c.url)); chip.appendChild(el('span', null, 'copy'));
-        chip.addEventListener('click', function () { copyText(c.url).then(function () { chip.classList.add('done'); say('Copied the connector URL.'); }); track('start_connect_clicked', { agent: agent.id, job: cur }); });
-        step.appendChild(chip);
-        if (c.fine) step.appendChild(el('p', 'fine', c.fine));
-      }
-      $('askPrompt').textContent = promptFor(j.task);
+      var a = el('a', 'connect'); a.href = c.href; a.target = '_blank'; a.rel = 'noopener';
+      a.appendChild(icon(agent)); a.appendChild(document.createTextNode(c.button));
+      a.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2h6v6M10 2 3 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>');
+      a.addEventListener('click', function () { track('start_connect_clicked', { agent: agent.id, job: cur }); });
+      step.appendChild(a); if (c.after) step.appendChild(el('span', 'then', c.after));
       after.appendChild(document.createTextNode('Already connected? Skip to step 3. No agent yet? '));
     }
     /* bound here only: a data-cta attribute would also catch the generic listener below and fire twice */
     var noagent = el('button', null, 'Start free'); noagent.type = 'button';
     noagent.addEventListener('click', function () { start('noagent'); });
-    after.appendChild(noagent); after.appendChild(document.createTextNode(' and the dashboard helps you pick one.'));
+    after.appendChild(noagent);
   }
   /* the visitor's own use case leads the grid */
   var mine = document.querySelector('.use[data-job="' + cur + '"]');
   if (mine) mine.parentNode.insertBefore(mine, mine.parentNode.firstChild);
+  /* the swipe dots follow the row on phones */
+  var grid = $('grid'), dots = $('swipe').children;
+  grid.addEventListener('scroll', function () {
+    var cards = grid.children, mid = grid.scrollLeft + grid.clientWidth / 2, best = 0;
+    for (var i = 0; i < cards.length; i++) if (Math.abs(cards[i].offsetLeft + cards[i].offsetWidth / 2 - mid) < Math.abs(cards[best].offsetLeft + cards[best].offsetWidth / 2 - mid)) best = i;
+    for (var d = 0; d < dots.length; d++) dots[d].classList.toggle('on', d === best);
+  }, { passive: true });
   /* the chips */
   var ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
   MORE.forEach(function (q) {
@@ -527,32 +651,23 @@ Then: </span><span class="ask">Look at what we are working on and propose three 
   }
   var toast = $('toast'), toastT;
   function say(msg) { toast.textContent = msg; toast.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(function () { toast.classList.remove('on'); }, 3200); }
-  function copyPrompt(task, node, where, job, flashBtn) {
+  var btn = $('copyBtn'), btnLabel = btn.querySelector('span'), btnT;
+  function copyPrompt(task, node, where, job) {
     var props = { where: where, job: job || cur, page_job: cur, agent: agent.id };
     copyText(promptFor(task)).then(function () {
       node.classList.add('done'); setTimeout(function () { node.classList.remove('done'); }, 3200);
-      if (flashBtn) { flashBtn.textContent = 'copied'; setTimeout(function () { flashBtn.textContent = 'copy prompt'; }, 3200); }
+      if (node === btn) { btnLabel.textContent = 'Copied'; clearTimeout(btnT); btnT = setTimeout(function () { btnLabel.textContent = 'Copy prompt'; }, 3200); }
       say(agent.kind === 'terminal' ? 'Copied, setup included. Paste it into ' + (agent.id === 'other' ? 'your agent' : agent.name) + '.' : 'Copied. Paste it into ' + agent.name + ' once treg.to is connected.');
       track('start_prompt_copied', props);
     }).catch(function () {
-      /* no clipboard (an iframe, a locked-down browser): select the prompt so Ctrl/Cmd+C works */
-      var pane = agent.kind === 'terminal' ? $('heroPrompt') : $('askPrompt');
-      try { var r = document.createRange(); r.selectNodeContents(pane); var sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); } catch (e) {}
+      /* no clipboard (an iframe, a locked-down browser): show and select the prompt so Ctrl/Cmd+C works */
+      setFull(true);
+      try { var r = document.createRange(); r.selectNodeContents($('heroPrompt')); var sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); } catch (e) {}
       say('Copy failed. The prompt above is selected: press Ctrl/Cmd+C.');
       track('start_prompt_copy_failed', props);
     });
   }
-  var btn = $('copyBtn');
-  btn.addEventListener('click', function () { copyPrompt(j.task, btn, 'hero', null, btn); });
-  var askBtn = $('copyAsk');
-  askBtn.addEventListener('click', function () { copyPrompt(j.task, askBtn, 'hero', null, askBtn); });
-  /* a card's button copies the example in its bubble, the prompt the visitor can read, not a hidden one */
-  document.querySelectorAll('[data-copy-job]').forEach(function (node) {
-    node.addEventListener('click', function () {
-      var card = node.closest('.use'), ask = card.querySelector('[data-ask]').getAttribute('data-ask');
-      copyPrompt(ask, node, 'card', card.getAttribute('data-job'));
-    });
-  });
+  btn.addEventListener('click', function () { copyPrompt(j.task, btn, 'hero'); });
   document.querySelectorAll('[data-ask]').forEach(function (node) {
     node.addEventListener('click', function () {
       var card = node.closest('.use');
@@ -580,7 +695,7 @@ Then: </span><span class="ask">Look at what we are working on and propose three 
   $('navSignin').addEventListener('click', function () { start('nav-signin'); });
   $('signinClose').addEventListener('click', closeSignin);
   scrim.addEventListener('click', function (e) { if (e.target === scrim) closeSignin(); });
-  addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSignin(); });
+  addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeSignin(); closeMore(); } });
   scrim.querySelectorAll('[data-method]').forEach(function (a) { a.addEventListener('click', function () { track('start_signin_method', { method: a.getAttribute('data-method') }); }); });
 
   function readJson(r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.detail || ('error ' + r.status)); return d; }); }
@@ -613,7 +728,7 @@ Then: </span><span class="ask">Look at what we are working on and propose three 
   $('em-btn2').addEventListener('click', emailVerify);
   $('em-code').addEventListener('keyup', function (e) { if (e.key === 'Enter') emailVerify(); });
 
-  track('start_viewed', { job: cur, agent: agent.id, device: matchMedia('(hover: none) and (pointer: coarse)').matches ? 'touch' : 'desktop' });
+  track('start_viewed', { job: cur, agent: agent.id, device: touch ? 'touch' : 'desktop' });
 })();
 </script>
 <script src="/gtag.js"></script>

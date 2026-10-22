@@ -40,16 +40,23 @@ async def test_start_copy_keeps_the_public_promises(clients: AsyncClient):
     # "no agent yet" button the script adds) are the sign-in fallbacks.
     assert "https://treg.to/install.sh | sh && treg login" in html and "https://treg.to/llms.txt" in html
     assert "modal=add-custom-connector" in html and "x.ai/bot/plugin/55647425" in html
-    assert "chatgpt.com/plugins/plugins_6a7fb961a34881918798681dade464ec" in html and "Developer mode" not in html
+    assert "chatgpt.com/plugins/plugin_asdk_app_6ac4c2df9c548191b83ea0c156bd9b6a" in html and "Developer mode" not in html
     # The general prompt is in the HTML itself, so a visitor without JavaScript still has something to copy.
     assert "Then: </span>" in html and "<noscript>" in html
     # The brand in prose is treg.to; a bare "treg" only names the CLI, the wordmark and the prompts.
     assert "© 2026 treg.to" in html and "Add treg.to to Claude.ai" in html
     assert len(re.findall(r'<button[^>]* data-cta="', html)) == 1
-    assert len(re.findall(r'data-copy-job="(seo|leads|ads|social)"', html)) == 4
+    # Every card copies through its one bubble; there is no second copy button to drift from it.
+    assert "data-copy-job" not in html
+    assert len(re.findall(r'<article class="use" data-job="(seo|leads|ads|social)">', html)) == 4
+    assert len(re.findall(r'class="bubble" data-ask="', html)) == 4
+    # Paid traffic is mostly phones, which have no terminal: a phone's first pick is ChatGPT.
+    assert "var first = touch ? 'chatgpt' : 'claude-code'" in html
     # The cards quote real runs; retired or mismatched comparisons must not come back: X dropped its
     # subscription tiers, and SpyFu researches Google ads, not Meta's.
-    assert "$0.0036" in html and "$119.99/mo" in html and "$0.019" in html and "18 for $0.88" in html
+    assert "$0.0036" in html and "$119.99/mo" in html and "$0.0076" in html and "18 for $0.88" in html
+    # Card media is served from the page's own folder, never hotlinked from a CDN that expires it.
+    assert "fbcdn.net" not in html and "pbs.twimg.com" not in html and "/media/start/" in html
     assert "$200" not in html and "SpyFu" not in html and "$471" not in html and "$238" not in html and "$358" not in html
     # One price per vendor: Semrush AI Visibility is quoted at $99.
     assert "$59" not in html and "$139" not in html
