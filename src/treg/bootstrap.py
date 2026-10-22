@@ -45,8 +45,6 @@ from .routers import call as call_routes
 AppRole = Literal["all", "dataplane", "control"]
 RouteKey = tuple[str, tuple[str, ...], str]
 
-# Every HTTP route has one workload owner. A new decorator in api.py fails app creation until its
-# key is placed here, so the dataplane cannot silently acquire a management or runner endpoint.
 _CONTROL_ROUTE_KEYS: frozenset[RouteKey] = frozenset({
     ('/enrich-arena', ('GET',), 'enrich_arena_page'),
     ('/web-arena', ('GET',), 'web_arena_page'),
@@ -420,10 +418,8 @@ _DATAPLANE_ROUTE_KEYS: frozenset[RouteKey] = frozenset({
 })
 
 ROLE_BACKGROUND_TASKS: dict[AppRole, tuple[str, ...]] = {
-    # Arena statistics moved out of the web processes: `treg-worker arena insights` (a cron)
-    # walks `callrecord` on its own schedule, so web processes no longer compete for the cursor
-    # row and a deploy no longer multiplies that scan. Only `/arena/insights` (a
-    # snapshot read) stays here.
+    # Arena statistics are built by `treg-worker arena insights` (a cron) walking `callrecord`, so
+    # web processes never compete for its cursor row. Only `/arena/insights` (a snapshot read) is here.
     "all": ("treg.adsconv.worker",),
     "dataplane": (),
     "control": ("treg.adsconv.worker",),
@@ -449,7 +445,7 @@ _STATIC_ANCHOR = ("/auth/cli-token", ("GET",), "auth_cli_token")
 
 try:
     from . import mcp as _mcp
-except ImportError:  # pragma: no cover - exercised by deploys without the optional dependency
+except ImportError:
     _mcp = None
 
 
@@ -788,8 +784,7 @@ def _lifespan(role: AppRole):
                     await arena.shutdown()
                     await endpoint_observations.aclose()
                     # analytics LAST: it is the sink the other two report their losses into, and a
-                    # drop during their drain is the one most worth hearing about. Draining it first
-                    # left those events queued behind a cancelled flusher.
+                    # drop during their drain is the one most worth hearing about.
                     await audit.drain()
                     await archive.drain()
                     await call_events.drain()

@@ -95,7 +95,7 @@ def _require_cryptography():
         from cryptography.hazmat.primitives import hashes, serialization
         from cryptography.hazmat.primitives.asymmetric import ec
         from cryptography.x509.oid import NameOID
-    except ModuleNotFoundError as exc:  # pragma: no cover - exercised by hand, not in CI
+    except ModuleNotFoundError as exc:
         raise ProxyDependencyError(
             "the local proxy needs the certificate library, which is not part of the light CLI.\n"
             "  Run this from a terminal and treg offers to install it the right way for your install,\n"
@@ -104,7 +104,6 @@ def _require_cryptography():
     return x509, hashes, serialization, ec, NameOID
 
 
-# ---- where state lives --------------------------------------------------------------------
 def proxy_dir() -> Path:
     """`~/.treg/proxy/` — the CA and the trust bundle. Follows `TREG_CONFIG` when set, so tests and
     agents that redirect the CLI's config also redirect the CA instead of writing into the real one."""
@@ -113,7 +112,6 @@ def proxy_dir() -> Path:
     return base / "proxy"
 
 
-# ---- P1 · the certificate authority ---------------------------------------------------------
 @dataclass
 class CertAuthority:
     """The machine's own certificate authority plus the leaf certificates signed from it.
@@ -323,7 +321,6 @@ def _machine_label() -> str:
     return safe[:40] or "local"
 
 
-# ---- the environment we hand to the agent ---------------------------------------------------
 def proxy_env(port: int, token: str, bundle_path: Path | str, treg_host: str | None = None) -> dict[str, str]:
     """The variables that point a process at this proxy and make it trust our certificates.
 
@@ -362,7 +359,6 @@ def proxy_env(port: int, token: str, bundle_path: Path | str, treg_host: str | N
     return env
 
 
-# ---- the daemon's state file (`treg serve`) --------------------------------------------------
 # `treg shell --proxy` needs none of this: the proxy lives and dies with one subshell, and its token
 # is passed straight into that shell's environment. A DAEMON is different — another terminal has to
 # find it — so the port and token go to disk. That file is the whole extra risk of `treg serve`, which
@@ -435,7 +431,6 @@ def running() -> dict | None:
     return state
 
 
-# ---- P0 · the proxy itself ---------------------------------------------------------------
 def mint_token() -> str:
     """A fresh proxy token per session. It is what stops any other process on the machine from
     pointing itself at us and spending the member's quota."""
@@ -637,7 +632,6 @@ async def _forward_plain(cfg: ProxyConfig, client_r, client_w, head: bytes, targ
     await _pump(client_r, client_w, up_r, up_w)
 
 
-# ---- P2 · intercept an allow-listed host and forward it to treg -----------------------------
 # Rebuilt per hop or the stream corrupts — the same list `infra.upstream.relay.relay()` keeps on the server side.
 _HOP_BY_HOP = frozenset({
     "connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "proxy-connection",
@@ -741,7 +735,6 @@ def _forward_headers(cfg: ProxyConfig, pairs: list[tuple[str, str]]) -> list[tup
     return out
 
 
-# ---- P3 · the allow-list, and errors an agent can act on -------------------------------------
 async def fetch_hosts(client, base_url: str, token: str, org: str = "") -> frozenset[str]:
     """The hosts to intercept, from `GET /tools`.
 

@@ -296,7 +296,6 @@ def _products(eps: list[dict], cat: store.Catalog) -> tuple[dict[str, tuple[str,
     return {k: tuple(sorted(v)) for k, v in keys.items()}, labels
 
 
-# ---- channels ------------------------------------------------------------------------------------
 def lexical(query: str, ix: Index, aliases: dict[str, list[str]]) -> list[float]:
     """Per unit: the idf of each query word it carries as a whole word (or through an alias; or, at
     half weight, for a word of five letters or more, as the prefix of a word of its id, platform or
@@ -413,7 +412,6 @@ def recall(query: str, ix: Index, aliases: dict[str, list[str]], *,
             + [Candidate(ix.units[i]) for i in raw])
 
 
-# ---- names ---------------------------------------------------------------------------------------
 def name_of(query: str, ix: Index, platform: str | None = None,
             provider_display: Callable[[str], str] = lambda s: s) -> NameHit | None:
     """What a query names, if it is a name: a platform (exactly its name or slug; or, from four

@@ -77,10 +77,8 @@ def _platform_billable(status_code: int, cost_type: str) -> bool:
       4xx                        → only under `per_call`, and only when the rejection is about the
                                    CALLER'S INPUT (400/404/422 …). Even then the hold settles only
                                    when the provider REPORTS a charge for it (`_platform_settle`):
-                                   no vendor has been seen billing a schema rejection, and Fiber's
-                                   400 "body/identifier Required" + 404 "profile not found" billed
-                                   twenty $0.04 calls to one team (2026-09-06) for answers Fiber
-                                   gave away. A credential/quota refusal
+                                   no vendor has been seen billing a schema rejection. A
+                                   credential/quota refusal
                                    (`_NOT_THE_CALLERS_FAULT`) is on us and is never billed — a 405
                                    rejects the method OUR catalog selected, while a 429 on a
                                    SHARED-plan key is treg's own saturation. Billing either would
@@ -103,10 +101,7 @@ _PLATFORM_BODY_MAX = 8 * 1024 * 1024  # complete response evidence ceiling; free
 def _brightdata_record_count(body: bytes) -> int | None:
     """How many RECORDS a Bright Data Web Scraper response delivered, or None for "settle at the
     estimate". Bright Data bills $1.50/1000 records *delivered* and reports no charge field, so the
-    response body is the only bill we will ever see. Counting it is what closed the 39x gap found
-    2026-08-24: $13.61 consumed upstream in three weeks vs $0.35 billed, because a per_result call
-    always settled as ONE record — a Google Play reviews job that delivered ~6,000 records billed
-    $0.0015.
+    response body is the only bill we will ever see.
 
     Shapes, per docs + live traffic:
       - sync /scrape and /snapshot downloads, format=json → a JSON ARRAY, one element per record;
@@ -471,8 +466,7 @@ def _observed_cost_micro(mk: MarketplaceCall, body: bytes, headers=None) -> int 
         answers HTTP 200, so the estimate billed the full credit for a name Hunter had nothing on.
       - tikhub: REPORTED in prose rather than a number. Every envelope says whether the call is
         billed; only the explicit no-charge phrasing settles at zero, because TikHub really does
-        charge for a 2xx whose payload is an embedded error (verified live 2026-07-30 — see
-        docs/context/architecture/catalog.md, "the provider decides what counts as success").
+        charge for a 2xx whose payload is an embedded error.
 
       - crustdata / cloro / aiark: REPORTED in credits in a response HEADER (`_CREDIT_HEADERS`),
         the only place the charge exists. AI Ark reports debits as negative `X-Credit` values; its
@@ -507,8 +501,8 @@ def _observed_cost_micro(mk: MarketplaceCall, body: bytes, headers=None) -> int 
         return mk.estimate_micro
     if cost and cost.get("settle") == "base" and cost.get("usd") is not None:
         # The reserve can include documented request riders while the observed settlement remains
-        # the catalog base. Aviato simple search earned this rule from two multi-row live probes:
-        # enrich=true returned only id rows and charged the same 0.25-credit base both times.
+        # the catalog base: Aviato simple search with enrich=true returns only id rows and charges
+        # the 0.25-credit base.
         return _usd_to_micro(float(cost["usd"]))
     header_spec = _CREDIT_HEADERS.get(provider)
     if header_spec and headers is not None:
@@ -664,8 +658,7 @@ def _observed_cost_micro(mk: MarketplaceCall, body: bytes, headers=None) -> int 
     if provider == "datagma":
         # Datagma returns the exact charge as a numeric string, including zero for cached repeats
         # and misses. Use the request-time credit so a later catalog price edit cannot change a
-        # call already in flight. Not `unit_micro`: on phone find that is all 30 credits, which
-        # billed `creditBurn: 30` as 900.
+        # call already in flight. Not `unit_micro`: on phone find that is all 30 credits.
         raw = doc.get("creditBurn")
         if isinstance(raw, (int, float, str)) and not isinstance(raw, bool):
             try:
@@ -718,9 +711,6 @@ def _observed_cost_micro(mk: MarketplaceCall, body: bytes, headers=None) -> int 
         # Discovery bills per creator RETURNED (cost.value credits each, e.g. 0.01 for search/similar,
         # 0.03 for search with return_filter_values=true). The `accounts` array is invisible to the
         # generic counters. An envelope without `accounts` (an error shape) costs nothing.
-        # BUG FIX 2026-10: the original code multiplied rows by mk.unit_micro (one whole credit =
-        # $0.598) instead of by cost.value × unit_micro (0.01 credits = $0.00598 per row), causing
-        # ~100x overbilling. Use _rows_billed_micro which correctly applies cost.value.
         rows = doc.get("accounts")
         row_count = sum(item is not None for item in rows) if isinstance(rows, list) else 0
         return _rows_billed_micro(mk, ep, row_count)
@@ -741,10 +731,10 @@ def _observed_cost_micro(mk: MarketplaceCall, body: bytes, headers=None) -> int 
         if doc.get("result") in ("unknown", "catch_all"):
             return 0
     if provider == "exa":
-        # REPORTED in dollars: every Exa response carries `costDollars.total` — the search base,
-        # the per-result rider beyond 10, deep-mode uplifts and each contents type summed (verified
-        # live 2026-08-27: 20 results → 0.016, highlights+summary → 0.002). The catalog holds the
-        # base price; this is what makes a 20-result search settle at what Exa actually charged.
+        # REPORTED in dollars: every Exa response carries `costDollars.total` - the search base,
+        # the per-result rider beyond 10, deep-mode uplifts and each contents type summed. The
+        # catalog holds the base price; this is what makes a 20-result search settle at what Exa
+        # actually charged.
         cost = doc.get("costDollars")
         total = cost.get("total") if isinstance(cost, dict) else None
         if isinstance(total, (int, float)) and not isinstance(total, bool) and total >= 0:
@@ -793,12 +783,8 @@ def _observed_cost_micro(mk: MarketplaceCall, body: bytes, headers=None) -> int 
     if provider == "hunter" and mk.endpoint_id == "hunter.companies.emails":
         # DERIVED, like apollo. Hunter's domain search does not bill per row at all: it takes ONE
         # whole search credit per 10 emails RETURNED, rounded up, and a domain it knows nobody at is
-        # free. Neither half of that rule survives being flattened into the catalog's per-row price
-        # (1 credit ÷ 10 = $0.00245/result), so settling at the estimate is wrong in BOTH
-        # directions — a search with no `limit` reserved the 20-row default page and settled a
-        # ZERO-email answer at $0.0490, 20x the published per-result price for results nobody got,
-        # while `limit=1` on a domain that did answer settled at $0.00245, a tenth of the credit
-        # Hunter actually took. The returned list is the bill.
+        # free. Neither half survives being flattened into the catalog's per-row price, so settling
+        # at the estimate is wrong in both directions. The returned list is the bill.
         data = doc.get("data")
         emails = data.get("emails") if isinstance(data, dict) else None
         rate = catalog_store.load().credit_rates.get("hunter")
@@ -808,10 +794,9 @@ def _observed_cost_micro(mk: MarketplaceCall, body: bytes, headers=None) -> int 
         return None
     if provider == "hunter" and mk.endpoint_id == "hunter.people.email.find":
         # DERIVED, the flat case of the same family: the finder takes ONE whole search credit when
-        # it finds an email and nothing when it doesn't — the catalog note says "a miss is free" in
-        # as many words, yet a miss still answers HTTP 200 with `email: null`, so settling at the
-        # estimate billed the full credit ($0.0245) for a name Hunter had nothing on. A body
-        # without the `email` key (an error shape) still falls back to the estimate.
+        # it finds an email and nothing when it doesn't, yet a miss still answers HTTP 200 with
+        # `email: null`. A body without the `email` key (an error shape) still falls back to the
+        # estimate.
         data = doc.get("data")
         rate = catalog_store.load().credit_rates.get("hunter")
         if isinstance(data, dict) and "email" in data and rate:
@@ -820,10 +805,9 @@ def _observed_cost_micro(mk: MarketplaceCall, body: bytes, headers=None) -> int 
     if provider == "tikhub":
         # REPORTED in prose rather than a number: every TikHub envelope states whether the call is
         # billed. A 2xx whose payload is an embedded error still says "This request will incur a
-        # charge." and TikHub really does charge us for it (verified live 2026-07-30 — see
-        # docs/context/architecture/catalog.md, "the provider decides what counts as success"), so
-        # a dead page settling at the estimate is faithful, not an over-charge. Only the explicit
-        # no-charge phrasing settles at zero; anything else stays at the estimate.
+        # charge." and TikHub really does charge us for it, so a dead page settling at the estimate
+        # is faithful, not an over-charge. Only the explicit no-charge phrasing settles at zero;
+        # anything else stays at the estimate.
         msg = doc.get("message")
         if isinstance(msg, str):
             low = msg.lower()
@@ -845,9 +829,7 @@ def _observed_cost_micro(mk: MarketplaceCall, body: bytes, headers=None) -> int 
                     return int(rate * 1_000_000 + 0.5) if doc[key] else 0
     # GENERIC miss rule: a `per_success` endpoint bills only when it found something, and the
     # routing adapter (catalog/adapters.yaml, fixture-verified at load) already knows what "nothing"
-    # looks like in this provider's body. Before this, tomba / findymail / leadsforge misses settled
-    # at the estimate — a whole credit for a miss the catalog and the provider both call free
-    # (found live by the first routed waterfall, 2026-08-28: three of five misses were charged).
+    # looks like in this provider's body.
     if mk.cost_type == "per_success" and isinstance(doc, dict):
         cat = catalog_store.load()
         if (rule := (cat.by_id.get(mk.endpoint_id) or {}).get("expect")):
@@ -1183,11 +1165,11 @@ async def _platform_settle(
         if capacity_signatures.is_exhausting(signal):
             billable, reason = False, f"capacity_{signal.kind}"
     # `observed_override`: the overflow child cycle knows its cost from the aggregator's envelope, not
-    # from the vendor body — the caller pays exactly that (plan §4.3 step 5), whatever the vendor's
-    # own billing shape. `overflow_spend` = (aggregator, adjustment from the budget reservation,
-    # delta vs treg's direct price): folded into the SAME settle transaction, the one allowlisted
-    # overflow write (`overflow_spend_in_settle`). It is recorded even when the vendor response is
-    # not billable to the caller because the aggregator's prepaid account still incurred the cost.
+    # from the vendor body - the caller pays exactly that, whatever the vendor's own billing shape.
+    # `overflow_spend` = (aggregator, adjustment from the budget reservation, delta vs treg's direct
+    # price): folded into the SAME settle transaction, the one allowlisted overflow write
+    # (`overflow_spend_in_settle`). It is recorded even when the vendor response is not billable to
+    # the caller because the aggregator's prepaid account still incurred the cost.
     observed = ((observed_override if observed_override is not None
                  else _observed_cost_micro(mk, body, headers)) if billable else None)
     if billable and status_code >= 400 and not observed:
@@ -1203,8 +1185,7 @@ async def _platform_settle(
     # success costs, and this was not one.
     # A `settle: usage` endpoint reads the provider's own charge from the answer (the async worker
     # hands the terminal document; a synchronous call hands its body the same way, or a per-usage
-    # endpoint would settle at the reserve: live 2026-09-23, Jev settled at the $0.0005 ceiling
-    # instead of the reported $0.0000157).
+    # endpoint would settle at the reserve ceiling instead of the reported charge).
     terminal = None
     if billable and (mk.settlement_basis.get("amount") or {}).get("kind") == "usage" and body:
         terminal = _usage_document(body)
@@ -1423,9 +1404,9 @@ async def _finish_cancelled_call(
                         money_admission.require_balance_orgs([release_org]), operation="release"),
                     money_session(session_maker()) as cleanup_db,
                 ):
-                    # The parent hold AND the overflow child's (`{call_ref}:overflow`, plan §4.3
-                    # step 2): each release is a conditional claim, so a hold that never existed or
-                    # was already closed is a safe no-op, and both are released exactly once.
+                    # The parent hold AND the overflow child's (`{call_ref}:overflow`): each release is a
+                    # conditional claim, so a hold that never existed or was already closed is a safe no-op, and
+                    # both are released exactly once.
                     await ledger.close_holds_in_transaction(cleanup_db, [
                         ledger.HoldClose(
                             hold_id, charge_hold and hold_id == call_ref,

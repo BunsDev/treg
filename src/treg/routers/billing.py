@@ -14,7 +14,6 @@ from .auth_helpers import _is_https
 from .orgs import _require_admin_of
 
 
-# app is the APIRouter alias so mechanically moved @app decorators stay byte-identical.
 app = APIRouter()
 
 
@@ -51,8 +50,7 @@ async def org_balance(
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
     balance = await ledger.balance_of(db, org_id)
-    # Auto-top-up's trigger point until phase 3 calls it right after `reserve`. Fire-and-forget by
-    # contract (see billing.maybe_schedule_autotopup): it starts a background task at most, so no
+    # An auto-top-up trigger point besides `reserve`. Fire-and-forget by contract (see billing.maybe_schedule_autotopup): it starts a background task at most, so no
     # Stripe latency lands in this response, and reading a balance can therefore never be slow.
     billing.maybe_schedule_autotopup(caller.org)
     blocks = await ledger.blocks_of(db, org_id)

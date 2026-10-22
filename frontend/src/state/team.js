@@ -1,7 +1,6 @@
 import { storageSet, storageRemove } from './storage.js'
 
 export default {
-// ---- Phase 2a: org lifecycle (writes; all endpoints already exist) ----
     async joinByCode(){ const code=(this.joinCode||'').trim(); if(!code){ this.joinErr='Enter the invite code.'; return; } this.joinBusy=true; this.joinErr='';
       try{ const r=await this.api('/invites/accept',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code, email:this.me})});
         this.showJoin=false; this.joinCode=''; await this.loadAll(); this.switchOrg({slug:r.org}); }

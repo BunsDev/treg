@@ -37,7 +37,6 @@ from .infra.upstream import injectors
 from .models import Org, Secret, Tool
 from .sandbox_identity import visitor_name as visitor_name
 
-# ---- the ONE live wire ----------------------------------------------------------------------
 # The seeded stripe tool above is special: when TREG_DEMO_STRIPE_KEY is configured, a sandbox call
 # to a tool matching this EXACT fingerprint relays to the real Stripe test API — with the key
 # injected from env, so no sandbox org ever holds it. Edit anything about the tool (base_url,

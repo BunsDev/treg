@@ -1,6 +1,6 @@
 
 export default {
-// ---- agents: a member identity for a machine caller ----
+// An agent is a member identity for a machine caller.
     pollAgentConnected(){
       this.stopAgentPoll();
       const target=this.agentConnectionTarget, orgId=this.activeOrgId;
@@ -74,7 +74,7 @@ async createAgent(){ const name=(this.agentName||'').trim();
       finally{ if(live()) this.agentBusy=false; } },
 // Rotate = create with the SAME name: the server replaces the token hash, so the old one dies.
     // We deliberately send only name/role/cap — the server leaves every field we DON'T send as it is,
-    // so the agent's tool ACL and project scope survive a rotate (they used to be silently cleared).
+    // so the agent's tool ACL and project scope survive a rotate.
     async rotateAgent(a, confirmed=false){ const mark='rotate-'+a.user_id;
       if(this.credentialIssue) return;
       if(!confirmed && this.confirmAgent!==mark){ this.confirmAgent=mark; return; }

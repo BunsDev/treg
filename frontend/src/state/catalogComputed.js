@@ -22,7 +22,6 @@ mkAccounts(){ return this.connAccounts.filter(a=>a.service===this.mkService); },
 // Which capabilities ANY account here already holds — a page-level "you have this" summary,
     // since the permission list describes the integration, not one account.
     mkGranted(){ const s=new Set(); for(const a of this.mkAccounts) for(const cap of ((a.c&&a.c.capabilities)||[])) s.add(cap); return s; },
-// ---- endpoint catalog ----
     // Platform tiles grouped by the category the catalog assigns each platform. "Other" (the
     // taxonomy's bucket for things like `account`) gets no tile — those capabilities are only
     // meaningful inside a platform page, not as a destination of their own.
@@ -30,10 +29,6 @@ mkAccounts(){ return this.connAccounts.filter(a=>a.service===this.mkService); },
     // from the data, so a category the catalog invents tomorrow still gets a shelf and a tab (sorted
     // to the end) instead of vanishing. A hint is optional for the same reason.
     platCategories(){
-      // The founder's reading order. The answer engines (ChatGPT, Perplexity, Gemini…) used to be
-      // their own shelf; they are SEO now, unfeatured, so they surface inside its "see more" row
-      // rather than as a category of six. The list is a lookup, not a schema — a category the
-      // catalog invents tomorrow still gets a shelf, sorted to the end.
       const order=['Enrichment','SEO/AEO','Social','Advertising','E-commerce','Reviews & Apps','AI generation','Community'];
       const hints={
         'AI generation':'video, image, voice and music models, the same model over several routes priced side by side',
@@ -51,7 +46,7 @@ mkAccounts(){ return this.connAccounts.filter(a=>a.service===this.mkService); },
       const rest=Object.keys(by).filter(c=>!order.includes(c)).sort();
       return known.concat(rest).map(c=>({category:c, hint:hints[c]||'', items:by[c]}));
     },
-// The catalog's size as a headline ("3,300+"), from the platform shelves already loaded: rounded
+// The catalog's size as a headline, from the platform shelves already loaded: rounded
     // down to the hundred so it never overstates, and empty until the list arrives so no stale
     // number is ever shown.
     toolCountText(){
@@ -121,7 +116,6 @@ platProviders(){  // providers with endpoints here, in catalog order
       // registry. Depending on that async registry made the entire row flicker away locally. `treg`
       // is the synthetic router, not a provider page a person can open.
       return seen.filter(s=>s!=='treg'); },
-// ---- the shelf's rows ----
     // Which endpoints file together (a job several providers do, or one endpoint alone) is decided by
     // the server (catalog_store.domain_rows), so the CLI, the API and this page cannot disagree about
     // what a platform contains. What is added here is presentation: the title a row shows, whether it
@@ -141,7 +135,6 @@ platProviders(){  // providers with endpoints here, in catalog order
                  e.provider+' '+(e.provider_display||'')+' '+(e.name||'')+' '+e.path+' '+e.summary).join(' ')).toLowerCase()});
       }
       return out; },
-// ---- the shelf, read as comparisons and tools ----
     // A capability at least two providers serve on the shelf is the one place a comparison means
     // something, so it gets a card and a page of its own. The server marks those rows (`compare`,
     // the key its URL uses; `Catalog.compared`). Everything else is a TOOL, opened in the drawer.
@@ -267,8 +260,8 @@ catalogExtra(){  // catalog patterns not already in the own list — the union d
 sortedInvites(){  // the clicked email link's team first, then newest-first (the API's order)
       return [...this.pendingInvites].sort((a,b)=>(b.org_id===this.inviteLinkOrg?1:0)-(a.org_id===this.inviteLinkOrg?1:0)); },
 selectedInvites(){ return this.sortedInvites.filter(i=>this.inviteSel[i.id]); },
-inviteFirstRun(){ return !this.myOrgs.some(o=>!this.isPersonal(o)); },
 // no real team yet → decline offers create-team
+inviteFirstRun(){ return !this.myOrgs.some(o=>!this.isPersonal(o)); },
     activityRows(){  // calls + runs from `/activity`, one time-sorted feed (ISO strings compare fine)
       // Cost precedence: what was CHARGED (settle amount; 0 on a release — the estimate alone would
       // over-report a refunded call as spend), else observed, else the estimate (old rows / own-key).

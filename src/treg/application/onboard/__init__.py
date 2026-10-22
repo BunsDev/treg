@@ -108,8 +108,7 @@ async def mint_sandbox(*, client_ip: str) -> dict:
             raise SandboxError("rate_limited")
         await db.commit()
         # Reap opportunistically, but never let the reaper close the front door: a gc failure is
-        # logged and rolled back, and the visitor still gets their sandbox. Before this guard, one
-        # undeletable expired sandbox turned every mint into a 500 for six hours.
+        # logged and rolled back, and the visitor still gets their sandbox.
         try:
             await landing_sandbox.gc(db)
         except Exception:

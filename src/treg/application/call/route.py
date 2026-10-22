@@ -348,7 +348,7 @@ async def build_plan(ep: dict, identity_given: dict, caller, options: RouteOptio
             continue
         if tier == "platform" and not get_settings().platform_key_for(e["provider"]):
             # priceable, but this deployment holds no key for the provider: the child would answer
-            # "no credential" (a 404 the router must not treat as the caller's fault). Live 2026-08-28.
+            # "no credential" (a 404 the router must not treat as the caller's fault).
             dropped.append({"endpoint_id": e["id"], "why": f"no {e['provider']} key on this deployment and no own key"})
             continue
         if c.exhausted:
@@ -356,10 +356,8 @@ async def build_plan(ep: dict, identity_given: dict, caller, options: RouteOptio
         cands.append(c)
     if options.strict_filters:
         # The caller would rather get nothing than a LOOSER answer: a candidate that cannot express
-        # a filter it sent is dropped, not ranked last. Without this, `{full_name, country: GT}`
-        # had two candidates, neither mapping country, and the call went out and was billed for
-        # people in New York (voice-ai-outbound, 2026-09-03). The drop names the filters and what
-        # the adapter DOES take, so an agent can re-ask with an identity a geo-aware child accepts.
+        # a filter it sent is dropped, not ranked last. The drop names the filters and what the
+        # adapter DOES take, so an agent can re-ask with an identity a geo-aware child accepts.
         kept = []
         for c in cands:
             if c.ignored:
@@ -535,10 +533,8 @@ async def _run_routed(parent: CallContext, ep: dict, body_bytes: bytes, get_head
             if errors > MAX_ERROR_FALLBACKS or not plan.contract.idempotent:
                 break
             continue
-        # A filter the caller sent that this adapter never mentions is silently NOT applied — say so
-        # on the attempt (live 2026-08-29: `country: fr` reached icypeas as nothing, rows came from
-        # anywhere; the bench had post-filtered in the agent). Computed at planning time, where it
-        # also ranks the candidate down.
+        # A filter the caller sent that this adapter never mentions is silently NOT applied - say so
+        # on the attempt. Computed at planning time, where it also ranks the candidate down.
         ignored = cand.ignored
         remaining = max(0, options.max_cost_micro - spent) if options.max_cost_micro is not None else None
         child = CallContext(input=_child_input(parent, cand.endpoint, query, body, remaining), call_ref=f"{parent.call_ref}:r{n}",
@@ -648,15 +644,11 @@ async def _run_routed(parent: CallContext, ep: dict, body_bytes: bytes, get_head
             break
         if _declared_miss(cand.endpoint, response.status, raw):
             # The provider's declared "asked and answered: no result" status (`miss: {status, means}`
-            # on the endpoint — aviato/hunter/leadmagic/… 404 a person they have no record of),
+            # on the endpoint - aviato/hunter/leadmagic/... 404 a person they have no record of),
             # optionally narrowed by a body predicate (`when`) where one status carries both a miss
             # and a fault (prospeo 400 NO_MATCH vs INVALID_DATAPOINTS). It is a MISS, not a
-            # rejected request: before this the 404 counted as an error, so a waterfall whose other
-            # providers all missed ended in a 502 `route_failed` instead of a 200 miss (live
-            # 2026-09-03: 768 of 1,824 phone.find 502s in 30 days had no failure but an aviato 404;
-            # live 2026-09-18: 64% of three days of email.find 502s were a limadata 404 or a prospeo
-            # NO_MATCH among otherwise clean misses), and a caller could not tell "nobody has it"
-            # from "treg broke".
+            # rejected request, so a waterfall whose other providers all missed ends in a 200 miss,
+            # not a 502 `route_failed`, and a caller can tell "nobody has it" from "treg broke".
             tried.append(Attempt(cand.endpoint["id"], cand.endpoint["provider"], "miss", response.status, charged, ignored=ignored))
             if options.waterfall:
                 continue
@@ -678,21 +670,18 @@ async def _run_routed(parent: CallContext, ep: dict, body_bytes: bytes, get_head
         temporary_capacity = capacity_signal is not None and capacity_signal.kind in ("burst", "unknown")
         platform_auth_failure = cand.tier == "platform" and response.status in (401, 403)
         # 405 and 410 Gone say the PROVIDER cannot serve this route (a discontinued endpoint answers
-        # 410 to every request), whatever the caller sent: fall over as after a 5xx, paid providers too
-        # (live 2026-10-04: aviato discontinued its LinkedIn post routes and linkedin.user.posts
-        # ended as the caller's fault with three providers never asked).
+        # 410 to every request), whatever the caller sent: fall over as after a 5xx, paid providers too.
         if (400 <= response.status < 500 and response.status not in (402, 405, 408, 410, 429)
                 and not platform_auth_failure and not temporary_capacity):
             # The vendor rejected the REQUEST. Usually the caller's mistake and the same answer
-            # everywhere — but a scraper's "Request failed. Please retry" is also a 400 (tikhub,
-            # live 2026-08-28), so the waterfall goes on to providers that are FREE ON FAILURE
-            # (per_success / free / ≤ 1¢ per call, another provider, the usual error bound). A dearer
-            # paid-per-call provider is never asked to bill the same mistake twice (plan §4).
+            # everywhere - but a scraper's "Request failed. Please retry" is also a 400 (tikhub), so
+            # the waterfall goes on to providers that are FREE ON FAILURE (per_success / free / <= 1c
+            # per call, another provider, the usual error bound). A dearer paid-per-call provider is
+            # never asked to bill the same mistake twice.
             # Another provider already ANSWERED this same question (a hit, a weak hit or a miss), so
             # the question is valid and this rejection is this provider's own: note it and go on,
             # like any provider error, instead of ending the whole call as the caller's fault. The
-            # rows already paid for are then still returned (live 2026-09-23: prospeo's 400 after
-            # two companyenrich answers ended a people.search as a 400 and threw the rows away).
+            # rows already paid for are then still returned.
             if any(a.outcome in ("hit", "weak", "miss") for a in tried):
                 tried.append(Attempt(cand.endpoint["id"], cand.endpoint["provider"], "rejected", response.status, charged,
                                      raw[:120].decode("utf-8", "replace")))
@@ -726,8 +715,6 @@ async def _run_routed(parent: CallContext, ep: dict, body_bytes: bytes, get_head
         # An adapter transform that throws on unexpected provider output must not crash the parent
         # after a child already answered (and was audited OK): record it as an error attempt and
         # let the waterfall go on, so the worst case is a structured `route_failed` with `tried`.
-        # Defensive: no such crash was found in prod (2026-09-18 audit, 3 days, every 502 parent
-        # had run the route_failed path) — the bug that report traced was the undeclared miss above.
         try:
             core = cand.adapter.from_upstream(doc) if doc is not None else {}
         except Exception as exc:  # noqa: BLE001 — adapter threw on provider response
@@ -737,10 +724,9 @@ async def _run_routed(parent: CallContext, ep: dict, body_bytes: bytes, get_head
             if errors > MAX_ERROR_FALLBACKS or not plan.contract.idempotent:
                 break
             continue
-        # A miss is what the adapter's predicate says — OR a 2xx whose body does not carry the
+        # A miss is what the adapter's predicate says - OR a 2xx whose body does not carry the
         # contract's required core (a null `result` under a 200, an error task inside a 20000
-        # envelope): the caller asked for the field and did not get it (live 2026-08-28: dataforseo's
-        # yahoo task returned `result: null` and was counted a hit).
+        # envelope): the caller asked for the field and did not get it.
         empty_core = any(core.get(k) in (None, "", [], {}) for k in plan.contract.required_output)
         try:
             is_miss = cand.adapter.is_miss(doc) if doc is not None else True
@@ -764,9 +750,7 @@ async def _run_routed(parent: CallContext, ep: dict, body_bytes: bytes, get_head
             break
         # A HIT that answers thinly is not the end of the search. `min_results` lets the caller say
         # how many rows make an answer; below it the waterfall keeps going and the best result so
-        # far is kept, so a weak first provider can still win if nothing better turns up. Without
-        # this the router stops at the first non-empty body — three rows of the wrong people end a
-        # search that a later provider would have answered (bench 2026-08-29, recruiting).
+        # far is kept, so a weak first provider can still win if nothing better turns up.
         n_rows = max((len(v) for v in core.values() if isinstance(v, list)), default=1)
         weak = options.waterfall and n_rows < options.min_results
         tried.append(Attempt(cand.endpoint["id"], cand.endpoint["provider"], "weak" if weak else "hit",
@@ -778,10 +762,8 @@ async def _run_routed(parent: CallContext, ep: dict, body_bytes: bytes, get_head
             answers.append((cand, doc, core, raw))
             weak_hits += 1
             # Bounded like the error fallback, and for the same reason: a brief whose honest answer
-            # IS one or two people (a lookup — "who runs engineering at X") never clears the bar, so
-            # an unbounded rule walks the whole paid ladder on every such call. Measured on the
-            # bench's deterministic set, unbounded cost 12.7x ($1.76 -> $22.35 over 28 queries) for
-            # answers that were already correct.
+            # IS one or two people (a lookup - "who runs engineering at X") never clears the bar, so
+            # an unbounded rule walks the whole paid ladder on every such call.
             if weak_hits > MAX_WEAK_FALLBACKS:
                 break
             continue
@@ -825,9 +807,8 @@ async def _run_routed(parent: CallContext, ep: dict, body_bytes: bytes, get_head
     merged_from: list[str] = []
     if options.merge and len(answers) > 1:
         # A LIST answer is the only shape a union makes sense for, and the caller has already been
-        # charged for every attempt (`charged_micro` is the running sum) — so without this the
-        # router throws away rows the team paid for. Bench 2026-08-29: a `people.search` that fell
-        # through returned the fullest SINGLE provider's rows, never icypeas' 5 plus exa's 10.
+        # charged for every attempt (`charged_micro` is the running sum) - so without this the
+        # router throws away rows the team paid for.
         field = _list_field(plan.contract)
         if field:
             rows = _merge_rows(field, answers, plan.identity.get("limit"))

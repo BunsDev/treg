@@ -69,7 +69,6 @@ class OAuthProvider:
     # plain terms. Not a tagline — someone scanning a grid of twenty is deciding whether this is
     # the thing that answers their question.
     summary: str = ""
-    # ---- how the credential is obtained --------------------------------------------------
     # "oauth"  — treg holds an approved app; the user consents and supplies nothing.
     # "token"  — the user brings their OWN bot/app token. Correct where a workspace-scoped bot
     #            is the natural unit (Slack): our app can't be installed into their workspace on
@@ -119,9 +118,9 @@ class OAuthProvider:
     examples: tuple[dict, ...] = ()
     docs_url: str = ""
     # A cheap authenticated GET on base_url that proves the credential still works, mirroring the
-    # env-import catalog's `probe`. Registry tools had none, so they showed "unchecked" on the Tools
-    # page forever — health could never say more than "nothing has called this yet". It must live on
-    # base_url, NOT discover_base_url: the probe runs against the provisioned tool's own host.
+    # env-import catalog's `probe`; without one, health can never say more than "nothing has called
+    # this yet". It must live on base_url, NOT discover_base_url: the probe runs against the
+    # provisioned tool's own host.
     probe_path: str = ""
     # An ABSOLUTE URL to verify a pasted key against, used only at connect time when the cheapest
     # key-check lives on a DIFFERENT host than base_url — Semrush's free unit-balance endpoint is on
@@ -214,10 +213,10 @@ class OAuthProvider:
     # `platform_bindings` appends it as a second header binding; user connections are untouched.
     platform_extra_setting: str = ""
 
-    # Some providers bill the OWNER OF THE APP per use, whoever's token made the call — X moved to
-    # prepaid pay-per-use in Feb 2026 (per resource read, per post written; no plans). For those,
+    # Some providers bill the OWNER OF THE APP per use, whoever's token made the call - X bills
+    # prepaid pay-per-use (per resource read, per post written; no plans). For those,
     # a registry connect rides treg's app and every call spends treg's credits, so the proxy meters
-    # it against the org's balance (api.py, same reserve→settle path as tier 4) when the deployment
+    # it against the org's balance (the same reserve→settle path as tier 4) when the deployment
     # allow-lists the provider (`TREG_OAUTH_BILLED_PROVIDERS` — see config.oauth_billed_set).
     # The rates are the provider-level DEFAULTS, used when the called route has no priced catalog
     # entry; a curated endpoint's own `cost` (catalog/x.yaml) wins when the path matches one.
@@ -302,8 +301,7 @@ class OAuthProvider:
     # properties those reports need on analyticsadmin. The credential already covers both — Google
     # scopes are per-capability, not per-host — but /call/ resolution is per-HOST, so without a
     # second Tool row the agent is trapped: the admin path 404s on the data host (Google) and the
-    # admin host 404s in treg ("no registered tool"). Observed live: 13 calls / 7 orgs stuck at
-    # exactly that wall while runReport itself worked fine. Each entry provisions one extra Tool
+    # admin host 404s in treg ("no registered tool"). Each entry provisions one extra Tool
     # bound to the SAME secret: {"suffix", "base_url", optional "probe_path", optional "examples"}.
     # The suffix names it `<connection>-<suffix>` so a second account's tools stay distinct too.
     extra_tools: tuple = ()
@@ -315,7 +313,7 @@ class OAuthProvider:
     resource_example: dict | None = None
 
     # Some listings return only ids — Google Ads' listAccessibleCustomers gives
-    # ["customers/6186675831", …] and nothing else. "6186675831" tells a user nothing about which
+    # ["customers/1234567890", …] and nothing else. "1234567890" tells a user nothing about which
     # account they're choosing, so a provider can declare a per-row lookup for the human name.
     # `{id}` is the bare id (the last path segment of the resource id).
     enrich_path: str = ""  # POSTed to discovery_base + this
@@ -470,7 +468,6 @@ class OAuthProvider:
             ) from None
 
 
-# ---- the registry ------------------------------------------------------------------------
 # One shared Google OAuth client covers Search Console, Analytics, Business Profile, Tag Manager
 # and YouTube — but each is registered separately so a connect only ever requests its own
 # capability's scopes. Google Ads is the exception: its developer token is welded to a dedicated
@@ -857,7 +854,7 @@ X = OAuthProvider(
     identity_id_path="data.id",
     identity_label_path="data.username",
     # X bills treg's app per use (prepaid credits, no plans — docs.x.com/x-api/getting-started/
-    # pricing, re-read 2026-08-18). The card prices EVERY resource type separately, so these two
+    # pricing). The card prices EVERY resource type separately, so these two
     # numbers are only a FALLBACK for a path no catalog entry claims (a route X ships that we have
     # not re-ingested): the post-read rate for a GET, the post-write rate for anything else. Both
     # catalog files now price every known route from the card itself — `catalog_ingest.X_RATES` —
@@ -943,7 +940,7 @@ _META_CONSENT_NOTICE = (
 # Pages and Instagram accounts are OWNED by a Business portfolio, where the member has
 # business-level access and no personal Page role — without this scope /me/businesses answers
 # "Missing Permission" and those assets are undiscoverable, so the connect consents cleanly and
-# then offers an empty picker. (The scope already has Advanced Access on our Meta app.)
+# then offers an empty picker.
 _FB_READ = ["pages_show_list", "pages_read_engagement", "read_insights", "business_management"]
 
 # One request walks the Business graph: each business row holds owned_pages and client_pages
@@ -1202,7 +1199,7 @@ META_ADS = OAuthProvider(
     long_lived_exchange=True,
     resource_label="ad account",
     resource_label_plural="ad accounts",
-    # Returns act_<id> together with the account's name, so the picker shows "Superdesign Pty Ltd"
+    # Returns act_<id> together with the account's name, so the picker shows "Acme Pty Ltd"
     # rather than an opaque number — no enrichment pass needed, unlike Google Ads.
     discover_path="/me/adaccounts?fields=id,name,account_id",
     discover_key="data",
@@ -1211,7 +1208,6 @@ META_ADS = OAuthProvider(
     probe_path="/me?fields=id,name",
 )
 
-# ---- API-key providers (auth_kind="key") ------------------------------------------------------
 # The user pastes an API key instead of consenting through an OAuth app treg owns. Same connect
 # mechanic as Slack's bot token — verify against a probe, store as an env secret, auto-provision the
 # tool — differing only in the header (or query param) the key rides in and the "where do I get a
@@ -1241,7 +1237,7 @@ APOLLO = OAuthProvider(
     base_url="https://api.apollo.io/api/v1",
     docs_url="https://docs.apollo.io/reference/authentication",
     # Free auth check. It answers HTTP 200 even for a BAD key ({"healthy":true,"is_logged_in":false});
-    # validity is the is_logged_in field, so the probe must read it, not the status (verified live).
+    # validity is the is_logged_in field, so the probe must read it, not the status.
     probe_path="/auth/health",
     token_verify_field="is_logged_in",
 )
@@ -1297,7 +1293,7 @@ AKTA = OAuthProvider(
     docs_url="https://docs.akta.pro",
     # Trailing slash matters: /company/search (no slash) 307-redirects to /company/search/, and we
     # don't follow redirects with the key attached. Hitting the slashed path directly returns a clean
-    # 401 {"detail":"Invalid API key"} for a bad key (verified live).
+    # 401 {"detail":"Invalid API key"} for a bad key.
     probe_path="/v1/company/search/?query=canva.com",
 )
 
@@ -1378,14 +1374,14 @@ SUMBLE = OAuthProvider(
     base_url="https://api.sumble.com/v9", docs_url="https://docs.sumble.com/api/api",
     probe_path="/technologies/find", probe_method="POST",
     probe_json={"query": "treg-nonexistent-probe-20260909"},
-    # Live 2026-09-09: bogus Bearer 401; valid key 200 with credits_used=0.
+    # Bogus Bearer 401; valid key 200 with credits_used=0.
 )
 
 MOLTSETS = OAuthProvider(
     service="moltsets", display_name="MoltSets", auth_kind="key",
     token_label="API key", token_placeholder="ms_…",
     token_header="Authorization", token_format="Bearer {secret}",
-    # Required on every API call as of 2026-09-16. Pin a descriptive value for connection
+    # Required on every API call. Pin a descriptive value for connection
     # probes and all BYOK/platform calls instead of relying on httpx's incidental default.
     required_headers=(("User-Agent", "treg/1.0 (+https://treg.to)"),),
     setup_url="https://app.moltsets.com/dashboard/api_keys",
@@ -1399,7 +1395,7 @@ MOLTSETS = OAuthProvider(
     base_url="https://api.moltsets.com/api/v1/tools",
     docs_url="https://docs.moltsets.com/",
     probe_path="/get_account", probe_method="POST", probe_json={},
-    # Live 2026-09-16: bogus Bearer 401; valid key 200. Account calls consume no records.
+    # Bogus Bearer 401; valid key 200. Account calls consume no records.
 )
 
 OPENMART = OAuthProvider(
@@ -1416,7 +1412,7 @@ OPENMART = OAuthProvider(
     summary="Search and enrich businesses, find decision makers and contact details, and detect technologies.",
     base_url="https://api.openmart.ai", docs_url="https://app.openmart.com/api-docs",
     probe_path="/api/v2/credit-balance", probe_method="GET",
-    # Live 2026-09-17: missing and bogus Bearer keys returned 401; a valid key returned 200.
+    # Missing and bogus Bearer keys returned 401; a valid key returned 200.
 )
 
 HARVESTAPI = OAuthProvider(
@@ -1432,7 +1428,7 @@ HARVESTAPI = OAuthProvider(
     category="Enrichment",
     summary="Retrieve LinkedIn profiles, companies, jobs, posts and ads, and find leads and emails.",
     base_url="https://api.harvestapi.io", docs_url="https://docs.harvestapi.io",
-    probe_path="/users/my-api-user",  # Internal only; live bad key 401, valid key 200.
+    probe_path="/users/my-api-user",  # Internal only; bad key 401, valid key 200.
 )
 
 FETCHINIO = OAuthProvider(
@@ -1532,7 +1528,7 @@ QUICKENRICH = OAuthProvider(
     base_url="https://app.quickenrich.io", docs_url="https://app.quickenrich.io/docs",
     probe_path="/api/employees/contact-finder", probe_method="POST",
     probe_json={"company_url": {"include": ["treg-probe-nonexistent.invalid"], "exclude": []}, "per_page": 1},
-    # Live 2026-09-08: bad key 401; valid free key 200, credits_used=0.
+    # Bad key 401; valid free key 200, credits_used=0.
 )
 
 PROSPEO = OAuthProvider(
@@ -1549,7 +1545,7 @@ PROSPEO = OAuthProvider(
     category="Enrichment",
     summary="Search and enrich people and companies, including verified work emails and mobiles.",
     base_url="https://api.prospeo.io", docs_url="https://prospeo.io/api-docs",
-    # Live 2026-09-16: GET returned 200 for the platform key and 400 INVALID_API_KEY for garbage.
+    # GET returned 200 for the platform key and 400 INVALID_API_KEY for garbage.
     # The same free route is the capacity collector; Prospeo's data routes are POST, this one is GET.
     probe_path="/account-information", probe_method="GET",
 )
@@ -1569,7 +1565,7 @@ AIARK = OAuthProvider(
     summary="Search people and companies, find verified emails and mobiles, and enrich profiles.",
     base_url="https://api.ai-ark.com/api/developer-portal",
     docs_url="https://docs.ai-ark.com/",
-    # Live 2026-09-17: missing and bogus keys returned 401; the assigned key returned 200.
+    # Missing and bogus keys returned 401; the assigned key returned 200.
     probe_path="/v1/payments/credits", probe_method="GET",
 )
 
@@ -1587,7 +1583,7 @@ WIZA = OAuthProvider(
     category="Enrichment",
     summary="Search professional profiles and companies, enrich company data, and run contact reveal jobs.",
     base_url="https://wiza.co", docs_url="https://docs.wiza.co/",
-    # Live 2026-09-16: a bogus Bearer key returned 401; the assigned key returned 200.
+    # A bogus Bearer key returned 401; the assigned key returned 200.
     # This route is internal and is also the free capacity collector.
     probe_path="/api/meta/credits", probe_method="GET",
 )
@@ -1606,7 +1602,7 @@ LIMADATA = OAuthProvider(
     category="Enrichment",
     summary="Enrich people and companies, find contact details, search a B2B database, and research the web.",
     base_url="https://api.limadata.com", docs_url="https://api.limadata.com/docs/basic_v2",
-    # Live 2026-09-17: POST with {} is a free 400 for the assigned key and 401 for a bogus key.
+    # POST with {} is a free 400 for the assigned key and 401 for a bogus key.
     probe_path="/api/v1/search/web", probe_method="POST", probe_json={},
     probe_reject_statuses=(401, 403),
 )
@@ -1625,7 +1621,7 @@ GETLEADSIO = OAuthProvider(
     category="Enrichment",
     summary="Search a business-contact database, enrich people, and find company contacts and signals.",
     base_url="https://app.getleads.io", docs_url="https://www.getleads.io/docs/",
-    # Live 2026-09-16: bogus Bearer 401; valid key 200; the documented route costs zero credits.
+    # Bogus Bearer 401; valid key 200; the documented route costs zero credits.
     probe_path="/api/v1/usage/fair-use", probe_method="GET",
 )
 
@@ -1633,9 +1629,9 @@ SCRUBBY = OAuthProvider(
     service="scrubby", display_name="Scrubby", auth_kind="key",
     token_label="API key", token_placeholder="your Scrubby API key",
     token_header="x-api-key", token_format="{secret}",
-    # Live: Scrubby's edge rejected Python's default urllib User-Agent before the request reached
-    # the API. Pin a descriptive value for probes and all BYOK/platform calls; required_headers
-    # intentionally overwrites any caller-supplied User-Agent.
+    # Scrubby's edge rejects Python's default urllib User-Agent before the request reaches the API.
+    # Pin a descriptive value for probes and all BYOK/platform calls; required_headers intentionally
+    # overwrites any caller-supplied User-Agent.
     required_headers=(("User-Agent", "treg/1.0 (+https://treg.to)"),),
     setup_url="https://app.scrubby.io/",
     setup_action_label="Get your Scrubby API key",
@@ -1669,7 +1665,7 @@ ZEROBOUNCE = OAuthProvider(
     summary="Verify email deliverability and inspect validation usage and credit balance.",
     base_url="https://api.zerobounce.net",
     docs_url="https://www.zerobounce.net/docs/email-validation-api-quickstart",
-    # Live 2026-09-17: no/bogus key returned 403; the assigned key returned 200. Use usage rather
+    # No/bogus key returned 403; the assigned key returned 200. Use usage rather
     # than getcredits for connection verification because getcredits reports a bad key as the
     # HTTP-200 sentinel {"Credits": -1}. Dates are a valid closed historical range.
     probe_path="/v2/getapiusage?start_date=2026-01-01&end_date=2026-12-31",
@@ -1690,7 +1686,7 @@ DATAGMA = OAuthProvider(
     summary="Find work emails and mobile numbers, enrich people and companies, and detect job changes.",
     base_url="https://gateway.datagma.net",
     docs_url="https://datagmaapi.readme.io/reference/getting-started-with-your-api",
-    # Live 2026-09-18: the assigned key returned 200 and a bogus key returned 401. This free
+    # The assigned key returned 200 and a bogus key returned 401. This free
     # account route remains internal; catalog callers never receive its account payload.
     probe_path="/api/ingress/v1/mine", probe_method="GET",
 )
@@ -1713,7 +1709,7 @@ TRYKITT = OAuthProvider(
     summary="Find verified work emails and verify email deliverability, including catch-all addresses.",
     base_url="https://api.trykitt.ai",
     docs_url="https://documenter.getpostman.com/view/479833/2s93m62NHf",
-    probe_path="/credit",  # Live: valid zero balance is 200; garbage key is 401.
+    probe_path="/credit",  # valid zero balance is 200; garbage key is 401.
 )
 
 CONTACTOUT = OAuthProvider(
@@ -1729,7 +1725,7 @@ CONTACTOUT = OAuthProvider(
     summary="Find work emails, personal emails and phones from LinkedIn; search people and companies.",
     base_url="https://api.contactout.com", docs_url="https://api.contactout.com/",
     probe_path="/v1/stats", token_ok_field="status_code", token_ok_value="200",
-    # Live: garbage token returns HTTP 401; the supplied platform token returns 200.
+    # Garbage token returns HTTP 401; the supplied platform token returns 200.
 )
 
 MILLIONVERIFIER = OAuthProvider(
@@ -1756,7 +1752,7 @@ MILLIONVERIFIER = OAuthProvider(
     base_url="https://api.millionverifier.com",
     docs_url="https://developer.millionverifier.com/",
     probe_path="/api/v3/credits",
-    # Live 2026-09-08: HTTP 200 {result: error, error: apikey_not_found} for a garbage key.
+    # HTTP 200 {result: error, error: apikey_not_found} for a garbage key.
     # Do not require a truthy credits balance: a valid exhausted account can still connect.
     token_reject_field="error",
 )
@@ -1907,7 +1903,7 @@ REAPI = OAuthProvider(
     base_url="https://reapi.ai/api/v1",
     docs_url="https://reapi.ai/docs",
     # No free account route: a valid key answers the unknown task id with 404, a bad one with 401
-    # ({"error":{"code":10003,"message":"Invalid API key."}}, observed 2026-09-14).
+    # ({"error":{"code":10003,"message":"Invalid API key."}}).
     probe_path="/tasks/probe",
     probe_reject_statuses=(401, 403),
 )
@@ -1937,7 +1933,7 @@ GOOGLE_AI = OAuthProvider(
     base_url="https://generativelanguage.googleapis.com/v1beta",
     docs_url="https://ai.google.dev/gemini-api/docs/image-generation",
     # A bad key answers 400 API_KEY_INVALID, 401 UNAUTHENTICATED (a malformed AQ. key) or 403
-    # (none), observed 2026-09-29; listing models is free.
+    # (none); listing models is free.
     probe_path="/models?pageSize=1",
 )
 
@@ -2050,8 +2046,7 @@ BRIGHTDATA = OAuthProvider(
     base_url="https://api.brightdata.com",
     docs_url="https://docs.brightdata.com/api-reference/authentication",
     # Account status: free, answers 200 for a valid token and 401 "Invalid credentials" for a bad one
-    # (verified live 2026-08-13). The old inferred /datasets/v3/datasets was not a real route — it
-    # 404'd "Cannot GET" even with a valid token, so every real key was refused at connect.
+    # (/datasets/v3/datasets is not a real route: it 404s "Cannot GET" even with a valid token).
     probe_path="/status",
 )
 
@@ -2133,11 +2128,10 @@ JUSTONEAPI = OAuthProvider(
     summary="A second social-scraping backend — TikTok, Instagram, YouTube, X, Weibo, Xiaohongshu and more.",
     base_url="https://api.justoneapi.com",
     docs_url="https://docs.justoneapi.com/en/usage",
-    # A bad token returns HTTP 401 {"code":100,"message":"TOKEN INVALID/UNACTIVATE"} (verified live), so
+    # A bad token returns HTTP 401 {"code":100,"message":"TOKEN INVALID/UNACTIVATE"}, so
     # the standard status check rejects it. A valid token on this endpoint returns code:0 (~1 credit).
-    # The param is camelCase `uniqueId` — with the old snake_case `unique_id` the API answered HTTP 400
-    # "must input one of them (uniqueId or secUid)" and a VALID token was refused at connect
-    # (verified live 2026-08-13).
+    # The param is camelCase `uniqueId`: snake_case `unique_id` answers HTTP 400 "must input one of
+    # them (uniqueId or secUid)".
     probe_path="/api/tiktok/get-user-detail/v1?uniqueId=tiktok",
 )
 
@@ -2164,13 +2158,12 @@ SCRAPECREATORS = OAuthProvider(
     base_url="https://api.scrapecreators.com",
     docs_url="https://docs.scrapecreators.com",
     # Free credit check. It answers HTTP 200 even for a BAD key ({"success":true,"creditCount":0}),
-    # so validity is the creditCount field, not the status (verified live 2026-07-28). A real key
+    # so validity is the creditCount field, not the status. A real key
     # with 0 credits also fails, which is right: such a key gets 402 on every data endpoint anyway.
     probe_path="/v1/account/credit-balance",
     token_verify_field="creditCount",
 )
 
-# ---- SEO API-key providers -------------------------------------------------------------------
 
 DATAFORSEO = OAuthProvider(
     service="dataforseo",
@@ -2248,7 +2241,7 @@ MOZ = OAuthProvider(
     docs_url="https://moz.com/api/docs",
     # POST /usage_data {} is Moz's quota meter: free, and it answers 200 even when the account's row
     # quota is exhausted — so it probes key VALIDITY without ever spending or false-alarming on an
-    # empty quota. (/quota, probed before 2026-07-28, is not a real V2 route: the API's own error
+    # empty quota. (/quota is not a real V2 route: the API's own error
     # message enumerates the valid actions and /quota is absent — see src/treg/catalog/moz.yaml.)
     probe_method="POST",
     probe_path="/usage_data",
@@ -2312,7 +2305,6 @@ SERPSTAT = OAuthProvider(
     token_reject_field="error",
 )
 
-# ---- more Enrichment API-key providers -------------------------------------------------------
 
 LUSHA = OAuthProvider(
     service="lusha",
@@ -2564,7 +2556,7 @@ EXA = OAuthProvider(
     ),
     base_url="https://api.exa.ai",
     docs_url="https://docs.exa.ai/reference/getting-started",
-    # Exa has no free account route (/v0/teams/me answers 404 on every key, 2026-08-27). The cheapest
+    # Exa has no free account route (/v0/teams/me answers 404 on every key). The cheapest
     # authenticated call is /contents on a cached public page: $0.001, 401 INVALID_API_KEY on a bad key.
     probe_path="/contents",
     probe_method="POST",
@@ -2894,7 +2886,7 @@ CRAWL4AI = OAuthProvider(
     token_label="API key",
     token_placeholder="sk_live_…",
     # Bearer, not the also-accepted `x-api-key`, matching every Crawl4AI doc example. A bogus or
-    # missing key answers 401 {"error": "sign in"} on the probe (live 2026-10-05).
+    # missing key answers 401 {"error": "sign in"} on the probe.
     token_header="Authorization",
     token_format="Bearer {secret}",
     setup_url="https://api.crawl4ai.com/dashboard/",
@@ -3030,18 +3022,11 @@ CLORO = OAuthProvider(
     docs_url="https://cloro.dev/docs/api-reference/introduction",
     # Credit balance: free, charges nothing, and separates a bad key from a good one distinctly.
     # A well-formed but unknown key answers 401 INVALID_OR_EXPIRED_API_KEY, a malformed one 401
-    # INVALID_API_KEY_FORMAT, and no header at all 401 MISSING_API_KEY (all verified live
-    # 2026-09-05). A valid key answers 200 with the balance.
+    # INVALID_API_KEY_FORMAT, and no header at all 401 MISSING_API_KEY. A valid key answers 200
+    # with the balance.
     probe_path="/v1/credits",
 )
 
-
-# ---- more Enrichment API-key providers (2026-08 category expansion) ---------------------------
-# Eight providers added together to deepen Enrichment: company/people enrichment with prospecting
-# search (CompanyEnrich, Ocean.io), email finding & verification (Tomba, Findymail, Icypeas,
-# LeadsForge), company signals — funding, hiring, technographics (PredictLeads), and brand assets
-# (Brand.dev). Every entry below was live-verified against the real API on 2026-08-20, including
-# the bogus-key rejection each probe comment records.
 
 COMPANYENRICH = OAuthProvider(
     service="companyenrich",
@@ -3075,7 +3060,7 @@ COMPANYENRICH = OAuthProvider(
     base_url="https://api.companyenrich.com",
     docs_url="https://docs.companyenrich.com",
     # /me is free (spends no credits), needs auth, and returns the credit balance — the natural key
-    # check. VERIFIED live 2026-08-20: a valid key gets 200 with {credits:{used,total}}; the key
+    # check. A valid key gets 200 with {credits:{used,total}}; the key
     # "bogus123" gets a clean HTTP 401 with an application/problem+json body titled "Unauthorized"
     # whose detail reads "Invalid or no authorization token provided...",
     # as does a request with no Authorization header at all. No status-lies-about-the-key problem
@@ -3092,7 +3077,7 @@ OCEANIO = OAuthProvider(
     token_label="API token",
     token_placeholder="your Ocean.io API token",
     # The token rides in its own header, spelled `X-Api-Token` in the docs and `x-api-token` in the
-    # OpenAPI spec; HTTP header names are case-insensitive and both were confirmed live. A query form
+    # OpenAPI spec; HTTP header names are case-insensitive, so both work. A query form
     # `?apiToken=<token>` ALSO works, but that would put the token in a URL the proxy records, so the
     # header wins — and sending BOTH at once is a documented 400 ("Conflicting API tokens provided in
     # query parameters and headers"), which is another reason to inject exactly one form.
@@ -3233,7 +3218,7 @@ TRESTLEIQ = OAuthProvider(
     summary="Validate phone numbers, contact details, and US postal addresses.",
     base_url="https://api.trestleiq.com",
     docs_url="https://docs.trestleiq.com/api-reference",
-    # Live 2026-09-21: a bogus key returned 403; this provider-owned invalid-number sandbox
+    # A bogus key returned 403; this provider-owned invalid-number sandbox
     # fixture returned 200. Trestle bills the probe as one Phone Validation query.
     probe_path="/3.0/phone_intel?phone=%2B13005550100&is_sandbox=true",
     probe_cost_micro=15_000,
@@ -3290,9 +3275,9 @@ PREDICTLEADS = OAuthProvider(
     token_label="API key : API token pair",
     token_placeholder="key:token — both values from Your Subscription Plans, joined by a colon",
     # PredictLeads authenticates with TWO secrets and BOTH must be present on every request
-    # (verified live 2026-08-20: key-only -> 401, token-only -> 401, both -> 200). The documented
+    # (key-only -> 401, token-only -> 401, both -> 200). The documented
     # transports are the X-Api-Key + X-Api-Token headers or api_key/api_token query params — but the
-    # API ALSO accepts standard HTTP Basic with `key:token` (verified live: 200 with the real pair,
+    # API ALSO accepts standard HTTP Basic with `key:token` (200 with the real pair,
     # 401 for a bogus pair), which fits the one-slot pasted credential exactly like DataForSEO's
     # login:password. Base64 is handled at paste time (token_encode), so `Basic {secret}` renders
     # the same at connect and on every proxy call, and neither value ever rides in a URL.
@@ -3319,8 +3304,8 @@ PREDICTLEADS = OAuthProvider(
     ),
     base_url="https://predictleads.com/api/v3",
     docs_url="https://docs.predictleads.com/v3/api_endpoints",
-    # FREE — spends no credits (verified live 2026-08-20: three consecutive calls left
-    # monthly_credits_used unchanged). A bad pair returns a clean 401 with
+    # FREE - spends no credits (repeated calls leave monthly_credits_used unchanged). A bad pair
+    # returns a clean 401 with
     # {"error":{"type":"unauthorized","message":"Authentication failed."}} — no body-field
     # trickery needed.
     probe_path="/api_subscription",
@@ -3333,7 +3318,7 @@ FINDYMAIL = OAuthProvider(
     auth_kind="key",
     token_label="API key",
     token_placeholder="your Findymail API key",
-    # Authorization: Bearer {secret} — the defaults; confirmed live 2026-08-20.
+    # Authorization: Bearer {secret} - the defaults.
     # The app is behind a bot wall for anonymous requests (every path answers 403), so the exact
     # deep link to the key page could not be confirmed from outside a session — this points at the
     # app root, which is always correct. Deep-link it once someone with a session checks.
@@ -3359,7 +3344,7 @@ FINDYMAIL = OAuthProvider(
     # THE LOAD-BEARING QUIRK: Findymail is a Laravel app that only speaks JSON when asked. Our probe
     # sends no `Accept` header, so a BAD key does not 401 — it 302-redirects to the HTML login page.
     # 302 is < 400, so the default "any >=400 is a bad key" rule would have ACCEPTED a garbage key.
-    # Two gates close it, both verified live on 2026-08-20:
+    # Two gates close it:
     #   probe_reject_statuses names 302 explicitly (with Accept: application/json the same request
     #       returns 401 {"message":"Unauthenticated."}, so both statuses are listed), and
     #   token_verify_field reads `email` off the JSON body — the account's login address, present on
@@ -3380,7 +3365,7 @@ BRANDDEV = OAuthProvider(
     token_label="API key",
     token_placeholder="your Context.dev API key",
     # token_header / token_format default to Authorization: Bearer {secret} — which is exactly
-    # what this API wants (verified live on the Context.dev host 2026-09-28).
+    # what this API wants (on the Context.dev host).
     setup_url="https://context.dev",
     setup_action_label="Get your Context.dev API key",
     setup_steps=(
@@ -3399,7 +3384,7 @@ BRANDDEV = OAuthProvider(
     docs_url="https://docs.context.dev",
     # There is NO free account/usage route on this API (every /v1/account, /v1/usage, /v1/key
     # guess answers 403 "does not exist"). The probe is therefore the Coresignal pattern: call
-    # the data route with NO parameters. Observed live on the Context.dev host 2026-09-28:
+    # the data route with NO parameters. On the Context.dev host:
     #   valid key   -> 400 {"error_code":"INPUT_VALIDATION_ERROR", ... credits_consumed: 0}
     #   bogus key   -> 401 {"error_code":"NOT_FOUND","message":"API key not found …"}
     # so 400 must count as "key accepted" and only 401/403 as a rejection. The probe is FREE.
@@ -3435,7 +3420,7 @@ ICYPEAS = OAuthProvider(
     docs_url="https://api-doc.icypeas.com/",
     # The results-read route is free and needs no prior search: with a valid key it answers
     # 200 {"success":true,...}; with a garbage key it answers a clean
-    # 401 {"error":"UserNotFoundError","code":"user_not_found_error"} (observed live 2026-08-20).
+    # 401 {"error":"UserNotFoundError","code":"user_not_found_error"}.
     # It is a POST, so the probe carries a body.
     probe_path="/bulk-single-searchs/read",
     probe_method="POST",
@@ -3450,7 +3435,7 @@ LEADSFORGE = OAuthProvider(
     token_label="API key",
     token_placeholder="your LeadsForge API key",
     # The vendor's Swagger declares a bare `apiKey` in the Authorization header, and the API accepts
-    # BOTH the raw key and `Bearer <key>` (both returned 200 on /balance, 2026-08-20). We send the
+    # BOTH the raw key and `Bearer <key>` (both return 200 on /balance). We send the
     # Bearer form — these are the transport defaults, spelled out here because the spec is ambiguous.
     token_header="Authorization",
     token_format="Bearer {secret}",
@@ -3477,13 +3462,11 @@ LEADSFORGE = OAuthProvider(
     base_url="https://api.leadsforge.ai/public/v1",
     docs_url="https://api.leadsforge.ai/public/swagger/doc.json",
     # Free, and it rejects cleanly: a bogus key returns 401 {"message":"invalid api key",
-    # "code":"invalid_api_key"} and a missing key 401 {"message":"missing api key"} (verified live
-    # 2026-08-20). No token_verify_field / probe_reject_statuses needed — the status alone is honest.
+    # "code":"invalid_api_key"} and a missing key 401 {"message":"missing api key"}. No
+    # token_verify_field / probe_reject_statuses needed - the status alone is honest.
     probe_path="/balance",
 )
 
-
-# ---- Creator / influencer data (Enrichment shelf, 2026-08-21) ---------------------------------
 
 INFLUENCERSCLUB = OAuthProvider(
     service="influencersclub",
@@ -3515,18 +3498,15 @@ INFLUENCERSCLUB = OAuthProvider(
     docs_url="https://docs.influencers.club/",
     # Free and rejects cleanly: a bogus key answers 401 {"detail":"Token is invalid",
     # "code":"authentication_failed"}, a missing one 401 "Authentication credentials were not
-    # provided." (verified live 2026-08-21). THE TRAILING SLASH IS LOAD-BEARING: it is a Django app,
+    # provided." THE TRAILING SLASH IS LOAD-BEARING: it is a Django app,
     # and the slash-less path 301s, which the probe would read as "not a 401" (the Akta trap).
     probe_path="/public/v1/accounts/credits/",
 )
 
 
-# ---- Advertising API-key providers (ad intelligence) -----------------------------------------
-
-# ---- Market data API-key providers -------------------------------------------------------------
-# The first category added under the shared-plan pricing ladder (docs/SHARED-PLAN-PRICING-PLAN.md);
-# provider selection: docs/MARKET-DATA-CATEGORY-RESEARCH.md. CoinGecko leads because it is the one
-# true credit-priced provider in the sector — its fx.yaml entry divides like Hunter's.
+# Market data API-key providers (pricing: docs/SHARED-PLAN-PRICING-PLAN.md; provider selection:
+# docs/MARKET-DATA-CATEGORY-RESEARCH.md). CoinGecko leads because it is the one true credit-priced
+# provider in the sector - its fx.yaml entry divides like Hunter's.
 
 COINGECKO = OAuthProvider(
     service="coingecko",
@@ -3553,7 +3533,7 @@ COINGECKO = OAuthProvider(
     summary="Crypto prices, market caps, volume and history across 17,000+ coins and 1,000+ exchanges.",
     base_url="https://pro-api.coingecko.com/api/v3",
     docs_url="https://docs.coingecko.com/reference/authentication",
-    # Free probe; validity is the HTTP status. Verified live 2026-08-14: a bogus key answers 401
+    # Free probe; validity is the HTTP status. A bogus key answers 401
     # {"status":{"error_code":10002,...}} on the pro host, so the default reject-on-status works.
     probe_path="/ping",
 )
@@ -3581,8 +3561,8 @@ POLYGON = OAuthProvider(
     summary="US stocks, options, indices, forex and crypto — real-time and deep history, tick-level.",
     base_url="https://api.polygon.io",
     docs_url="https://polygon.io/docs",
-    # Free-tier listable reference call; a bogus key answers 401 "Unknown API Key" (verified live
-    # 2026-08-14), so the default reject-on-status works.
+    # Free-tier listable reference call; a bogus key answers 401 "Unknown API Key", so the default
+    # reject-on-status works.
     probe_path="/v3/reference/tickers?limit=1",
 )
 
@@ -3609,7 +3589,7 @@ FINNHUB = OAuthProvider(
     summary="Real-time quotes, company fundamentals, earnings, and news sentiment.",
     base_url="https://finnhub.io/api/v1",
     docs_url="https://finnhub.io/docs/api",
-    # One free-tier quote; a bogus key answers 401 {"error":"Invalid API key."} (verified live 2026-08-14).
+    # One free-tier quote; a bogus key answers 401 {"error":"Invalid API key."}.
     probe_path="/quote?symbol=AAPL",
 )
 
@@ -3635,7 +3615,7 @@ TWELVEDATA = OAuthProvider(
     summary="Equities, forex and crypto quotes and time series across global exchanges.",
     base_url="https://api.twelvedata.com",
     docs_url="https://twelvedata.com/docs",
-    # One-credit quote; a bogus key answers 401 {"code":401,...} (verified live 2026-08-14).
+    # One-credit quote; a bogus key answers 401 {"code":401,...}.
     probe_path="/quote?symbol=AAPL",
 )
 
@@ -3661,7 +3641,7 @@ FMP = OAuthProvider(
     summary="Company fundamentals: statements, ratios, profiles, earnings and institutional data.",
     base_url="https://financialmodelingprep.com/api/v3",
     docs_url="https://site.financialmodelingprep.com/developer/docs",
-    # Free-tier profile call; a bogus key answers 401 {"Error Message": ...} (verified live 2026-08-14).
+    # Free-tier profile call; a bogus key answers 401 {"Error Message": ...}.
     probe_path="/profile/AAPL",
 )
 
@@ -3688,7 +3668,7 @@ EODHD = OAuthProvider(
     base_url="https://eodhd.com/api",
     docs_url="https://eodhd.com/financial-apis/",
     # A bogus key answers 401 with a PLAIN-TEXT body ("Unauthenticated") — fine, the connect verify
-    # only JSON-parses JSON responses and rejects on status (verified live 2026-08-14).
+    # only JSON-parses JSON responses and rejects on status.
     probe_path="/eod/AAPL.US?fmt=json",
 )
 
@@ -3714,7 +3694,7 @@ MARKETSTACK = OAuthProvider(
     summary="Global end-of-day and intraday stock prices — simple, cheap, 70+ exchanges.",
     base_url="https://api.marketstack.com/v1",
     docs_url="https://marketstack.com/documentation",
-    # A bogus key answers 401 {"error":{"code":"invalid_access_key",...}} (verified live 2026-08-14).
+    # A bogus key answers 401 {"error":{"code":"invalid_access_key",...}}.
     probe_path="/eod?symbols=AAPL",
 )
 
@@ -3741,7 +3721,7 @@ TIINGO = OAuthProvider(
     docs_url="https://www.tiingo.com/documentation/general/overview",
     # NOT /api/test — that endpoint answers 200 with prose for a BAD key ("Auth Token was not
     # correct"), the Apollo trap. The daily-metadata endpoint 403s cleanly {"detail":"Invalid
-    # token."} (verified live 2026-08-14), so reject-on-status works with this probe instead.
+    # token."}, so reject-on-status works with this probe instead.
     probe_path="/tiingo/daily/aapl",
 )
 
@@ -3788,9 +3768,9 @@ FINANCIALDATASETS = OAuthProvider(
 )
 
 
-# Alpha Vantage is DELIBERATELY absent. Its API served real quote data to a garbage key (verified
-# live 2026-08-14: bogus key -> HTTP 200 with the IBM quote; even premium endpoints answer 200 with
-# an upsell note), so a pasted key can never be validated at connect — the ScrapeCreators rule:
+# Alpha Vantage is DELIBERATELY absent. Its API serves real quote data to a garbage key (bogus
+# key -> HTTP 200 with the IBM quote; even premium endpoints answer 200 with an upsell note), so a
+# pasted key can never be validated at connect - the ScrapeCreators rule:
 # never ship a key provider whose key cannot be checked. Its fx.yaml shared-plan pilot rate is
 # unaffected (platform-tier serving uses OUR OWN subscribed key, which needs no connect verify).
 
@@ -3889,7 +3869,6 @@ SERPAPI = OAuthProvider(
     probe_path="/account",  # free account/plan snapshot; 401 on bad key
 )
 
-# ---- Advertising OAuth platforms (UNCONFIGURED until this deployment registers a dev app) ------
 # These list as `configured: false` until treg holds each platform's client id/secret. Microsoft +
 # Snapchat fit the existing OAuth machinery (Microsoft additionally needs the user's own developer
 # token, like Google Ads). TikTok Ads is NON-STANDARD OAuth and needs oauth.py + binding work before
@@ -4297,9 +4276,8 @@ def listing() -> list[dict]:
     ]
 
 
-# Moved from api.py (2026-08-27) so BOTH callers — the relay path in api and the archive's
-# refresh worker — reach the ONE authoritative builder without the worker importing api
-# (the routers→api import boundary forbids that chain).
+# One authoritative builder for every caller - the call path and the archive's refresh worker -
+# so the worker never imports the routers.
 def platform_bindings(provider, account: str | None = None) -> list[dict]:
     """Tier 4's injection: the SAME header/param shape a pasted key of this provider gets
     (`_provider_bindings`), except the value is named rather than carried — `relay` reads

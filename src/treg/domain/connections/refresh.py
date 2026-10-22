@@ -55,7 +55,6 @@ def is_stale(blob: dict, skew: float = _SKEW) -> bool:
     return time.time() > exp - skew
 
 
-# ---- expiry, as an axis separate from health ---------------------------------------------
 # health_status answers "does this credential work". Expiry answers "how long will it keep
 # working" — and for a NON-refreshable token those are different questions with different
 # answers. A LinkedIn token at the non-partner tier reports perfectly healthy right up until it

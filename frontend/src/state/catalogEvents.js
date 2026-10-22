@@ -1,4 +1,3 @@
-// ---- catalog events ----
 // One event set for every catalog surface, so a shelf, a comparison, a provider page and the Catalog
 // index read on the same numbers: `catalog_platform_viewed`, `catalog_comparison_viewed`,
 // `catalog_tool_opened`, and `catalog_action` for the actions that say "I found what I came for".

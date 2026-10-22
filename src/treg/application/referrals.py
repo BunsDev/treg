@@ -32,7 +32,7 @@ async def get_referral_summary(user_id: int) -> dict:
                 "referral code mint failed for user %s: %s", user_id, exc)
         try:
             await referrals.sweep(db, referrer_user_id=user_id)
-        except Exception as exc:  # noqa: BLE001 — pragma: no cover
+        except Exception as exc:  # noqa: BLE001
             logging.getLogger("treg").warning(
                 "referral sweep failed for user %s: %s", user_id, exc)
         # A recovery rollback above (the sweep's contained payout failure, or either except branch)

@@ -213,9 +213,8 @@ async def _enforce_tag_budgets(caller: Caller, meta: CallMeta, db: AsyncSession,
                 })
             if row.calls_per_day is not None and row.calls_per_day >= 0:
                 # From the LEDGER's tag rows, never CallRecord: audit rows are shed under load, so a
-                # count cap would let a burst through exactly when it matters — and CallRecord only
-                # carries the PRIMARY dimension, so a cap on any other declared key matched nothing
-                # and never fired at all.
+                # count cap would let a burst through exactly when it matters - and CallRecord only
+                # carries the PRIMARY dimension, so a cap on any other declared key would never fire.
                 used = await ledger.tag_calls_since(
                     db, caller.org_id, dim, val, _day_start_utc())
                 if used >= row.calls_per_day:
@@ -293,10 +292,9 @@ async def _platform_reserve(mk: MarketplaceCall, caller: Caller, meta: CallMeta 
                             tags=meta.tags, call_id=call_ref)
                 except ledger.InsufficientBalance:
                     await db.rollback()
-                    # A refused call asks for a refill too. Only a call that got through used to, so a
-                    # team at $0 with auto top-up on stayed empty until something else ran, refusing
-                    # every call meanwhile. One read by primary key, refusals only;
-                    # the wait check in `maybe_schedule_autotopup` keeps it from starting a task per call.
+                    # A refused call asks for a refill too, or a team at $0 with auto top-up on would stay
+                    # empty, refusing every call. One read by primary key, refusals only; the wait check in
+                    # `maybe_schedule_autotopup` keeps it from starting a task per call.
                     if auto_on:
                         mark_money(db, "reserve_refusal_read", org_id=caller.org_id, call_id=call_ref)
                         with money_stage(db, "post_refusal_read"):

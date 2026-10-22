@@ -15,8 +15,8 @@ from .config import get_settings
 
 RESEND_URL = "https://api.resend.com/emails"
 
-# ---- Monologue-skin email chrome (matches the landing page): charcoal ground, hardware
-# card, cyan accent, mono everywhere. Inline styles + solid fallbacks only (email-safe).
+# Email chrome (matches the landing page): charcoal ground, hardware card, cyan accent, mono
+# everywhere. Inline styles + solid fallbacks only (email-safe).
 _MONO = "ui-monospace,Menlo,Consolas,'DM Mono',monospace"
 _WRAP = (
     '<div style="background:#151412;padding:36px 16px;font-family:' + _MONO + '">'

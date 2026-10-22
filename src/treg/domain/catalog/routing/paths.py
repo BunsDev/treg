@@ -56,8 +56,6 @@ def set_path(doc: dict, path: str, value: Any) -> None:
     cur[parts[-1]] = value
 
 
-# ---- named transforms -----------------------------------------------------------------------
-
 def split_first(name: Any) -> str | None:
     if not isinstance(name, str) or not name.strip():
         return None
@@ -143,8 +141,7 @@ def linkedin_handle(v: Any) -> str | None:
 
 def linkedin_url(v: Any) -> str | None:
     """A handle → the public profile URL; a URL passes through; a scheme-less URL
-    (`linkedin.com/in/x`, `www.linkedin.com/in/x`) gets `https://` — quickenrich 422'd 311 routed
-    calls in two days with "linkedin url must be a valid URL" on exactly that shape (2026-09-18)."""
+    (`linkedin.com/in/x`, `www.linkedin.com/in/x`) gets `https://`."""
     if not isinstance(v, str) or not v:
         return None
     v = v.strip()

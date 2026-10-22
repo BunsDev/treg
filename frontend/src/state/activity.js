@@ -25,8 +25,7 @@ async loadTagUsage(){ if(!this.canAdmin || !this.activeOrgId) return;
       this.tagUsage={}; const live=this.ticket('tagUsage'), org=this.activeOrgId;
       try{
         // What the team has actually SENT. Reporting works on any key, unlike enforcement, which
-        // needs a declared one — so this is deliberately NOT the budgetable list, which hid
-        // `feature=` and friends from the dashboard even though the API served them fine.
+        // needs a declared one - so this is deliberately NOT the budgetable list.
         const k=await this.api('/orgs/'+org+'/tag-keys');
         if(!live()) return;
         const primary=k.primary;

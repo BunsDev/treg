@@ -38,11 +38,9 @@ from ..models import Bundle, Secret, Tool
 from .orgs import _resolve_project
 
 
-# The app alias preserves the moved handlers' original decorator text byte-for-byte.
 app = APIRouter()
 crud_router = app
 
-# Moved helpers retain their api.py-relative provider import while Stage 3 preserves source bytes.
 sys.modules.setdefault("treg.routers.providers", _providers)
 sys.modules.setdefault("treg.routers.convert", _convert)
 sys.modules.setdefault("treg.routers.skills", _skills)
@@ -216,7 +214,7 @@ class ToolIn(BaseModel):
     secret_field: str = "access_token"
     health_check: dict | None = None  # {method, path, expect_status}
     examples: list[dict] | None = None  # [{method, path, note}]
-    cli: dict | None = None  # local-run profile for `treg run` (docs/CLI-RUN-PLAN.md)
+    cli: dict | None = None  # local-run profile for `treg run`
     project: str | int | None = None  # project slug or id; None = org-wide (the default)
 
 
@@ -484,7 +482,6 @@ def _tool_view(t: Tool) -> dict:
 
 class BundleUpdate(BaseModel):
     recipe: str | None = None  # edit the SKILL.md text of a recipe/skill bundle
-    # (Run metadata moved to Tool.cli — a tool with a cli profile is runnable.)
 
 
 class SkillSecretIn(BaseModel):
@@ -526,7 +523,6 @@ class SkillImportIn(BaseModel):
     env_values: dict[str, str] = {}  # user-filled values for env secrets missing from the upload
 
 
-# A second router keeps local grant/report between CRUD and skills in the legacy route order.
 app = APIRouter()
 skill_router = app
 

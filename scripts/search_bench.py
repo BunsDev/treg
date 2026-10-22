@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from treg.domain.catalog import store as cs
 
 
-# ---- the frozen pre-change engine (every token must match; score = sum of field weights) --------
+# The frozen pre-change engine (every token must match; score = sum of field weights).
 def search_legacy(query: str, cat, limit: int = 25):
     tokens = cs._tokens(query)
     if not tokens:
@@ -47,11 +47,10 @@ def search_legacy(query: str, cat, limit: int = 25):
     return scored[:max(limit, 0)], len(scored)
 
 
-# ---- labeled queries -----------------------------------------------------------------------------
 # (style, query, truth ids). A `family:` truth expands at runtime to every id containing ALL its
 # words — used where a job is served by a whole family and pinning one id would be arbitrary.
 CASES = [
-    # -- sentences: agent voice (first two are the real SearchMiss rows, verbatim) --
+    # Sentences: agent voice (first two are the real SearchMiss rows, verbatim).
     ("sentence", "company job postings hiring open jobs linkedin",
      {"apollo.companies.jobs", "apify.linkedin.search.jobs", "leadmagic.x.jobs-search-v3"}),
     ("sentence", "company search filter by location industry headcount growth",
@@ -111,7 +110,7 @@ CASES = [
      {"scrapecreators.x.v1-linkedin-company", "apollo.companies.enrich",
       "leadsforge.people.identity.resolve.bulk", "fiber-ai.people.identity.resolve",
       "icypeas.people.identity.resolve"}),
-    # -- short: the refinement style the old rule served well (regression guard) --
+    # Short: the refinement style the old rule served well (regression guard).
     ("short", "tiktok comments", "family:tiktok comment"),
     ("short", "ad library",
      {"scrapecreators.x.v1-tiktok-ad-library-search", "meta-ad-library.meta-ads.library.search",

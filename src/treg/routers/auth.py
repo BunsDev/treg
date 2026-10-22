@@ -31,16 +31,15 @@ from ..models import User
 from .auth_helpers import _is_https, _remember_oauth_return, _same_origin, require_managed_cli
 from .web import _esc_html
 
-# The app alias preserves the moved handlers' original @app.post decorator text byte-for-byte.
 app = APIRouter()
 email_router = app
 
 
-# ---- human login via email one-time code (the third identity door) ------------------------
-# OTP code + its brute-force counter, and the /auth/email/start throttle, live in the DB (treg.ratestore
-# over the Ephemeral table) — NOT per-process dicts — so a restart can't reset them and they stay correct
-# across instances (backlog #3). The 'otp' namespace holds {code_hash, attempts} keyed by email; the
-# 'otp_start' namespace holds the per-email + per-IP sliding windows (email-bomb + brute-force guard).
+# Human login via email one-time code. OTP code + its brute-force counter, and the
+# /auth/email/start throttle, live in the DB (treg.ratestore over the Ephemeral table) - NOT
+# per-process dicts - so a restart can't reset them and they stay correct across instances. The
+# 'otp' namespace holds {code_hash, attempts} keyed by email; the 'otp_start' namespace holds the
+# per-email + per-IP sliding windows (email-bomb + brute-force guard).
 
 
 class EmailStartIn(BaseModel):
@@ -197,7 +196,6 @@ def _login_callback_base(request: Request) -> str:
     return get_settings().public_url.rstrip("/")
 
 
-# The app alias preserves the moved handlers' original @app.get decorators byte-for-byte.
 app = APIRouter()
 social_router = app
 
@@ -227,7 +225,6 @@ def _social_http_error(exc: auth_use_cases.SocialLoginError) -> HTTPException:
     return HTTPException(status_code=status_code, detail=detail)
 
 
-# ---- human login via GitHub OAuth (dashboard sessions) ------------------------------------
 @app.get("/auth/github")
 async def auth_github(request: Request, cli: str = "", return_to: str = ""):
     try:
@@ -364,7 +361,6 @@ async def auth_google_callback(
     return _finish_oauth_login(request, proof.user, proof.cli_state)
 
 
-# The app alias preserves the moved handlers' original @app decorators byte-for-byte.
 app = APIRouter()
 cli_router = app
 
@@ -634,7 +630,6 @@ async function verifyCode(){err('');const em=document.getElementById('em').value
 if(HAS_SESSION)loadOrgs();
 """
 
-# The app alias preserves the moved handlers' original @app decorators byte-for-byte.
 app = APIRouter()
 session_router = app
 
@@ -682,7 +677,6 @@ async def auth_logout(request: Request) -> JSONResponse:
     return resp
 
 
-# The app alias preserves the moved handlers' original @app decorators byte-for-byte.
 app = APIRouter()
 invite_router = app
 
@@ -773,7 +767,6 @@ async def auth_invite_signin_confirm(request: Request):
     return resp
 
 
-# The app alias preserves the moved handlers' original @app decorators byte-for-byte.
 app = APIRouter()
 oauth_server_router = app
 
@@ -995,9 +988,7 @@ async def oauth_authorize(
         return _oauth_server_failure(exc, redirect_uri, state)
     if view is None:
         # Sign in first, then come back to THIS request. Parked in a cookie rather than a `?next=`
-        # query the sign-in page would have to understand — the first version invented that
-        # convention and nothing implemented it, so the user signed in and landed on the dashboard
-        # with the authorization silently dropped.
+        # query the sign-in page would have to understand.
         # The query is only a UI cue. The validated request stays in the HttpOnly return cookie.
         resp = RedirectResponse("/?signin=oauth", status_code=302)
         _remember_oauth_return(resp, request)
@@ -1162,7 +1153,6 @@ async def openai_apps_challenge():
     return PlainTextResponse(token, headers={"Cache-Control": "no-store"})
 
 
-# The app alias preserves the moved handlers' original @app decorators byte-for-byte.
 app = APIRouter()
 grants_router = app
 
@@ -1205,7 +1195,6 @@ async def oauth_grant_set_team(family_id: str, body: GrantTeamIn,
         raise HTTPException(status_code=404, detail=exc.detail) from exc
 
 
-# The app alias preserves the moved handlers' original @app decorators byte-for-byte.
 app = APIRouter()
 token_router = app
 

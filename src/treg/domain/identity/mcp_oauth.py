@@ -54,7 +54,7 @@ BASE_SCOPES = ["treg:catalog", "treg:call", "treg:read"]
 # "treg for Sheets" (the Google Sheets add-on, docs/context/architecture/table.md): a first-party
 # public client with its own resource and scope, so its token works only on the `/table` routes and
 # an MCP token does not work there. Its token names a DEFAULT team; a request picks one of the
-# person's teams with `X-Treg-Org`, checked against membership on every request (owner, 2026-09-26).
+# person's teams with `X-Treg-Org`, checked against membership on every request.
 SHEETS_CLIENT_ID = "treg-sheets"
 SHEETS_SCOPE = "treg:table"
 
@@ -74,10 +74,7 @@ def scopes_for_resource(version: str = "v1") -> list[str]:
         return [*BASE_SCOPES, DIRECTORY_SCOPE]
     raise ValueError(f"unknown MCP resource version {version!r}")
 
-# Marks a token as an MCP access token and nothing else. treg already mints session cookies and
-# identity tokens with the same HMAC construction, so without a type marker a session cookie would
-# validate here (and vice versa) — one class of token would silently become another, which is a
-# privilege escalation waiting for someone to notice it before we do.
+# Session cookies and identity tokens share this HMAC construction; the marker keeps them apart.
 _TOKEN_TYPE = "treg-mcp-at"
 
 
@@ -273,10 +270,6 @@ def verify_pkce(verifier: str, challenge: str) -> bool:
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
     return hmac.compare_digest(_b64(digest), challenge)
 
-
-# ---------------------------------------------------------------------------------------------
-# Client registration — two doors in, one row shape out
-# ---------------------------------------------------------------------------------------------
 
 # A client-id metadata document is fetched from a URL the CALLER chose, which makes it a
 # request-forgery primitive unless it is fenced. The fence: https only, no redirects followed, a

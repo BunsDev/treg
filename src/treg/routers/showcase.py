@@ -95,8 +95,6 @@ class VoteIn(BaseModel):
     up: bool
 
 
-# ---- public --------------------------------------------------------------------------------------
-
 @router.get("/showcase/leaderboard", include_in_schema=False)
 async def showcase_leaderboard(request: Request, db: AsyncSession = Depends(get_session)):
     """Approved apps with their vote tallies, consented activity tiers and badges, and the boards.
@@ -137,8 +135,6 @@ async def showcase_vote(body: VoteIn, request: Request, treg_session: str = Cook
     except showcase.ShowcaseError as exc:
         raise _fail(exc) from None
 
-
-# ---- makers --------------------------------------------------------------------------------------
 
 async def _maker(user: User = Depends(require_identity), db: AsyncSession = Depends(get_session)) -> User:
     await db.commit()  # each use case opens its own sessions; hold no connection meanwhile
@@ -204,8 +200,6 @@ async def showcase_remove(app_id: int, request: Request, user: User = Depends(_m
         raise HTTPException(403, "cross-origin request rejected")
     return await _run(showcase.remove(user, app_id))
 
-
-# ---- staff (the private admin) -------------------------------------------------------------------
 
 def _actor(principal: str, named: str | None) -> str:
     """Who acted: a superadmin's own address, or the operator the admin service names."""

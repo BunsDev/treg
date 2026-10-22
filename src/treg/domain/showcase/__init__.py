@@ -228,7 +228,6 @@ def boards(apps: dict[int, tuple[Activity, Consent, int]]) -> dict[str, list[int
     return {"most_loved": loved, "most_active": active, "rising": rising, "longest_streak": streak}
 
 
-# ---- applications ---------------------------------------------------------------------------
 # What a team submits. Checked here so the /showcase form, the dashboard and the staff API refuse
 # the same things. Text is stored as given and escaped wherever it is shown.
 
