@@ -30,6 +30,7 @@ sources:
   - src/treg/alembic/versions/0081_sso_manual_block.py
   - src/treg/alembic/versions/0082_oauth_sso_provenance.py
   - src/treg/alembic/versions/0083_enterprise_sso_safety.py
+  - src/treg/alembic/versions/0084_enterprise_workos_cleanup.py
   - src/treg/worker.py
   - src/treg/routers/enterprise_sso.py
   - src/treg/infra/workos.py
@@ -103,6 +104,8 @@ removes pre-sync SSO identities absent from the roster. Only `active` directory 
 provisioned. SSO and Directory Sync stay active while Stripe retries a `past_due` subscription.
 When the subscription ends, enforcement is lifted so existing members can use normal sign-in.
 Cancellation removes only SSO-created memberships; pre-existing members remain.
+The cleanup worker then deletes the canceled team's WorkOS directory and connection, clears
+obsolete SSO identity links, and records completion before a new checkout can start.
 
 The registry is **tenant-isolated**: an **Org** owns resources, a **User** is a global identity, and a
 **Membership** links them with a role and IS where the caller's token lives. A token = a `(user, org)`

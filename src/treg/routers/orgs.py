@@ -918,6 +918,8 @@ async def delete_org(
     sso = await db.get(EnterpriseSSO, org_id)
     if sso is not None and sso.stripe_subscription_id and sso.subscription_status not in {"canceled", "incomplete_expired"}:
         raise HTTPException(status_code=409, detail="cancel the SSO subscription in Billing before deleting this team")
+    if sso is not None and sso.workos_org_id and sso.workos_cleanup_completed_at is None:
+        raise HTTPException(status_code=409, detail="wait for SSO setup cleanup before deleting this team")
     # The team's archived answers go with it (archive.md, "Opting out"). The opt-out is set and
     # committed first, so nothing new of the team's is recorded from here on; the object phase
     # then runs on its own short sessions after this one has let go of its connection, and a

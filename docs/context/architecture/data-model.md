@@ -62,6 +62,7 @@ sources:
   - src/treg/alembic/versions/0079_enterprise_sso.py
   - src/treg/alembic/versions/0082_oauth_sso_provenance.py
   - src/treg/alembic/versions/0083_enterprise_sso_safety.py
+  - src/treg/alembic/versions/0084_enterprise_workos_cleanup.py
   - src/treg/timeutil.py
   - src/treg/infra/db.py
   - src/treg/infra/money_timing.py
@@ -100,7 +101,7 @@ Revision `0077` adds the empty `TeamDatabase` and `TableDoc` control-plane table
 [Workbench table storage](workbench-storage.md#management-metadata). It does not provision remote
 databases or business rows. Existing tables and data are unchanged by the migration.
 
-Migration `0078` adds `EnterpriseSSO` for a team's plan, subscription state, WorkOS organization,
+Migration `0079` adds `EnterpriseSSO` for a team's plan, subscription state, WorkOS organization,
 connection and directory; `EnterpriseSSOIdentity` for a stable team-specific SSO profile link;
 `EnterpriseDirectoryUser` for the directory roster, including users who have never signed in;
 and `EnterpriseSSOEvent` for WorkOS webhook deduplication. Team deletion removes the team-scoped
@@ -108,6 +109,8 @@ rows before its `Org`, and active subscriptions block team deletion until cancel
 Migration `0083` records whether SSO created a membership, makes an IdP subject unique within
 its team, reserves one pending enterprise Checkout per team, and marks keys issued under SSO
 enforcement. Existing keys have no SSO issuance proof and cannot enter an enforced team.
+Migration `0084` records when WorkOS cleanup completes. That marker keeps cancellation retries
+idempotent and prevents a new checkout while billable WorkOS resources may remain.
 
 Migration `0043` adds `ProviderResource`, the durable organization-owned counterpart to the existing
 async ownership rows. It stores provider, resource kind, upstream id, display name, creator, source

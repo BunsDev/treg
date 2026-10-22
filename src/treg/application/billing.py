@@ -40,7 +40,7 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, update
+from sqlalchemy import delete, func, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlmodel import select
 
@@ -52,7 +52,7 @@ from ..domain import money as ledger
 from ..domain import referrals
 from ..config import get_settings
 from ..infra import stripe as stripe_adapter
-from ..models import CreditBlock, EnterpriseSSO, LedgerEntry, Membership, Org, User
+from ..models import CreditBlock, EnterpriseSSO, EnterpriseSSOIdentity, EnterpriseDirectoryUser, LedgerEntry, Membership, Org, User
 from ..infra.db import session_maker
 from . import enterprise_sso
 
@@ -1867,6 +1867,8 @@ async def status(org_id: int) -> dict:
                 "sso_ready": bool(row and row.connection_id),
                 "directory_ready": bool(row and row.directory_id and row.directory_active),
                 "enforced": bool(row and row.enforced),
+                "cleanup_pending": bool(row and row.subscription_status in {"canceled", "incomplete_expired"}
+                                        and row.workos_org_id and row.workos_cleanup_completed_at is None),
                 "cancel_at_period_end": bool(row and row.cancel_at_period_end)}
 
 
@@ -1887,6 +1889,9 @@ async def start_checkout(org_id: int, plan: str, *, base: str, email: str) -> di
             raise EnterpriseBillingError("team is unavailable")
         if row is not None and row.stripe_subscription_id and row.subscription_status not in {"canceled", "incomplete_expired"}:
             raise EnterpriseBillingError("manage the existing subscription in Billing")
+        if (row is not None and row.subscription_status in {"canceled", "incomplete_expired"}
+                and row.workos_org_id and row.workos_cleanup_completed_at is None):
+            raise EnterpriseBillingError("previous SSO setup is being removed; retry shortly")
         if row is not None and row.checkout_pending_until > now:
             if row.checkout_url:
                 return {"url": row.checkout_url}
@@ -2039,6 +2044,7 @@ async def handle_event(db, event: dict) -> dict:
         return {"handled": False, "type": kind}
     row.stripe_event_created = created
     if row.stripe_subscription_id and row.subscription_status in ENTITLED:
+        row.workos_cleanup_completed_at = None
         row.checkout_token = None
         row.checkout_pending_until = 0
         row.checkout_url = None
@@ -2050,3 +2056,65 @@ async def handle_event(db, event: dict) -> dict:
         await enterprise_sso.remove_sso_created_memberships(db, org_id)
     await db.commit()
     return {"handled": True, "type": kind}
+
+
+async def cleanup_canceled_workos(org_id: int) -> dict:
+    """Remove billable WorkOS resources after entitlement ends, outside any DB transaction.
+
+    A canceled team's WorkOS organization is dedicated to that treg team. Keep the organization
+    for a later purchase, but remove every connection and directory it owns, including resources
+    made in Admin Portal before a first sign-in or activation webhook recorded their IDs here.
+    """
+    import httpx
+    from ..infra import workos
+
+    async with session_maker() as db:
+        row = await db.get(EnterpriseSSO, org_id)
+        if row is None or row.subscription_status not in {"canceled", "incomplete_expired"}:
+            return {"org_id": org_id, "skipped": "subscription is not ended"}
+        if row.workos_cleanup_completed_at is not None:
+            return {"org_id": org_id, "skipped": "already cleaned"}
+        organization = row.workos_org_id
+        subscription_id = row.stripe_subscription_id
+    if organization:
+        key = get_settings().workos_api_key
+        if not key:
+            raise EnterpriseBillingError("WorkOS API key is not configured")
+        async with httpx.AsyncClient() as client:
+            details = await workos.get_organization(client, key=key, organization=organization)
+            if details.get("external_id") != str(org_id):
+                raise EnterpriseBillingError("WorkOS organization does not belong to this team")
+            directories = await workos.directories_for_organization(client, key=key,
+                organization=organization)
+            connections = await workos.connections_for_organization(client, key=key,
+                organization=organization)
+            for kind, rows in (("directory", directories), ("connection", connections)):
+                for resource in rows:
+                    expected = "directory_" if kind == "directory" else "conn_"
+                    if (resource.get("organization_id") != organization or
+                            not isinstance(resource.get("id"), str) or
+                            not resource["id"].startswith(expected)):
+                        raise EnterpriseBillingError("WorkOS resource does not belong to this team")
+            for resource in directories:
+                await workos.delete_directory(client, key=key, directory=resource["id"])
+            for resource in connections:
+                await workos.delete_connection(client, key=key, connection=resource["id"])
+            if (await workos.directories_for_organization(client, key=key, organization=organization)
+                    or await workos.connections_for_organization(client, key=key, organization=organization)):
+                raise EnterpriseBillingError("WorkOS resources remain; retry cleanup")
+    async with session_maker() as db:
+        row = await db.get(EnterpriseSSO, org_id, with_for_update=True)
+        if (row is None or row.subscription_status not in {"canceled", "incomplete_expired"}
+                or row.stripe_subscription_id != subscription_id or row.workos_org_id != organization):
+            raise EnterpriseBillingError("SSO subscription changed during cleanup")
+        row.connection_id = None
+        row.directory_id = None
+        row.directory_active = False
+        row.workos_cleanup_completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        await db.execute(delete(EnterpriseSSOIdentity).where(EnterpriseSSOIdentity.org_id == org_id))
+        await db.execute(delete(EnterpriseDirectoryUser).where(EnterpriseDirectoryUser.org_id == org_id))
+        enterprise_sso._audit(db, org_id, "sso.workos_cleanup_completed")
+        db.add(row)
+        await db.commit()
+    return {"org_id": org_id, "directories_deleted": len(directories) if organization else 0,
+            "connections_deleted": len(connections) if organization else 0}

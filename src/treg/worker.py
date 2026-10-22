@@ -16,6 +16,7 @@
     treg-worker admin purge-ad-clicks                      # delete email-to-click stash rows past 90 days
     treg-worker admin erase-archive --org <id>             # erase what an opted-out team stored in the archive
     treg-worker enterprise reconcile [--org <id>]          # repair missed Directory Sync removals
+    treg-worker enterprise cleanup [--org <id>]            # remove WorkOS setup after paid SSO ends
     treg-worker enterprise purge-audit [--days 400]        # delete expired SSO audit evidence
 
 Not the light `treg` CLI: these need the server extra (DB, platform keys in the env) and make
@@ -525,6 +526,35 @@ async def _enterprise_reconcile(args) -> int:
     return 1 if failed else 0
 
 
+async def _enterprise_cleanup(args) -> int:
+    """Retry canceled-team WorkOS teardown without holding a DB connection over HTTP."""
+    from sqlmodel import select
+    from .application import billing
+    from .infra import workos
+    from .infra.db import session_maker, verify_db
+    from .models import EnterpriseSSO
+
+    await verify_db()
+    async with session_maker() as db:
+        statement = select(EnterpriseSSO.org_id).where(
+            EnterpriseSSO.subscription_status.in_(("canceled", "incomplete_expired")),
+            EnterpriseSSO.workos_cleanup_completed_at.is_(None),
+        )
+        if args.org:
+            statement = statement.where(EnterpriseSSO.org_id == args.org)
+        targets = (await db.execute(statement.order_by(EnterpriseSSO.org_id))).scalars().all()
+    results = []
+    failed = False
+    for org_id in targets:
+        try:
+            results.append(await billing.cleanup_canceled_workos(org_id))
+        except (billing.EnterpriseBillingError, workos.WorkOSError):
+            failed = True
+            results.append({"org_id": org_id, "error": "WorkOS cleanup failed; retry required"})
+    print(json.dumps({"results": results}, sort_keys=True))
+    return 1 if failed else 0
+
+
 async def _enterprise_purge_audit(args) -> int:
     from datetime import datetime, timedelta, timezone
     from sqlalchemy import delete
@@ -684,6 +714,9 @@ def main(argv: list[str] | None = None) -> int:
     reconcile = enterprisesub.add_parser("reconcile", help="repair missed WorkOS Directory Sync changes")
     reconcile.add_argument("--org", type=_positive_int, help="one team id (default: every connected team)")
     reconcile.set_defaults(fn=_enterprise_reconcile)
+    cleanup = enterprisesub.add_parser("cleanup", help="remove WorkOS setup after paid SSO ends")
+    cleanup.add_argument("--org", type=_positive_int, help="one team id (default: every canceled team)")
+    cleanup.set_defaults(fn=_enterprise_cleanup)
     purge_audit = enterprisesub.add_parser("purge-audit", help="delete expired enterprise access evidence")
     purge_audit.add_argument("--days", type=_positive_int, default=400)
     purge_audit.set_defaults(fn=_enterprise_purge_audit)

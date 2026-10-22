@@ -110,6 +110,34 @@ async def directories_for_organization(client: httpx.AsyncClient, *, key: str,
                        params={"organization_id": organization})
 
 
+async def connections_for_organization(client: httpx.AsyncClient, *, key: str,
+                                       organization: str) -> list[dict]:
+    return await _list(client, "/connections", key=key,
+                       params={"organization_id": organization})
+
+
+async def _delete(client: httpx.AsyncClient, path: str, *, key: str) -> None:
+    try:
+        response = await client.delete(BASE_URL + path,
+            headers={"Authorization": f"Bearer {key}"}, timeout=15)
+        if response.status_code != 404:  # A previous attempt may have succeeded before the worker died.
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise WorkOSError("WorkOS resource deletion failed") from exc
+
+
+async def delete_directory(client: httpx.AsyncClient, *, key: str, directory: str) -> None:
+    if not re.fullmatch(r"directory_[A-Za-z0-9_]{1,96}", directory):
+        raise WorkOSError("invalid WorkOS directory")
+    await _delete(client, f"/directories/{directory}", key=key)
+
+
+async def delete_connection(client: httpx.AsyncClient, *, key: str, connection: str) -> None:
+    if not re.fullmatch(r"conn_[A-Za-z0-9_]{1,96}", connection):
+        raise WorkOSError("invalid WorkOS connection")
+    await _delete(client, f"/connections/{connection}", key=key)
+
+
 async def directory_users(client: httpx.AsyncClient, *, key: str, directory: str) -> list[dict]:
     """Fetch a complete roster before a caller makes any revocation decision."""
     users: list[dict] = []

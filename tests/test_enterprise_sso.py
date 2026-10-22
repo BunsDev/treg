@@ -567,6 +567,20 @@ def test_catalog_can_offer_bundle_only(monkeypatch):
     assert [item["id"] for item in enterprise_billing.catalog()] == ["sso_directory"]
 
 
+def test_markup_49_prices_bundle_at_299(monkeypatch):
+    from treg.config import Settings
+    monkeypatch.delenv("TREG_ENTERPRISE_SSO_MARKUP_USD", raising=False)
+    monkeypatch.delenv("TREG_ENTERPRISE_SSO_BUNDLE_ONLY", raising=False)
+    settings = Settings(_env_file=None)
+    assert settings.enterprise_sso_markup_usd == 0
+    assert settings.enterprise_sso_bundle_only
+    from treg.config import get_settings
+    monkeypatch.setattr(get_settings(), "enterprise_sso_bundle_only", True)
+    monkeypatch.setattr(get_settings(), "enterprise_sso_markup_usd", 49)
+    assert enterprise_billing.catalog() == [
+        {"id": "sso_directory", "usd_monthly": 299, "directory_sync": True}]
+
+
 async def test_browser_callback_requires_company_proof_for_enforced_team(clients, monkeypatch):
     from treg.config import get_settings
     settings = get_settings()
@@ -709,6 +723,100 @@ async def test_subscription_webhooks_activate_then_cancel_without_balance_credit
             Membership.org_id == org_id, Membership.user_id == result.user_id))).scalar_one_or_none() is None
 
 
+async def test_canceled_workos_setup_is_removed_and_retried(clients, monkeypatch):
+    from treg.config import get_settings
+    settings = get_settings()
+    monkeypatch.setattr(settings, "workos_api_key", "sk_test")
+    monkeypatch.setattr(settings, "workos_client_id", "client_test")
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_stripe_test")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_test")
+    org_id = await team(clients, plan="sso_directory")
+    signed_in = await signin(org_id, profile())
+    async with session_maker() as db:
+        row = await db.get(EnterpriseSSO, org_id)
+        row.subscription_status = "canceled"
+        row.stripe_subscription_id = "sub_old"
+        row.directory_id = "directory_known"
+        row.directory_active = True
+        await enterprise_sso.remove_sso_created_memberships(db, org_id)
+        db.add(row)
+        await db.commit()
+    with pytest.raises(billing.EnterpriseBillingError, match="previous SSO setup"):
+        await billing.start_checkout(org_id, "sso_directory",
+            base="https://treg.example", email="owner@example.com")
+    assert (await billing.status(org_id))["cleanup_pending"]
+
+    async def get_org(client, *, key, organization):
+        return {"id": organization, "external_id": str(org_id)}
+    async def list_dirs(client, *, key, organization):
+        return [{"id": "directory_extra", "organization_id": organization}] if "directory_extra" not in deleted else []
+    async def list_conns(client, *, key, organization):
+        return [{"id": "conn_extra", "organization_id": organization}] if "conn_extra" not in deleted else []
+    async def delete_dir(client, *, key, directory):
+        deleted.append(directory)
+    async def delete_conn(client, *, key, connection):
+        if fail_once.pop(0):
+            raise workos.WorkOSError("temporary failure")
+        deleted.append(connection)
+    deleted = []
+    fail_once = [True, False]
+    monkeypatch.setattr(workos, "get_organization", get_org)
+    monkeypatch.setattr(workos, "directories_for_organization", list_dirs)
+    monkeypatch.setattr(workos, "connections_for_organization", list_conns)
+    monkeypatch.setattr(workos, "delete_directory", delete_dir)
+    monkeypatch.setattr(workos, "delete_connection", delete_conn)
+    with pytest.raises(workos.WorkOSError):
+        await billing.cleanup_canceled_workos(org_id)
+    async with session_maker() as db:
+        assert (await db.get(EnterpriseSSO, org_id)).workos_cleanup_completed_at is None
+    result = await billing.cleanup_canceled_workos(org_id)
+    assert result["connections_deleted"] == 1
+    assert deleted == ["directory_extra", "conn_extra"]
+    async with session_maker() as db:
+        row = await db.get(EnterpriseSSO, org_id)
+        assert row.workos_cleanup_completed_at is not None
+        assert row.connection_id is None and row.directory_id is None
+        assert (await db.execute(select(EnterpriseSSOIdentity).where(
+            EnterpriseSSOIdentity.org_id == org_id))).scalar_one_or_none() is None
+        assert (await db.execute(select(Membership).where(
+            Membership.org_id == org_id, Membership.user_id == signed_in.user_id))).scalar_one_or_none() is None
+    assert (await billing.cleanup_canceled_workos(org_id))["skipped"] == "already cleaned"
+    assert not (await billing.status(org_id))["cleanup_pending"]
+    async def fake_stripe(operation, *, api_key, **kwargs):
+        return {"id": "cus_new"} if operation == billing.stripe_adapter.CUSTOMER_CREATE else {
+            "url": "https://checkout.stripe.com/c/pay/renewal"}
+    monkeypatch.setattr(billing.stripe_adapter, "call", fake_stripe)
+    assert (await billing.start_checkout(org_id, "sso_directory",
+        base="https://treg.example", email="owner@example.com"))["url"].endswith("renewal")
+
+
+async def test_canceled_team_cannot_be_deleted_before_workos_cleanup(clients):
+    org_id = await team(clients)
+    slug = next(org["slug"] for org in (await clients.get("/orgs")).json()
+                if org["org_id"] == org_id)
+    async with session_maker() as db:
+        row = await db.get(EnterpriseSSO, org_id)
+        row.subscription_status = "canceled"
+        db.add(row)
+        await db.commit()
+    response = await clients.delete(f"/orgs/{org_id}?confirm={slug}")
+    assert response.status_code == 409
+    assert "SSO setup cleanup" in response.json()["detail"]
+
+
+async def test_workos_delete_resources_is_retry_safe():
+    seen = []
+    def handle(request):
+        seen.append((request.method, request.url.path))
+        assert request.headers["Authorization"] == "Bearer sk_test"
+        return httpx.Response(404 if request.url.path.endswith("missing") else 204)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        await workos.delete_directory(client, key="sk_test", directory="directory_missing")
+        await workos.delete_connection(client, key="sk_test", connection="conn_present")
+    assert seen == [("DELETE", "/directories/directory_missing"),
+                    ("DELETE", "/connections/conn_present")]
+
+
 async def test_billing_loss_preserves_preexisting_member_and_lifts_enforcement(clients):
     org_id = await team(clients)
     async with session_maker() as db:
@@ -811,7 +919,7 @@ async def test_checkout_uses_monthly_team_subscription_without_touching_balance(
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_stripe_test")
     monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_test")
     monkeypatch.setattr(settings, "enterprise_sso_bundle_only", True)
-    monkeypatch.setattr(settings, "enterprise_sso_markup_usd", 0)
+    monkeypatch.setattr(settings, "enterprise_sso_markup_usd", 49)
     org_id = (await clients.get("/orgs")).json()[0]["org_id"]
     calls = []
     async def fake_call(operation, *, api_key, **kwargs):
@@ -826,7 +934,7 @@ async def test_checkout_uses_monthly_team_subscription_without_touching_balance(
     assert result["url"].startswith("https://checkout.stripe.com/")
     checkout = calls[-1][1]
     assert checkout["mode"] == "subscription"
-    assert checkout["line_items"][0]["price_data"]["unit_amount"] == 25000
+    assert checkout["line_items"][0]["price_data"]["unit_amount"] == 29900
     assert checkout["line_items"][0]["price_data"]["recurring"] == {"interval": "month"}
     assert checkout["subscription_data"]["metadata"]["treg_org_id"] == str(org_id)
 

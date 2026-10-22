@@ -14,7 +14,7 @@ link if email discovery returns no match or several teams. Email is a routing hi
 
 ## Configure the deployment
 
-1. Apply Alembic migrations through `0082` before running the new code.
+1. Apply Alembic migrations through `0084` before running the new code.
 2. In the WorkOS environment, create an API key and find the client ID. Set
    `TREG_WORKOS_API_KEY` and `TREG_WORKOS_CLIENT_ID` on the server. Set a stable
    `TREG_SECRET_KEY` and `TREG_SESSION_SECRET` for the state and browser cookies.
@@ -25,6 +25,8 @@ link if email discovery returns no match or several teams. Email is a routing hi
    `dsync.user.updated`, `dsync.user.deleted`. Set its signing secret as
    `TREG_WORKOS_WEBHOOK_SECRET`. Without that secret, the endpoint returns 404.
    Run `treg-worker enterprise reconcile` periodically to repair missed webhook deliveries.
+   Also run `treg-worker enterprise cleanup` periodically after subscriptions end. It removes
+   WorkOS SSO connections and directories; monitor its nonzero exit status and retry failures.
    It reads the complete WorkOS roster before changing access; monitor failures.
 5. Configure Stripe's existing `TREG_STRIPE_SECRET_KEY` and `TREG_STRIPE_WEBHOOK_SECRET`. Send
    `checkout.session.completed`, `customer.subscription.created`,
@@ -43,8 +45,9 @@ treg returns the employee to its sign-in dialog with an explanation.
 
 ## Owner and employee flow
 
-The team owner chooses **SSO** ($125/month) or **SSO + Directory Sync** ($250/month), plus any
-whole-dollar `TREG_ENTERPRISE_SSO_MARKUP_USD`. The default
+The team owner chooses **SSO** ($125/month) or **SSO + Directory Sync** ($250/month), plus the
+whole-dollar `TREG_ENTERPRISE_SSO_MARKUP_USD` (zero by default; 49 makes the bundle $299/month).
+The default
 `TREG_ENTERPRISE_SSO_BUNDLE_ONLY=true` displays only the bundle; set it to `false` to offer both.
 After Stripe reports an active subscription, the owner opens **Set up or manage SSO**. On the
 bundle, they can also open **Set up Directory Sync**. The owner should complete a real test sign-in
@@ -84,8 +87,13 @@ The owner can schedule subscription cancellation at the end of the current billi
 the SSO tab. While Stripe retries a `past_due` payment, SSO and Directory Sync remain active.
 When the subscription ends, treg lifts enforcement so existing members can use normal sign-in.
 SSO-created memberships and their team keys are revoked;
-pre-existing members keep their memberships. An active subscription must end before the team can
-be deleted.
+pre-existing members keep their memberships. The cleanup worker then verifies the WorkOS
+organization belongs to that team and deletes all its directories and SSO connections, including
+ones created before a first sign-in. A failed cleanup is retried; a new subscription waits until
+cleanup completes. WorkOS setup is permanently removed, so returning customers may need their IT
+admin to configure it again. An active subscription must end before the team can be deleted.
+If a canceled team still has WorkOS setup awaiting cleanup, team deletion waits too, so the
+resources cannot become orphaned.
 
 ## Evidence and personal data
 

@@ -70,7 +70,7 @@ related:
 ## Enterprise SSO subscription
 
 The team dashboard offers SSO at $125/month and SSO with Directory Sync at $250/month, plus
-`TREG_ENTERPRISE_SSO_MARKUP_USD` (zero by default). `TREG_ENTERPRISE_SSO_BUNDLE_ONLY=false` exposes
+`TREG_ENTERPRISE_SSO_MARKUP_USD` (zero by default; 49 makes the bundle $299/month). `TREG_ENTERPRISE_SSO_BUNDLE_ONLY=false` exposes
 both plans; the default exposes only the bundle. Stripe Checkout uses monthly recurring USD prices.
 The existing signed billing webhook records subscription status and gates WorkOS setup/sign-in on
 `active` or `trialing`; a redirect from Checkout grants nothing. Subscription metadata binds the
@@ -83,6 +83,10 @@ removes only SSO-created memberships and their keys. Pre-existing members
 keep their memberships. Team deletion
 waits until the subscription has ended. This subscription never credits or debits the
 prepaid tool-call balance, so the five ledger entry kinds remain unchanged.
+After the paid period ends, the enterprise cleanup worker deletes every WorkOS connection and
+directory belonging to the team's verified WorkOS organization. It retries failures and prevents
+a new checkout or team deletion until cleanup finishes, without holding a database connection
+across WorkOS I/O.
 
 TrestleIQ charges USD 0.015 for Phone Validation, USD 0.03 for Real Contact, and USD 0.01 for
 Address Validation. Every HTTP 200 response is billable, including a negative verdict; 4xx and 5xx

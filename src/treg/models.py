@@ -308,6 +308,7 @@ class EnterpriseSSO(SQLModel, table=True):
     directory_id: str | None = Field(default=None)
     directory_active: bool = Field(default=False)
     directory_event_ms: int = Field(default=0, sa_type=BigInteger)
+    workos_cleanup_completed_at: NaiveUTC | None = Field(default=None)
     # Switched on only after a successful test sign-in; then other login doors cannot enter this team.
     enforced: bool = Field(default=False)
     created_at: NaiveUTC = Field(default_factory=_now)

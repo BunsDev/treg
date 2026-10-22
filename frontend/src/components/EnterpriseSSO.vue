@@ -59,9 +59,10 @@ export default {
       <p v-if="!sso.configured || !sso.billing_configured" class="sub">SSO setup is unavailable until WorkOS and Stripe are configured on this deployment.</p>
       <template v-else-if="!['active','trialing'].includes(sso.subscription_status)">
         <button v-if="sso.enforced" class="btn sm" :disabled="!!busy" @click="action('enforce','enforce',{enabled:false})">Allow regular team sign-in</button>
+        <p v-if="sso.cleanup_pending" class="sub">Your previous SSO setup is being removed. You can subscribe again when cleanup finishes.</p>
         <div v-for="plan in sso.plans" :key="plan.id" style="display:flex;align-items:center;gap:12px;margin-top:10px">
           <span>{{plan.directory_sync ? 'SSO + Directory Sync' : 'SSO'}} — ${{plan.usd_monthly}}/month</span>
-          <button class="btn sm" :disabled="!!busy" @click="action('checkout','checkout',{plan:plan.id})">Choose plan</button>
+          <button class="btn sm" :disabled="!!busy || sso.cleanup_pending" @click="action('checkout','checkout',{plan:plan.id})">Choose plan</button>
         </div>
         <p class="sub">Directory Sync removes team access and team keys when a directory user is deactivated or deleted. SSO alone does not provide automatic offboarding.</p>
       </template>
@@ -88,8 +89,9 @@ export default {
             <button class="btn sm" :disabled="!!busy" @click="restoreMember(member.user_id)">Allow SSO again</button>
           </div>
         </div>
-        <p v-if="sso.cancel_at_period_end" class="sub">This subscription will end after the current billing period.</p>
-        <button v-else class="btn sm" style="margin-top:12px" :disabled="!!busy" @click="action('cancel','cancel')">Cancel at end of billing period</button>
+        <p v-if="sso.cancel_at_period_end" class="sub">This subscription will end after the current billing period. Your SSO and Directory Sync setup will then be deleted.</p>
+        <p v-else class="sub">When the paid period ends, SSO and Directory Sync setup will be deleted. Subscribing again may require your IT admin to set them up again.</p>
+        <button v-if="!sso.cancel_at_period_end" class="btn sm" style="margin-top:12px" :disabled="!!busy" @click="action('cancel','cancel')">Cancel at end of billing period</button>
       </template>
     </template>
   </div>
