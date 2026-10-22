@@ -4279,142 +4279,28 @@ endpoints:
   method: POST
   path: /v1/run/tiktok.ad_library_search
   name: TikTok Ad Library Search
-  summary: Search TikTok's ad library by keyword (top ads with brand, title, spend, CTR, likes, and video info).
+  summary: Search TikTok's public Ads Library by keyword or advertiser (advertiser, title, audience band, run dates, library link, and video).
   input:
     body:
-      adFormat:
-        type: string
-        required: false
-        note: Ad format filter.
-        enum:
-        - spark_ads
-        - non_spark_ads
-      adLanguage:
-        type: string
-        required: false
-        note: Ad language filter.
-        enum:
-        - en
-        - es
-        - ar
-        - vi
-        - th
-        - de
-        - id
-        - pt
-        - fr
-        - ms
-        - nl
-        - ja
-        - it
-        - ro
-        - zh-Hant
-        - ko
       advertiserName:
         type: string
         required: false
-        note: Filter to a specific advertiser by name (searches the public TikTok Ads Library by advertiser).
+        note: Advertiser name to list ads for (e.g. Spotify). Send exactly one of advertiserName or query; both together is rejected, and so is neither.
+        example: Spotify
       cursor:
         type: string
         required: false
         note: Opaque cursor from a previous response's nextCursor. Omit it for the first page.
-      duration:
-        type: string
-        required: false
-        note: Video duration bucket filter.
-        enum:
-        - under_10s
-        - 10_20s
-        - 20_30s
-        - 30_40s
-        - 40_50s
-        - over_50s
-      industry:
-        type: string
-        required: false
-        note: Advertiser industry filter.
-        enum:
-        - apparel_accessories
-        - appliances
-        - apps
-        - baby_kids_maternity
-        - beauty_personal_care
-        - business_services
-        - ecommerce_non_app
-        - education
-        - financial_services
-        - food_beverage
-        - games
-        - health
-        - home_improvement
-        - household_products
-        - life_services
-        - news_entertainment
-        - pets
-        - sports_outdoor
-        - tech_electronics
-        - travel
-        - vehicle_transportation
-      likes:
-        type: string
-        required: false
-        note: Likes percentile bucket filter (top_1_20 is the top-performing 20 percent).
-        enum:
-        - top_1_20
-        - top_21_40
-        - top_41_60
-        - top_61_80
-        - top_81_100
-      limit:
-        type:
-        - integer
-        - string
-        required: false
-        note: Results per page, with an existing maximum of 50 (default 20). Use a canonical JSON integer; legacy numeric strings remain accepted.
-        default: 20
-        min: 0
-        max: 50
-        example: 20
-      objective:
-        type: string
-        required: false
-        note: Campaign objective filter.
-        enum:
-        - app_installs
-        - conversions
-        - lead_generation
-        - product_sales
-        - reach
-        - traffic
-        - video_views
-        example: conversions
-      orderBy:
-        type: string
-        required: false
-        note: 'Sort metric: for_you, impression, play_2s_rate, play_6s_rate, cvr, ctr, or like.'
-      period:
-        type:
-        - integer
-        - string
-        required: false
-        note: Time window for top ads. Use the canonical JSON integer 7, 30, or 180; legacy numeric strings remain accepted.
-        enum:
-        - 7
-        - 30
-        - 180
-        - '7'
-        - '30'
-        - '180'
-        example: 30
       query:
         type: string
-        required: true
-        note: Keyword to search ad titles and content (e.g. spotify).
+        required: false
+        note: Keyword to search ad titles and content (e.g. spotify). Send exactly one of query or advertiserName; both together is rejected, and so is neither.
         example: spotify
       region:
         type: string
         required: false
-        note: Country code (defaults to US).
+        note: Two-letter region code for TikTok's Commercial Content Library, such as DE, FR, GB or IT. Omit it for the library default, DE. Coverage is the EU and EEA; a non-EU code such as US is not served.
+        example: GB
     bodyType: json
   cost:
     type: per_success
@@ -4429,14 +4315,11 @@ endpoints:
     checked: '2026-10-02'
     confidence: verified
   docs_url: https://getanyapi.com/api/tiktok/ad-library-search
-  note: 'AnyAPI slug `tiktok.ad_library_search`. Price is the p90 of what AnyAPI really charged for this endpoint over the 60 days to 2026-09-09 (26 charged calls, $0.002 median), not a list price; roughly one call in ten settles above it. That p90 is capped here at $0.0012, the dearest price any source can charge for this request today: the dearer source it measured has since been withdrawn, so no call can settle at the p90 any more. 2 sources can serve it; the cheapest serves first and a failed attempt is retried on the next, up to a $0.0012 ceiling per request. `costUsd` on the response is the exact charge, which is what reported_charge settles. Send `max_cost_usd` to refuse any source dearer than a price you name.'
+  note: 'AnyAPI slug `tiktok.ad_library_search`. Price is the p90 of what AnyAPI really charged for this endpoint over the 60 days to 2026-09-09 (26 charged calls, $0.002 median), not a list price; roughly one call in ten settles above it. That p90 is capped here at $0.0012, the dearest price any source can charge for this request today: the dearer source it measured has since been withdrawn, so no call can settle at the p90 any more. 2 sources can serve it; the cheapest serves first and a failed attempt is retried on the next, up to a $0.0012 ceiling per request. `costUsd` on the response is the exact charge, which is what reported_charge settles. Send `max_cost_usd` to refuse any source dearer than a price you name. Send exactly one of `query` or `advertiserName`: a body with both is rejected, and a body with neither is rejected. `period`, `orderBy`, `limit`, `objective`, and `industry` are not fields of this endpoint. For `period`, `limit`, `objective`, or `orderBy`, use `anyapi.tiktok.top_ads_search`. For `industry`, use `anyapi.tiktok.trending_hashtags`.'
   test_request:
     body:
-      limit: 20
-      objective: conversions
-      period: 30
       query: spotify
-  unverified: http 400
+  unverified: 'http 400 on the previous test body (limit, objective, period plus query). The stored test_request is now {"query":"spotify"}; catalog_verify has not recaptured a success example.'
 - id: anyapi.tiktok.ad_transparency_search
   tier: extended
   platform: tiktok
