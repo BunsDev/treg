@@ -5,9 +5,10 @@ mapping run. No call-path involvement."""
 from __future__ import annotations
 
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import httpx
 import pytest
 from sqlalchemy import select
 
@@ -207,6 +208,52 @@ def test_signature_table_classifies_balance_quota_and_burst():
     assert S.is_exhausting(S.classify("findymail", 402, {}, b"x")) and not S.is_exhausting(None)
 
 
+_NOW = datetime(2026, 1, 2, 23, 59, 59)
+_NOW_EPOCH = int(_NOW.replace(tzinfo=timezone.utc).timestamp())
+
+
+@pytest.mark.parametrize("headers, wait", [
+    ({"Retry-After": "2.1"}, 3),
+    ({"Retry-After": "-5"}, 0),
+    ({"Retry-After": "8 days, 02:48:09"}, 8 * 86400 + 2 * 3600 + 48 * 60 + 9),
+    ({"Retry-After": "00:01:00"}, 60),
+    ({"Retry-After": "0:00:05.500000"}, 6),
+    ({"Retry-After": "-1 day, 23:59:54"}, 0),
+    ({"Retry-After": "Sat, 03 Jan 2026 00:00:09 GMT"}, 10),
+    ({"Retry-After": "Fri, 02 Jan 2026 23:00:00 GMT"}, 0),
+    ({"RateLimit-Reset": "30"}, 30),
+    ({"RateLimit-Reset": str(_NOW_EPOCH + 41)}, 41),
+    ({"X-RateLimit-Reset": str(_NOW_EPOCH - 100)}, 0),
+    ({"Retry-After": "7", "RateLimit-Reset": "30", "X-RateLimit-Reset": "50"}, 7),
+    ({"Retry-After": "soon", "RateLimit-Reset": "30"}, 30),
+    ({"RateLimit-Reset": "later", "X-RateLimit-Reset": "50"}, 50),
+    ({"Retry-After": "nan"}, None),
+    ({"RateLimit-Reset": "1767398440000", "X-RateLimit-Reset": "12"}, 12),
+    ({"Retry-After": "99999999 days, 00:00:00"}, None),
+    ({"Retry-After": "12:99:00"}, None),
+    ({"Retry-After": "8 weeks, 02:48:09"}, None),
+    ({"X-RateLimit-Reset": "Sat, 03 Jan 2026 00:00:09 GMT"}, None),
+    (None, None),
+])
+def test_wait_headers_parse_by_format(headers, wait):
+    assert S._retry_after(None if headers is None else httpx.Headers(headers), _NOW) == wait
+
+
+def test_wait_header_formats_decide_burst_and_quota():
+    short = S.classify("diffbot", 429, httpx.Headers({"Retry-After": "0 days, 00:00:06"}), b"Too many requests", now=_NOW)
+    assert short.kind == "burst" and short.retry_after_s == 6 and not S.is_exhausting(short)
+    long = S.classify("diffbot", 429, httpx.Headers({"Retry-After": "8 days, 02:48:09"}), b"Too many requests", now=_NOW)
+    assert long.kind == "quota" and long.resets_at == datetime(2026, 1, 11, 2, 48, 8)
+    ietf = S.classify("someone", 429, httpx.Headers({"RateLimit-Reset": "20", "RateLimit-Limit": "50"}), b"", now=_NOW)
+    assert ietf.kind == "burst" and ietf.retry_after_s == 20
+
+
+def test_a_daily_quota_without_a_wait_header_resets_at_the_next_utc_midnight():
+    lusha = S.classify("lusha", 429, {}, b'{"message":"Daily search limit reached"}', now=_NOW)
+    assert lusha.kind == "quota" and lusha.resets_at == datetime(2026, 1, 3)
+    with pytest.raises(ValueError):
+        S.Signature("x", 429, r"", "quota", resets="next_tuesday")
+
 # Apollo API reference, "422 Unprocessable Entity": the body an empty credit pool gets (live 2026-09-01).
 APOLLO_OUT_OF_CREDITS = b'{"error": "Insufficient credits. Please upgrade your plan."}'
 # The SAME status for a caller's mistake - must never read as our account running dry.
@@ -246,8 +293,9 @@ def test_every_recorded_phrase_arms_the_tripwire():
     """Recording one vendor's wording must arm the tripwire for every other: each literal body
     phrase in `_TABLE` (the 429 rows carry period words, not capacity phrases) is in CAPACITY_PHRASES."""
     import re as _re
-    for provider, status, pattern, kind in S._TABLE:
-        if kind not in ("balance", "quota") or not pattern or status == 429 or _re.escape(pattern) != pattern:
+    for sig in S._TABLE:
+        provider, pattern = sig.provider, sig.body_regex
+        if sig.kind not in ("balance", "quota") or not pattern or sig.status == 429 or _re.escape(pattern) != pattern:
             continue  # empty (the bare 402 row), a period word, or a regex we cannot use as a body
         sig = S.classify("someone-else", 400, None, pattern.encode())
         assert sig is not None and sig.kind == "unrecorded", f"{provider}'s phrase {pattern!r} does not arm the tripwire"
@@ -342,7 +390,7 @@ def test_every_platform_provider_has_a_recorded_or_acknowledged_signature():
     catalog_ids = {e["provider"] for e in catalog_store.load().endpoints}
     slots = {p for p in catalog_ids if platform_setting_name(p) in settings}
     assert len(slots) == len(settings), f"a key slot with no catalog provider: {sorted(settings - {platform_setting_name(p) for p in slots})}"
-    recorded = {p for p, *_ in S._TABLE if p != "*"}
+    recorded = {sig.provider for sig in S._TABLE if sig.provider != "*"}
     missing = slots - recorded - _UNRECORDED_SIGNATURE
     assert not missing, f"record how these say 'out of credits' or acknowledge them: {sorted(missing)}"
     stale = (_UNRECORDED_SIGNATURE & recorded) | (_UNRECORDED_SIGNATURE - slots)

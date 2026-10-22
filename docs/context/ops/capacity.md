@@ -462,7 +462,11 @@ pays the aggregator's real price, 0% markup, disclosed in-band when it ships (st
   account (`balance` / `quota` means exhausted, `burst` is smoothed but never exhausted, and an
   `unknown` 429 is logged).
   Lusha's "Daily" 429 and Hunter's "per billing period" 429 are quota exhaustion wearing a 429;
-  a `retry-after ≤ 60 s` is a burst. cloro says it with a **403** `error.code INSUFFICIENT_CREDITS`
+  a quota row with no wait header takes its reset from the row's `resets` (Lusha's is
+  `next_utc_midnight`), else from the sweep's account call. The wait comes from the wait
+  headers, parsed by format and never by provider (`_retry_after` in `signatures.py`); a 429 no
+  row matched is a burst when the wait is ≤ 60 s and a quota when it is longer.
+  cloro says it with a **403** `error.code INSUFFICIENT_CREDITS`
   (from its OpenAPI spec, 2026-09-07 — documented, not yet observed); its 429s are concurrency /
   rate bursts with `X-RateLimit-*` headers and the allowance resets monthly at the
   `cycleResetsAt` that `GET /v1/credits` reports. Apollo says "out of credits" with a **422** and Moz uses a
