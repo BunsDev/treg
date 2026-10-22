@@ -488,7 +488,7 @@ pays the aggregator's real price, 0% markup, disclosed in-band when it ships (st
   flag a caller's own error) - never a mark, only an `unrecorded` event and
   `capacity_signal=unrecorded` on `tool_called`; and the coverage guard in
   `tests/test_capacity_overflow_routes.py`, which fails when a `platform_key_*` provider has neither
-  a table row nor an acknowledged gap. `edge_block` is the odd one out: the vendor's CDN refused the
+  a balance/quota row nor an acknowledged gap (a burst row says nothing about an empty account). `edge_block` is the odd one out: the vendor's CDN refused the
   request's shape (decided on headers, never the caller's UA), so it exhausts nothing, overflows
   nothing and alerts nothing; it exists so a chart can tell a bot-filtered UA family from a
   provider outage. Shared by the sweep, the future call-path trigger and alerts.

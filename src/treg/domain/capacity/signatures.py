@@ -59,6 +59,8 @@ _TABLE: list[Signature] = [
     Signature("thecompaniesapi", 403, r"noCreditsRemaining", "balance", tripwire=True),
     Signature("companyenrich", 402, r"payment required", "balance", tripwire=True),
     Signature("akta", 402, r"insufficient credits", "balance"),
+    # AI Ark: an empty credit pool is a 402 {"error": "sorry, you don't have enough credit"}.
+    Signature("aiark", 402, r"don't have enough credit", "balance"),
     Signature("lusha", 400, r"reached your credit limit", "balance", tripwire=True),
     # Misses share the 400 status; only this error code means an empty account.
     Signature("prospeo", 400, r'"error_code"\s*:\s*"insufficient_credits"', "balance"),
@@ -67,6 +69,8 @@ _TABLE: list[Signature] = [
     Signature("pdl", 402, r"hit your account maximum for", "quota", tripwire=True),
     Signature("lusha", 429, r"daily", "quota", resets="next_utc_midnight"),
     Signature("hunter", 429, r"per billing period", "quota"),
+    # Hunter answers its per-minute limit with a 403 {"errors": [{"id": "too_many_requests"}]} and `RateLimit-Reset`.
+    Signature("hunter", 403, r"too_many_requests", "burst"),
     Signature("apollo", 429, r"per (day|month)|daily|monthly", "quota"),
     # Apollo: an empty credit pool is a 422 {"error": "Insufficient credits. Please upgrade your
     # plan."} (ops/capacity.md, 2026-09-01). A 422 without the phrase is the caller's validation error.
@@ -116,6 +120,12 @@ _TABLE: list[Signature] = [
     # HLR Lookup answers an empty account with a 200 whose `results[0].error` is
     # INSUFFICIENT_CREDIT (its docs; the catalog row's `expect` already keeps it unbilled).
     Signature("hlrlookup", 200, r'"error"\s*:\s*"insufficient_credit"', "balance"),
+    # Tomba: a route's spent allowance is a 429 "You have reached your usage limit", with no Retry-After.
+    Signature("tomba", 429, r"reached your usage limit", "quota", tripwire=True),
+    # Fish Audio: too many requests in flight is a 429 "exceeded your current concurrency limit", no Retry-After.
+    Signature("fishaudio", 429, r"concurrency limit", "burst"),
+    # Icypeas: its per-minute limit is a 429 "exceeded the max number of requests per minute", no Retry-After.
+    Signature("icypeas", 429, r"max number of requests per minute", "burst"),
     Signature("*", 402, r"", "balance"),
 ]
 
@@ -127,7 +137,7 @@ _GENERIC_PHRASES = (
     r"insufficient[ _]credits?", r"insufficient (?:credits?|balance|funds)", r"out of credits?",
     r"credits? (?:exhausted|remaining|left)",
     r"(?:account |api |credit )?(?:balance|quota)(?: (?:has been|is|was))? (?:exceeded|reached|exhausted|limit)",
-    r"upgrade your plan", r"not have enough quota",
+    r"upgrade your plan", r"\w*(?:not|n['’]t) have enough (?:credits?|quota)",
 )
 CAPACITY_PHRASES = _GENERIC_PHRASES + tuple(sig.body_regex for sig in _TABLE if sig.tripwire)
 _UNRECORDED = re.compile(r"\b(?:" + "|".join(f"(?:{p})" for p in CAPACITY_PHRASES) + r")\b", re.IGNORECASE)

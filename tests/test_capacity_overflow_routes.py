@@ -309,6 +309,13 @@ def test_every_recorded_capacity_phrase_arms_the_tripwire():
         assert got is not None and got.kind == "unrecorded", f"{sig.provider}'s {sig.body_regex!r} does not arm the tripwire"
 
 
+def test_not_having_enough_credit_arms_the_tripwire_in_any_spelling():
+    for body in ("sorry, you don't have enough credit", "You don’t have enough credits",
+                 "The account does not have enough quota remaining"):
+        got = S.classify("someone-else", 400, None, body.encode())
+        assert got is not None and got.kind == "unrecorded", body
+
+
 def test_a_caller_error_never_arms_the_tripwire():
     for body in (b"insufficient parameters", b"unbalanced quotes", b"quotation mark missing"):
         assert S.classify("someone-else", 400, None, body) is None
@@ -349,7 +356,6 @@ _UNRECORDED_SIGNATURE = {
     "harvestapi",  # wallet exhaustion unobserved; no overflow route
     "quickenrich",  # subscription exhaustion not observed; do not spend the trial to force it
     "dropleads",  # free trial was not exhausted; no provider-specific 402 body recorded
-    "aiark",  # funded allowance was not exhausted; no provider-specific body was forced
     "wiza",  # The funded grant was not exhausted; no provider-specific body was forced
     "limadata",  # Starter credits remain; no provider-specific empty-balance body was forced
     "getleadsio",  # promotional allocation was not exhausted; bare 402 remains the generic signal
@@ -387,7 +393,7 @@ _UNRECORDED_SIGNATURE = {
     "blitzapi",  # monthly records remain; an exhausted-key response was not forced
     "enrichlayer",  # PAYG auto top-up remains funded; the docs name 403 but not its response body
 
-    "serpapi", "serpstat", "spyfu", "tiingo", "tikhub", "tomba", "twelvedata",
+    "serpapi", "serpstat", "spyfu", "tiingo", "tikhub", "twelvedata",
 }
 
 
@@ -403,7 +409,7 @@ def test_every_platform_provider_has_a_recorded_or_acknowledged_signature():
     catalog_ids = {e["provider"] for e in catalog_store.load().endpoints}
     slots = {p for p in catalog_ids if platform_setting_name(p) in settings}
     assert len(slots) == len(settings), f"a key slot with no catalog provider: {sorted(settings - {platform_setting_name(p) for p in slots})}"
-    recorded = {sig.provider for sig in S._TABLE if sig.provider != "*"}
+    recorded = {sig.provider for sig in S._TABLE if sig.provider != "*" and sig.kind in S.EXHAUSTING_KINDS}
     missing = slots - recorded - _UNRECORDED_SIGNATURE
     assert not missing, f"record how these say 'out of credits' or acknowledge them: {sorted(missing)}"
     stale = (_UNRECORDED_SIGNATURE & recorded) | (_UNRECORDED_SIGNATURE - slots)
