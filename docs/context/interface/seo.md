@@ -444,8 +444,9 @@ sign-in opens in place), so every server-rendered page now gets that behaviour a
 produced the signup is recorded. Schema on the page: `SoftwareApplication`, `BreadcrumbList`, and
 a `FAQPage` whose questions are asserted to appear verbatim in the body.
 
-The public sign-in dialogs share `media/signin-sso.js`: one email field appears first, with company
-SSO and email-code actions before social providers. Company discovery chooses the verified team
+The public sign-in dialogs, including Astra's native dialog, share `media/signin-sso.js`: one email
+field appears first, with company SSO and email-code actions before social providers. Company
+discovery chooses the verified team
 route and never grants access itself. The direct employee link remains available when discovery
 cannot disambiguate teams. The dashboard dialog follows the same order.
 

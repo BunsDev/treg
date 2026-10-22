@@ -69,6 +69,17 @@ test('company sign-in finds a team from email without blocking other methods', a
   await expect(dialog.getByRole('link', { name: 'Continue with Google' })).toBeVisible()
 })
 
+test('Astra sign-in offers the same email-first company route', async ({ page }) => {
+  await page.route('**/auth/me', route => route.fulfill({ status: 401, body: '{}' }))
+  await page.goto('/astra')
+  await page.locator('[data-setup]').first().click()
+  const dialog = page.getByRole('dialog', { name: 'Sign in to treg' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('textbox', { name: 'Email' })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Continue with company SSO' })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Email me a sign-in code' })).toBeVisible()
+})
+
 test('the dashboard and catalog ask for nothing that is not there', async ({ page }) => {
   const missing: string[] = []
   page.on('response', response => { if (response.status() === 404) missing.push(new URL(response.url()).pathname) })
