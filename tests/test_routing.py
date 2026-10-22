@@ -838,6 +838,18 @@ async def test_catalog_get_on_the_routed_endpoint_shows_the_plan(clients: AsyncC
     assert {c["endpoint_id"] for c in plan} <= set(d["endpoint"]["routed_children"] if "routed_children" in d["endpoint"] else [c["endpoint_id"] for c in plan])
 
 
+async def test_the_routed_quote_ranks_the_children_the_router_skips_last(clients: AsyncClient, enrichment_on, monkeypatch):
+    """The quote and the call agree: a child treg's key cannot serve (here `platform_blocked`)
+    stays in the plan for its `accepts`, after every child the router would call, saying why."""
+    from treg.domain.catalog import store as catalog_store
+    monkeypatch.setitem(catalog_store.load().by_id["tomba.people.email.find"], "platform_blocked", "test")
+    plan = (await clients.get(f"/catalog/endpoints/{ROUTED}")).json()["routing"]["plan"]
+    skipped = [c.get("skipped") is not None for c in plan]
+    assert skipped == sorted(skipped) and any(skipped) and not skipped[0]
+    tomba = next(c for c in plan if c["endpoint_id"] == "tomba.people.email.find")
+    assert tomba["skipped"] == "not platform-eligible and no own key" and tomba["accepts"]
+
+
 async def test_idempotent_replay_of_a_routed_call_never_calls_a_provider_twice(clients: AsyncClient, enrichment_on, monkeypatch):
     seen = []
     monkeypatch.setattr(call_service, "relay", _relay_by_provider(

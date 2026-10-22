@@ -216,6 +216,17 @@ async def catalog_provider(service: str) -> dict:
     }
 
 
+def _quote_skip(ep: dict, cat) -> str | None:
+    """Why the router would not call this child on treg's key, in `route.py`'s words; None if it would."""
+    if catalog_store.paused(ep):
+        return f"{ep['provider']} is paused on this deployment"
+    if not cat.platform_eligible(ep):
+        return "not platform-eligible and no own key"
+    if not get_settings().platform_key_for(ep["provider"]):
+        return f"no {ep['provider']} key on this deployment and no own key"
+    return None
+
+
 def _plan_row(c) -> dict:
     """One quote line, token-frugal: what an agent needs to pick or set a ceiling. Measured rates
     ride only when they exist; the unmeasured case says nothing rather than four nulls."""
@@ -668,7 +679,11 @@ async def catalog_endpoint(
                              k: {a: b for a, b in (v or {}).items() if a != "analytics"}
                              for k, v in contract.output.items()},
                          "miss": contract.miss, "derive": contract.derive} if contract else None,
-            "plan": [_plan_row(c) for c in rank(cands)],
+            # A child the router would not call on treg's key (`route.py` drops it the same way)
+            # stays in the plan for its `accepts`, ranked after the rest and saying why.
+            "plan": [_plan_row(c) for c in rank([c for c in cands if not _quote_skip(c.endpoint, cat)])]
+                    + [_plan_row(c) | {"skipped": _quote_skip(c.endpoint, cat)}
+                       for c in rank([c for c in cands if _quote_skip(c.endpoint, cat)])],
             # The same job from providers whose adapter is not (yet) verified: not chosen by the
             # router, still callable by id — the search page groups them under this row, so the
             # page it points at must name them too (found 2026-08-28: "+18 more" led to a list of 6).
