@@ -1896,7 +1896,7 @@ def _validate_enterprise_price(price: dict, *, price_id: str, minimum_cents: int
     return amount_cents
 
 
-async def status(org_id: int) -> dict:
+async def status(org_id: int, *, include_plans: bool = True) -> dict:
     settings = get_settings()
     async with session_maker() as db:
         row = await db.get(EnterpriseSSO, org_id)
@@ -1912,7 +1912,8 @@ async def status(org_id: int) -> dict:
                 "cancel_at_period_end": bool(row and row.cancel_at_period_end)}
     # Existing subscribers need management even when Stripe's Price API is unavailable. Only
     # teams shopping for a plan need live sale prices, and no DB connection spans that call.
-    result["plans"] = [] if result["subscription_status"] in ENTITLED else await catalog()
+    result["plans"] = (await catalog() if include_plans and result["subscription_status"] not in ENTITLED
+                       else [])
     return result
 
 

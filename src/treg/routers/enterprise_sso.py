@@ -64,7 +64,7 @@ def _owner(caller: Caller, org_id: int) -> None:
 async def sso_status(org_id: int, caller: Caller = Depends(require_member)) -> dict:
     if caller.org_id != org_id:
         raise HTTPException(403, "team membership required")
-    return await enterprise_billing.status(org_id)
+    return await enterprise_billing.status(org_id, include_plans=caller.role == "owner")
 
 
 @router.get("/orgs/{org_id}/sso/blocked")

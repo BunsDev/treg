@@ -67,19 +67,20 @@ export default {
       <div>
         <div class="lbl">TEAM ACCESS</div>
         <h2>Company sign-in</h2>
-        <p>Let employees join this team through your company's identity provider. They join as members; you can change their roles in Members.</p>
+        <p v-if="owner">Let employees join this team through your company's identity provider. They join as members; you can change their roles in Members.</p>
+        <p v-else>Your team has company sign-in connected. Use the employee link for a future sign-in or share it with a coworker.</p>
       </div>
-      <span v-if="subscribed" class="sso-progress">{{completedSteps}} of {{setupStepCount}} steps done</span>
+      <span v-if="owner && subscribed" class="sso-progress">{{completedSteps}} of {{setupStepCount}} steps done</span>
     </header>
 
     <p v-if="error" class="banner" role="alert">{{error}}</p>
     <p v-if="message" class="tut-notice" role="status">{{message}}</p>
 
-    <template v-if="sso && !owner">
+    <template v-if="sso?.sso_ready && subscribed && !owner">
       <div class="sso-panel">
-        <h3>Sign in with your company</h3>
-        <p class="sso-muted">Use your company's sign-in to access this team.</p>
-        <a class="btn primary sso-button" :href="`/auth/sso/${encodeURIComponent(slug)}/start`">Continue with company SSO <span aria-hidden="true">↗</span></a>
+        <h3>Company sign-in is ready</h3>
+        <p class="sso-muted">This link starts a company sign-in and can be shared with a coworker who has access through your identity provider.</p>
+        <button class="btn sso-button" @click="copyEmployeeLink">Copy employee sign-in link</button>
       </div>
     </template>
 

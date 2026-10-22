@@ -76,8 +76,9 @@ Each offered plan needs a reusable Stripe Price ID
 `billing.catalog` reads Prices outside a database session and hides unusable or unconfigured plans;
 the API returns integer cents and the Price ID for display. A deployment may set separate minimum
 monthly USD prices for the two plans; a cheaper Price is hidden and rejected at checkout.
-`billing.status` reads existing subscription state without Stripe I/O for entitled teams, so a
-Price API failure cannot hide their setup or cancellation controls. `billing.start_checkout` rejects a
+`billing.status` reads existing subscription state without Stripe I/O for entitled teams, and
+never fetches Prices for non-owner callers, so a Price API failure cannot hide setup or cancellation
+controls or delay a member's team page. `billing.start_checkout` rejects a
 stale Price ID from an older page, then retrieves the configured Price again
 outside a database session and verifies its active state, flat fee, USD currency, and monthly interval
 before sending that Price ID to Checkout. This avoids creating a new Stripe

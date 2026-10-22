@@ -70,6 +70,9 @@ WorkOS sign-in.
 
 The owner may enter an IT admin email to have WorkOS send setup instructions; the recipient does
 not need a treg owner account. The Admin Portal button remains for owners doing setup themselves.
+The SSO tab is always available to the team owner. Other members see it only after a paid SSO
+connection is ready; the tab lets them copy the employee sign-in link rather than sending their
+already signed-in browser through SSO again. Non-owners do not fetch Stripe plan prices.
 
 An employee who signs in through the team's WorkOS organization gets a team membership with the
 `member` role. A regular email or social sign-in does not satisfy SSO enforcement for that team,

@@ -627,6 +627,23 @@ async def test_existing_subscription_status_does_not_call_stripe(clients, monkey
         assert status["plans"] == []
 
 
+async def test_member_status_skips_stripe_catalog_without_subscription(clients, monkeypatch):
+    org_id = (await clients.get("/orgs")).json()[0]["org_id"]
+    async with session_maker() as db:
+        membership = (await db.execute(select(Membership).where(Membership.org_id == org_id))).scalar_one()
+        membership.role = "member"
+        await db.commit()
+
+    async def unexpected_catalog():
+        raise AssertionError("a non-owner must not request Stripe prices")
+
+    monkeypatch.setattr(enterprise_billing, "catalog", unexpected_catalog)
+    response = await clients.get(f"/orgs/{org_id}/sso")
+    assert response.status_code == 200
+    assert response.json()["plans"] == []
+    assert response.json()["sso_ready"] is False
+
+
 async def test_stripe_price_floor_hides_offer_and_blocks_checkout(clients, monkeypatch):
     from treg.config import get_settings
     settings = get_settings()

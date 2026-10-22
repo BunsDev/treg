@@ -12,9 +12,24 @@ import stripeWhite from '../assets/stripe-wordmark-white.svg'
 // The new agent's check-in poll lives as long as this page (state/agents.js).
 export default {
   components: { InfoTip, Money, Avatar, TeamShowcase, TeamAvatar, EnterpriseSSO },
-  data: () => ({ NO_KEY, stripeSlate, stripeWhite }),
+  data: () => ({ NO_KEY, stripeSlate, stripeWhite, memberSsoReady: false }),
   setup: useDashboard,
-  mounted() { this.resumeCredentialIssue(); this.resumeAgentPoll() },
+  mounted() { this.resumeCredentialIssue(); this.resumeAgentPoll(); this.loadMemberSso() },
+  watch: {
+    activeOrgId() { this.loadMemberSso() },
+    orgTab(tab) { if (tab === 'sso' && this.activeRole !== 'owner') this.loadMemberSso() },
+  },
+  methods: {
+    async loadMemberSso() {
+      this.memberSsoReady = false
+      if (!this.activeOrgId || this.activeRole === 'owner') return
+      const orgId = this.activeOrgId
+      const status = await this.api(`/orgs/${orgId}/sso`).catch(() => null)
+      if (this.activeOrgId !== orgId || this.activeRole === 'owner') return
+      this.memberSsoReady = !!(status?.sso_ready && ['active', 'trialing', 'past_due'].includes(status.subscription_status))
+      if (!this.memberSsoReady && this.orgTab === 'sso') this.orgTab = 'keys'
+    },
+  },
   beforeUnmount() { this.parkCredentialIssue() },
 }
 </script>
@@ -35,16 +50,16 @@ export default {
               <button v-if="canAdmin" :class="{active:orgTab==='policy'}" @click="orgTab='policy'">Policy</button>
               <button v-if="canAdmin" :class="{active:orgTab==='billing'}" @click="orgTab='billing'">Billing</button>
               <button v-if="canAdmin" :class="{active:orgTab==='showcase'}" @click="orgTab='showcase'">Showcase</button>
-              <button :class="{active:orgTab==='sso'}" @click="orgTab='sso'">SSO</button>
+              <button v-if="activeRole==='owner' || memberSsoReady" :class="{active:orgTab==='sso'}" @click="orgTab='sso'">SSO</button>
               <button :class="{active:orgTab==='danger'}" @click="orgTab='danger'; resetRenameForm()">Team settings</button>
             </div>
-            <p v-if="!canAdmin && !['keys','danger'].includes(orgTab)" class="sub" style="margin-bottom:12px">Members, projects and policy are visible to admins.</p>
+            <p v-if="!canAdmin && !['keys','danger','sso'].includes(orgTab)" class="sub" style="margin-bottom:12px">Members, projects and policy are visible to admins.</p>
             <p v-if="myUsage && myUsage.cap>=0" class="sub" style="margin:-6px 0 12px">Your usage today: <b>{{myUsage.used_today}} / {{myUsage.cap}}</b> calls.</p>
             <div v-if="orgErr" class="banner">{{orgErr}}</div>
             <div v-if="orgMsg" class="tut-notice" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
               <span>{{orgMsg}}</span><button class="btn sm ico" @click="orgMsg=''" aria-label="Dismiss">✕</button>
             </div>
-            <EnterpriseSSO v-if="orgTab==='sso'" :org-id="activeOrg.org_id" :slug="activeOrg.slug" :owner="activeRole==='owner'" />
+            <EnterpriseSSO v-if="orgTab==='sso' && (activeRole==='owner' || memberSsoReady)" :org-id="activeOrg.org_id" :slug="activeOrg.slug" :owner="activeRole==='owner'" />
             <div v-if="credentialIssue" class="tut-notice" role="status" style="margin-bottom:12px">
               <template v-if="credentialIssue.status==='pending'">Your key request is in progress. You can switch teams and return here for the result. Keep this browser tab open.</template>
               <template v-else-if="credentialIssue.status==='checking'">Checking that your issued key is still active before showing it…</template>
