@@ -215,6 +215,8 @@ endpoints:
       Recheck this rate if ContactOut starts metering verification.'
   verified: 2026-09-09
   added: '2026-09-08'
+  platform_blocked: treg's shared ContactOut account does not serve email verification; connect
+    your own ContactOut key to call it.
   example_response: examples/contactout.people.email.verify.json
   docs_url: https://api.contactout.com/
 - id: contactout.people.search
