@@ -232,7 +232,7 @@ def read_balance(client: httpx.Client, service: str, base: str, headers: dict, q
             value = dig(r.json(), route[1])
             if isinstance(value, (int, float)):
                 return value
-        except Exception:
+        except Exception:  # noqa: BLE001 - any failed probe is retried, then reported as no value
             pass
         time.sleep(1.0 * (attempt + 1))
     return None

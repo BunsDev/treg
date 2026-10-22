@@ -95,7 +95,7 @@ from .types import (
     UpstreamRequest,
     UpstreamResponse,
 )
-from ...domain import money as ledger
+from ...domain import money as ledger  # noqa: F401 - tests patch the money module through service.ledger
 
 
 class _ApplicationRequest:
@@ -224,9 +224,9 @@ def _set_caller_max_cost(request, mk: MarketplaceCall) -> None:
         return
     try:
         mk.max_cost_micro = int(round(float(raw) * 1_000_000))
-    except (ValueError, OverflowError):
+    except (ValueError, OverflowError) as exc:
         raise ResolutionFailed("catalog_parameter_invalid", status_code=400,
-                               detail=f"{routed.MAX_COST_HEADER} must be a USD number, got {raw!r}")
+                               detail=f"{routed.MAX_COST_HEADER} must be a USD number, got {raw!r}") from exc
 
 
 def _client_name(request: _ApplicationRequest) -> str:
@@ -419,11 +419,11 @@ async def _verify_public_managed_resources(
             )
         try:
             document = json.loads(b"".join(chunks)) if response.status == 200 else None
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise GatewayFailed(
                 "upstream_failed", status_code=502,
                 detail="provider public-resource verification failed",
-            )
+            ) from exc
         required = lookup.get("requires") or {}
         if (not isinstance(document, dict)
                 or any(_document_value(document, key) != value
@@ -522,7 +522,7 @@ async def _apply_managed_resource_result(
                 "provider_resource_state_failed", status_code=502,
                 detail="provider resource ownership could not be established",
             ) from exc
-        except Exception as exc:  # noqa: BLE001 - compensate outside the failed transaction
+        except Exception as exc:
             cleaned = await _compensate_managed_create(
                 mk, upstream_id, secrets, upstream_client)
             logging.getLogger("treg.provider_resources").error(
@@ -562,7 +562,7 @@ async def _apply_managed_resource_result(
                         if isinstance(name, str) and name.strip():
                             provider_resources.rename(row, name)
             await resource_db.commit()
-    except Exception as exc:  # noqa: BLE001 - upstream succeeded but local lifecycle did not
+    except Exception as exc:
         raise GatewayFailed(
             "provider_resource_state_failed", status_code=502,
             detail="provider resource state could not be updated; retry the request",
@@ -631,7 +631,6 @@ async def _execute_call(request: _ApplicationRequest, upstream_client: httpx.Asy
     except CallFailure:
         raise
     idem_key = intake.idempotency_key
-    idem_fingerprint = intake.fingerprint
     if intake.replay is not None:
         replayed = intake.replay
         request.context.replay_of = replayed.call_ref or None
@@ -1244,7 +1243,7 @@ async def _execute_call(request: _ApplicationRequest, upstream_client: httpx.Asy
         for secret in secrets.values():
             try:
                 await oauth.ensure_fresh(secret, db, upstream_client)
-            except Exception as exc:  # noqa: BLE001 — surface a clear 502 instead of injecting a dead token
+            except Exception as exc:
                 raise GatewayFailed(
                     "refresh_failed", status_code=502,
                     detail=f"oauth refresh failed: {exc}") from exc
@@ -1423,7 +1422,7 @@ async def _execute_call(request: _ApplicationRequest, upstream_client: httpx.Asy
                         await async_task_app.observe_owned_poll(
                             mk.async_owner_call_id, response.status, body,
                             answers_allowed=caller.org.archive_opt_out_at is None)
-                    except Exception:  # noqa: BLE001 - the worker retries; never fail the poll
+                    except Exception:
                         logging.getLogger("treg.asynctasks").warning(
                             "could not finalize owned poll for %s; worker will retry",
                             mk.async_owner_call_id, exc_info=True)
@@ -1432,7 +1431,7 @@ async def _execute_call(request: _ApplicationRequest, upstream_client: httpx.Asy
                         await async_task_app.remember_platform_resources(
                             caller.org_id, mk.provider, call_ref, mk.resource_ownership, body,
                             tags=meta.tags, key_slot=mk.key_slot)
-                    except Exception:  # noqa: BLE001 - failure keeps later access fail-closed
+                    except Exception:
                         logging.getLogger("treg.asynctasks").warning(
                             "could not persist async resource ownership for %s", call_ref,
                             exc_info=True)
@@ -1549,7 +1548,7 @@ async def _execute_call(request: _ApplicationRequest, upstream_client: httpx.Asy
                    _ERROR_MASKING_FAILED if _renderings is None else
                    _redact_snippet(f"treg: {exc.detail}", _renderings, _ERROR_RESPONSE_MAX)))
         raise
-    except Exception:  # noqa: BLE001 — an unexpected fault is still not the caller's bill
+    except Exception:
         # The reaper would eventually return this hold anyway; returning it now means a bug in the call
         # path can't make a funded org look broke for the next three minutes.
         if mk is not None and mk.metered:
@@ -1596,7 +1595,7 @@ async def _execute_call(request: _ApplicationRequest, upstream_client: httpx.Asy
                             mk, body, httpx.Headers(response.raw_headers)))
                     observed = None
                     request.context.finalization = FinalizationState.FINALIZED
-                except Exception as exc:  # noqa: BLE001 - an accepted task must never orphan a hold
+                except Exception as exc:
                     # treg could not record the task, so nobody will ever observe its outcome.
                     # The platform absorbs that: release the hold (status None = never a charge)
                     # and alert. Charging the basis here would bill a customer for treg's own

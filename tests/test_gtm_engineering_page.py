@@ -87,13 +87,14 @@ async def test_markdown_twin_carries_every_chapter(clients: AsyncClient):
     assert md.status_code == 200
     assert md.headers.get("x-robots-tag") == "noindex"
     assert "{BASE}" not in md.text
-    norm = lambda s: re.sub(r"[“”\"]", '"', _html.unescape(re.sub(r"<[^>]+>", "", s))).strip()
+    def norm(s):
+        return re.sub(r"[“”\"]", '"', _html.unescape(re.sub(r"<[^>]+>", "", s))).strip()
     headings = [norm(h) for h in re.findall(r'<h3 class="ct">(.*?)</h3>', page, re.S)]
     assert len(headings) >= 20
     md_headings = {norm(h) for h in re.findall(r"^## (.+)$", md.text, re.M)}
     missing = [h for h in headings if h not in md_headings]
     assert not missing, missing
-    assert f'rel="alternate" type="text/markdown" href="' in page
+    assert 'rel="alternate" type="text/markdown" href="' in page
 
 
 async def test_studies_publish_results_without_naming_the_databases(clients: AsyncClient):

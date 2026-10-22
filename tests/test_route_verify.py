@@ -39,7 +39,7 @@ def _bb(result: str | None, **flags) -> tuple[int, dict]:
 
 
 @pytest.fixture
-def verifiers_on(monkeypatch, platform_on):  # noqa: F811
+def verifiers_on(monkeypatch, platform_on):
     for p in ("TOMBA", "BOUNCEBAN", "HUNTER"):
         monkeypatch.setenv(f"TREG_PLATFORM_KEY_{p}", f"PLATFORM-{p}-KEY")
     monkeypatch.setenv("TREG_PLATFORM_KEY_TOMBA_SECRET", "PLATFORM-TOMBA-SECRET")

@@ -57,7 +57,7 @@ from mcp.shared.exceptions import MCPError
 from mcp.types import AudioContent, CallToolResult, METHOD_NOT_FOUND, TextContent, ToolAnnotations
 from starlette.responses import JSONResponse
 
-from . import analytics, audit, client_ip, hints, jsontext, oauth_providers
+from . import analytics, client_ip, hints, jsontext, oauth_providers
 from .application import catalog_find as find_app
 from .application import catalog_search as search_app
 from .application import search_experiment
@@ -603,7 +603,7 @@ async def _observed_stats(endpoint_ids: list[str]) -> dict[str, dict]:
         return {}
     try:
         return await reader.get_many(endpoint_ids)
-    except Exception:  # noqa: BLE001 — telemetry must never take search down
+    except Exception:
         logging.getLogger("treg.mcp").warning("endpoint stats unavailable", exc_info=True)
         return {}
 
@@ -660,7 +660,6 @@ async def _internal_auth(token: str) -> dict[str, str]:
         pinned = (_session.read_identity_claims(token) or {}).get("org")
         return {"X-Treg-Token": token, "X-Treg-Org": pinned} if pinned else {"X-Treg-Token": token}
 
-    from sqlmodel import select
 
     from .domain.identity import session
     from .infra.db import session_maker
@@ -792,7 +791,7 @@ async def _whose_grant(client: httpx.AsyncClient, slug: str | None, *, oauth: bo
             if slug and isinstance(orgs, list):
                 out["hint"] = (f"this connection spends from {slug!r}, which is not among this "
                                f"account's teams — check who authorised it")
-    except Exception:  # noqa: BLE001 — a label, never a gate
+    except Exception:
         logging.getLogger("treg.mcp").warning("could not label the grant's team", exc_info=True)
     if oauth:
         # Only an OAuth grant HAS a team to move. A header token carries its own team already, and
@@ -845,7 +844,7 @@ async def _search_identity(ctx: Context | None) -> tuple[str | None, int | None,
             me = await client.get("/auth/me")
             email = _body(me).get("email") if me.status_code == 200 else None
             return key, org_id, email
-    except Exception:  # noqa: BLE001 — attribution, never a reason to fail a search
+    except Exception:
         logging.getLogger("treg.mcp").warning("search experiment: identity unresolved", exc_info=True)
         return key, None, None
 

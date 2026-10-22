@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from ...caller_metadata import TAG_DEFAULT, _MAX_BUDGET_DIMS, _META_KEY_RE
+from ...caller_metadata import _MAX_BUDGET_DIMS, _META_KEY_RE
 from ...config import get_settings
 from ...models import Org, TagBudget
 from ..identity.access import Caller

@@ -481,7 +481,7 @@ async def _answers_allowed(db, org_id: int | None) -> bool:
         return False
     try:
         org = await db.get(Org, org_id)
-    except Exception:  # noqa: BLE001 - an optional event column never stops a settle or release
+    except Exception:
         log.warning("could not read the archive opt-out of org %s; event sent without answers",
                     org_id, exc_info=True)
         return False
@@ -538,7 +538,7 @@ async def _finish_terminal(snapshot: AsyncTaskRecord, outcome: str, document: ob
         try:
             await archive.store_terminal_response(
                 snapshot.call_id, snapshot.provider, snapshot.endpoint_id, status_code, body)
-        except Exception:  # noqa: BLE001 - archive is best effort, settlement is durable
+        except Exception:
             log.exception("could not archive terminal evidence for %s", snapshot.call_id)
     return result
 
@@ -598,7 +598,7 @@ async def _process(call_id: str, client: httpx.AsyncClient, attempt: int) -> str
         return result
     except money_admission.AdmissionRefused:
         raise
-    except Exception:  # noqa: BLE001 - the row stays pending; the next tick or the deadline ends it
+    except Exception:
         log.exception("could not release async task %s on a retired account", call_id)
         return "backed_off"
 

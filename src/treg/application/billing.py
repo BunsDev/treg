@@ -172,8 +172,8 @@ def validate_threshold_usd(amount_usd) -> int:
     card-fee math): any whole dollar amount from $1 up to the single-top-up ceiling."""
     try:
         value = float(amount_usd)
-    except (TypeError, ValueError):
-        raise TopupRejected("threshold must be a number of US dollars")
+    except (TypeError, ValueError) as exc:
+        raise TopupRejected("threshold must be a number of US dollars") from exc
     if value != int(value):
         raise TopupRejected("the threshold is whole dollars (e.g. 5, not 5.50)")
     if value < 1:
@@ -194,8 +194,8 @@ def validate_topup_usd(amount_usd) -> int:
     s = get_settings()
     try:
         value = float(amount_usd)
-    except (TypeError, ValueError):
-        raise TopupRejected("amount must be a number of US dollars")
+    except (TypeError, ValueError) as exc:
+        raise TopupRejected("amount must be a number of US dollars") from exc
     if value != int(value):
         raise TopupRejected("top-ups are whole dollars (e.g. 10, not 10.50)")
     value = int(value)
@@ -1843,7 +1843,7 @@ async def process_webhook(
     async with _db.session_maker() as db:
         try:
             return await handle_webhook_event(db, event)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             # 500 tells Stripe to retry, which is what we want for a transient failure — but log
             # loudly: an event that never succeeds is money someone paid and didn't get.
             log.exception("webhook %s failed: %s", event.get("type"), e)

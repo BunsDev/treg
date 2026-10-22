@@ -69,7 +69,7 @@ async def env():
 
 # ---- the stamp ---------------------------------------------------------------------------------
 async def test_client_is_normalized_and_junk_is_discarded(env):
-    for sent, stored in (("Claude-Code/1.2.3", "claude-code"), ("weird agent!!", "weirdagent"),
+    for sent, _stored in (("Claude-Code/1.2.3", "claude-code"), ("weird agent!!", "weirdagent"),
                          (None, "")):
         await env.c.get("/call/alpha/ok", headers=_h(env.member, sent))
     await audit.drain()

@@ -146,7 +146,8 @@ async def update_secret(
             try:
                 json.loads(raw)
             except (ValueError, TypeError):
-                raise HTTPException(status_code=422, detail=f"kind {fields['kind']!r} needs a JSON value")
+                # from None: a JSONDecodeError keeps the whole document, here the decrypted secret
+                raise HTTPException(status_code=422, detail=f"kind {fields['kind']!r} needs a JSON value") from None
         secret.health_status, secret.health_detail, secret.health_checked_at = "unknown", "", None
     if "value" in fields:
         fields["value"] = crypto.encrypt(fields["value"])  # re-encrypt on rotate
@@ -232,8 +233,8 @@ class ToolUpdate(BaseModel):
 def _host_of(url: str) -> str:
     try:
         return urlsplit(url).netloc.lower()
-    except ValueError:  # e.g. unbalanced IPv6 brackets "http://[::1" → don't 500, reject the input
-        raise HTTPException(status_code=422, detail="base_url is not a valid URL")
+    except ValueError as exc:  # e.g. unbalanced IPv6 brackets "http://[::1" → don't 500, reject the input
+        raise HTTPException(status_code=422, detail="base_url is not a valid URL") from exc
 
 
 def _normalize_scheme(rest: str) -> str:
@@ -365,8 +366,8 @@ async def create_tool(
     db.add(tool)
     try:
         await db.commit()
-    except IntegrityError:
-        raise HTTPException(status_code=409, detail=f"tool name {body.name!r} already exists in this org")
+    except IntegrityError as exc:
+        raise HTTPException(status_code=409, detail=f"tool name {body.name!r} already exists in this org") from exc
     return _tool_view(tool)
 
 
@@ -599,8 +600,8 @@ async def _register_skill_bundle(body: SkillIn, caller: Caller, db: AsyncSession
 
     try:
         await db.commit()
-    except IntegrityError:
-        raise HTTPException(status_code=409, detail="a tool name in this skill already exists in this org")
+    except IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="a tool name in this skill already exists in this org") from exc
     return await _bundle_view(bundle.id, db)
 
 

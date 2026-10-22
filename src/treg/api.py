@@ -594,11 +594,11 @@ async def grant_local_run(
     try:
         rendered = await localrun.render_grant(tool, profile, db, request.app.state.http)
     except LookupError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
-    except Exception as exc:  # noqa: BLE001 — a failed oauth refresh must read clearly, like /call
-        raise HTTPException(status_code=502, detail=f"oauth refresh failed: {exc}")
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:  # a failed oauth refresh must read clearly, like /call
+        raise HTTPException(status_code=502, detail=f"oauth refresh failed: {exc}") from exc
     audit_id = await _grant_audit(db, caller, tool.name, "GRANT", _redact_argv(body.argv), 200, _client_of(request))
     warnings = list(profile.get("warnings") or [])
     ttl = rendered["ttl_seconds"]
@@ -921,7 +921,7 @@ async def run_tool_server(
     try:
         exec_bin = runner.resolve_exec_bin(tool)  # the SAME resolution run_tool execs — never diverges
     except runner.RunError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if exec_bin not in _allowed_server_bins():
         raise HTTPException(status_code=422, detail=(
             f"{exec_bin!r} is not approved for server runs — only catalog-known CLIs may run on the "
@@ -931,9 +931,9 @@ async def run_tool_server(
         async with runner.run_slot(caller.email):  # cap concurrent server runs (global + per-user)
             result = await runner.run_tool(tool, list(body.args), db, timeout_s=timeout)
     except runner.RunBusy as exc:
-        raise HTTPException(status_code=429, detail=str(exc))
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
     except runner.RunError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     audit.record_run(
         org_id=caller.org_id, user_email=caller.email, bundle_name=tool.name,
         argv=_redact_argv_list(list(body.args)),  # redact any credential typed inline before it's stored

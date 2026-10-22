@@ -24,7 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from treg.domain.catalog import store as cs  # noqa: E402
+from treg.domain.catalog import store as cs
 
 
 # ---- the frozen pre-change engine (every token must match; score = sum of field weights) --------
@@ -177,8 +177,10 @@ def main() -> None:
     print("\nper-query rank of first correct id (None = not in top 8; total=0 marked ∅):")
     legacy_rows = results["legacy"][0]
     current_rows = results["current"][0]
+    def mark(r, t):
+        return "∅" if t == 0 else (str(r) if r else "-")
+
     for (style, q, r_old, t_old), (_, _, r_new, t_new) in zip(legacy_rows, current_rows):
-        mark = lambda r, t: "∅" if t == 0 else (str(r) if r else "—")
         flag = "  <-- fixed" if (t_old == 0 or not r_old) and r_new else \
                ("  <-- REGRESSED" if r_old and not r_new else "")
         print(f"  [{style[:4]}] {q[:58]:58} legacy={mark(r_old, t_old):2} current={mark(r_new, t_new):2}{flag}")

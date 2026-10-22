@@ -3076,8 +3076,8 @@ COMPANYENRICH = OAuthProvider(
     docs_url="https://docs.companyenrich.com",
     # /me is free (spends no credits), needs auth, and returns the credit balance — the natural key
     # check. VERIFIED live 2026-08-20: a valid key gets 200 with {credits:{used,total}}; the key
-    # "bogus123" gets a clean HTTP 401 with an application/problem+json body
-    # ({"title":"Unauthorized","status":401,"detail":"Invalid or no authorization token provided..."}),
+    # "bogus123" gets a clean HTTP 401 with an application/problem+json body titled "Unauthorized"
+    # whose detail reads "Invalid or no authorization token provided...",
     # as does a request with no Authorization header at all. No status-lies-about-the-key problem
     # here, so none of token_verify_field / token_ok_field / token_reject_field is needed, and the
     # default reject-on-status behavior is correct.

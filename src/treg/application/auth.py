@@ -645,7 +645,7 @@ async def complete_github_login(
             raise SocialLoginError("github_no_verified_email")
     except SocialLoginError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"[auth] github callback error: {exc}")  # keep internals server-side, not in the response
         raise SocialLoginError("callback_failed") from exc
     return await _provision_social_user(email, state, "github", entry_surface)
@@ -682,7 +682,7 @@ async def complete_google_login(
             raise SocialLoginError("google_unverified_email")
     except SocialLoginError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"[auth] google callback error: {exc}")  # keep internals server-side, not in the response
         raise SocialLoginError("callback_failed") from exc
     return await _provision_social_user(email, state, "google", entry_surface)

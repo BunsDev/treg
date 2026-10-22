@@ -19,7 +19,6 @@ Four kinds of tool, four sources of columns (`column_source`):
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from ... import jsontext

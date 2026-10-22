@@ -336,7 +336,7 @@ _Loader.yaml_implicit_resolvers = {
 
 def _read_yaml(path: Path) -> dict:
     try:
-        data = yaml.load(path.read_text(encoding="utf-8"), Loader=_Loader)  # noqa: S506 - SafeLoader subclass
+        data = yaml.load(path.read_text(encoding="utf-8"), Loader=_Loader)
     except (OSError, yaml.YAMLError):
         return {}
     return data if isinstance(data, dict) else {}
@@ -563,7 +563,7 @@ def _load_routing(directory: Path, by_id: dict[str, dict]):
             return None
     try:
         return load_routing(directory, by_id, _read_yaml, _example)
-    except Exception:  # noqa: BLE001 — a broken routing file must not take the catalog down
+    except Exception:
         import logging
         logging.getLogger("treg.catalog").warning("routing files failed to load", exc_info=True)
         return {}, {}
@@ -1339,7 +1339,8 @@ def _scored(query: str, cat: Catalog, platform: str | None, keep: Callable[[dict
 
 
 # ---- a provider named in the query ---------------------------------------------------------------
-_provider_label: Callable[[str], str] = lambda provider: provider
+def _provider_label(provider: str) -> str:
+    return provider
 
 
 def configure_provider_labels(label: Callable[[str], str]) -> None:

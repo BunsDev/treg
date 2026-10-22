@@ -826,7 +826,7 @@ async def test_contactout_pool_stats_are_informational_even_when_empty(contactou
         } | extra
         async with httpx.AsyncClient(
             transport=httpx.MockTransport(
-                lambda r: httpx.Response(200, json={"status_code": 200, "usage": usage})
+                lambda r, usage=usage: httpx.Response(200, json={"status_code": 200, "usage": usage})
             )
         ) as c:
             row = await collectors.provider_balance("contactout", c)

@@ -209,7 +209,7 @@ def _run_subshell(argv: list[str], env: dict, ttl_seconds: int | None = None) ->
     closed terminal both return control here for teardown, with no orphaned subshell. A `ttl_seconds`
     hard cap closes the session automatically when it elapses (a daemon timer that terminates the
     child); it is a convenience only — Phase-1 holds no credential, so nothing is left to time out."""
-    proc = subprocess.Popen(argv, env=env)  # noqa: S603 — argv list, no shell
+    proc = subprocess.Popen(argv, env=env)
 
     def _stop(_signum, _frame):
         if proc.poll() is None:

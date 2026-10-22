@@ -348,7 +348,7 @@ async def search(query: str, limit: int, *, cat: catalog_store.Catalog, source: 
     try:
         fields = await _v2(query, cat, limit, page=page, observed=observed, provider_display=provider_display,
                            hub=hub[0], serve_it=serve_it)
-    except Exception:  # noqa: BLE001 - a search degrades to the shipped ranker, never fails
+    except Exception:
         log.warning("v2 search failed; serving the lexical page", exc_info=True)
         if serve_it:
             page.verdict, page.reason = find.KEYWORD, "error"       # a holdout's page carries no verdict

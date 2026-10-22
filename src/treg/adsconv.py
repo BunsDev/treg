@@ -8,6 +8,22 @@ the UPLOAD is asynchronous. Nothing here may route through audit.py.
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import logging
+import re
+import time
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from .config import get_settings
+from .domain.identity.access import AGENT_DOMAIN
+from .models import AdConversion, Membership, Org, User
+
 # Fixed FX, set 2026-08-17: 1 AUD = 0.70 USD. Deliberately a constant rather than a live
 # rate so reported conversion value stays stable — a change in ROAS should mean the
 # business moved, not that the currency market did. Revisit if the rate drifts far.
@@ -38,22 +54,6 @@ def usd_micro_to_aud_micro(usd_micro: int) -> int:
     """
     return usd_micro * AUD_PER_USD_NUM // AUD_PER_USD_DEN
 
-
-import asyncio
-import hashlib
-import logging
-import re
-import time
-from datetime import datetime, timedelta, timezone
-
-from sqlalchemy import or_
-from sqlalchemy.exc import IntegrityError
-from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
-
-from .config import get_settings
-from .domain.identity.access import AGENT_DOMAIN
-from .models import AdConversion, Membership, Org, User
 
 
 def user_data_enabled() -> bool:

@@ -394,17 +394,17 @@ async def maybe_overflow(
                     await _preserve_unknown_budget(budget_reservations[0])
                 else:
                     await _release_budget(budget_reservations[0])
-            except Exception:  # noqa: BLE001 - cancellation must remain the result
+            except Exception:
                 log.exception("overflow budget cleanup failed for cancelled %s", mk.endpoint_id)
         raise
     except CallFailure:
         if budget_reservations:
             try:
                 await _release_budget(budget_reservations[0])
-            except Exception:  # noqa: BLE001 - preserve the typed call failure
+            except Exception:
                 log.exception("overflow budget release failed for %s", mk.endpoint_id)
         raise
-    except Exception:  # noqa: BLE001 - overflow is advisory and must not replace the primary result
+    except Exception:
         log.exception("overflow attempt crashed for %s", mk.endpoint_id)
         if reserved:
             await _platform_settle(reserved[0], None, reason="overflow_crashed")
@@ -418,7 +418,7 @@ async def maybe_overflow(
                     await _preserve_unknown_budget(budget_reservations[0])
                 else:
                     await _release_budget(budget_reservations[0])
-            except Exception:  # noqa: BLE001 - the primary vendor answer still wins
+            except Exception:
                 log.exception("overflow budget release failed for crashed %s", mk.endpoint_id)
         return None
 

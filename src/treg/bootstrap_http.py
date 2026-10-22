@@ -10,7 +10,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.datastructures import MutableHeaders
 
-from .config import LEGACY_PUBLIC_HOSTS, PUBLIC_HOST_ALIASES, get_settings
+from .config import LEGACY_PUBLIC_HOSTS, get_settings
 from .domain.identity import session as sess
 
 

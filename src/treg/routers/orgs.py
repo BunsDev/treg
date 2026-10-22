@@ -67,14 +67,14 @@ from ..models import (
 )
 from ..timeutil import as_naive as _as_naive
 from ..timeutil import utcnow_naive as _utcnow_naive
+from .auth_helpers import _is_https, require_managed_cli
+from .signup_cookies import REFERRAL_COOKIE
 
 
 _day_start_utc = usage_policy._day_start_utc
 count_today = usage_policy.count_today
 _deny_match = access_policy._deny_match
 _org_deny_rules = access_policy._org_deny_rules
-from .auth_helpers import _is_https, require_managed_cli
-from .signup_cookies import REFERRAL_COOKIE
 
 
 INVITE_TTL_DAYS = 7  # invite codes are one-time AND expire after this many days
@@ -572,9 +572,9 @@ async def accept_invite(
     invite.status = "accepted"
     try:
         await db.commit()  # a concurrent double-accept trips uq_membership_user_org — 409, not 500
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="already a member of this org")
+        raise HTTPException(status_code=409, detail="already a member of this org") from exc
     org = await db.get(Org, invite.org_id)
     response.headers["Cache-Control"] = "no-store"
     return {"org": org.slug, "org_id": org.id, "name": org.name, "role": invite.role, "token": token}
@@ -676,9 +676,9 @@ async def accept_my_invite(
     invite.status = "accepted"
     try:
         await db.commit()  # a concurrent double-accept trips uq_membership_user_org — 409, not 500
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="already a member of this org")
+        raise HTTPException(status_code=409, detail="already a member of this org") from exc
     org = await db.get(Org, invite.org_id)
     response.headers["Cache-Control"] = "no-store"
     return {"org": org.slug, "org_id": org.id, "name": org.name, "role": invite.role, "token": token}
@@ -1107,9 +1107,9 @@ async def create_agent(
             db, membership, user, actor_email=caller.email,
         )
         await db.commit()
-    except (managed_keys.RotationConflict, IntegrityError):
+    except (managed_keys.RotationConflict, IntegrityError) as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="another rotation already replaced this agent key")
+        raise HTTPException(status_code=409, detail="another rotation already replaced this agent key") from exc
     response.headers["Cache-Control"] = "no-store"
     return {"token": token, "name": name, "email": email, "org": caller.org.slug, "user_id": user.id,
             "api_key_id": key.id,
@@ -1312,8 +1312,8 @@ async def usage_spend(
     try:
         last = min(date.fromisoformat(to) if to else today, today)
         first = date.fromisoformat(from_) if from_ else key_spend.first_day(last, key_spend.WINDOW_DAYS)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="from and to are dates: YYYY-MM-DD")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="from and to are dates: YYYY-MM-DD") from exc
     if first > last:
         raise HTTPException(status_code=422, detail="from must not be after to")
     state = await key_spend.history(db)
@@ -1416,10 +1416,10 @@ async def rename_org(
                                allow_reserved=bool(caller.user.is_superadmin))
         await db.commit()
     except ValueError as e:
-        raise HTTPException(status_code=409 if "taken" in str(e) else 400, detail=str(e))
-    except IntegrityError:
+        raise HTTPException(status_code=409 if "taken" in str(e) else 400, detail=str(e)) from e
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="slug is taken")
+        raise HTTPException(status_code=409, detail="slug is taken") from exc
     analytics.capture(caller.email, "org_renamed", {
         "org_id": org.id, "slug_changed": org.slug != old_slug})
     return {"org_id": org.id, "org": org.slug, "previous_slug": org.previous_slug, "name": org.name}

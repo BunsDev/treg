@@ -15,7 +15,7 @@ from treg import archive, archive_bodies, audit, bootstrap
 from treg.application import archive_erasure
 from treg.application.call import service as call_service
 from treg.infra.db import session_maker
-from treg.models import ArchiveEndpointStat, ArchiveKey, ArchiveKeyOrg, ArchiveSnapshot, Org
+from treg.models import ArchiveEndpointStat, ArchiveKeyOrg, ArchiveSnapshot, Org
 from tests.fake_object_store import MemoryObjectStore
 from tests.test_archive import (  # noqa: F401 - fixtures
     EP, OWN, PLAT, _own_key, _rows, _spend_entries, _vendor_says, own_key_serve, platform_on, serve,

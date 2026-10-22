@@ -18,21 +18,15 @@ from ..application import auth as auth_use_cases
 from ..application import signup
 from ..application import images
 from ..application.auth import (
-    CLI_APPROVE_MAX_TRIES,
-    EMAIL_CODE_TTL,
-    HANDSHAKE_TTL,
-    MAX_OTP_ATTEMPTS,
-    OTP_NS,
-    OTP_START_MAX_PER_EMAIL,
-    OTP_START_MAX_PER_IP,
-    OTP_START_NS,
-    OTP_START_WINDOW_S,
+    CLI_APPROVE_MAX_TRIES as CLI_APPROVE_MAX_TRIES,
+    MAX_OTP_ATTEMPTS as MAX_OTP_ATTEMPTS,
+    OTP_START_MAX_PER_EMAIL as OTP_START_MAX_PER_EMAIL,
+    OTP_START_MAX_PER_IP as OTP_START_MAX_PER_IP,
 )
 from ..config import get_settings
 from ..domain.identity import mcp_oauth
 from ..domain.identity import session as sess
 from ..domain.identity.access import require_identity
-from ..domain.identity.mcp_oauth import REFRESH_TTL_S
 from ..models import User
 from .auth_helpers import _is_https, _remember_oauth_return, _same_origin, require_managed_cli
 from .web import _esc_html
@@ -481,8 +475,6 @@ async def login_page(request: Request, cli: str = "", treg_session: str = Cookie
 def _login_page_html(login_id: str, *, session_email: str | None, github: bool, google: bool) -> str:
     """Server-rendered /login card. login_id is whitelist-validated by the caller; the session email
     is HTML-escaped (it's the only other interpolated value)."""
-    from html import escape
-
     # A pairing-code block sits above everything: whichever door the user takes, approve() won't complete
     # the CLI handshake until the code shown in their own terminal is echoed back (phishing guard — a
     # login they didn't start has no matching code). A `treg login` link carries the code in the URL
@@ -718,7 +710,6 @@ async def auth_invite_signin(
     email through a real door (OTP / GitHub / Google) and the invite auto-appears via /invites/mine.
     An invalid/expired secret of either kind just lands on the site."""
     from urllib.parse import quote
-    base = get_settings().public_url.rstrip("/")
     try:
         landing = await auth_use_cases.invite_signin_landing(t, code, treg_session)
     except auth_use_cases.InviteSigninError as exc:

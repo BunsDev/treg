@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from ..timeutil import utcnow_naive as _utcnow_naive
-from .. import adsconv, agent_pages, analytics, oauth_providers
+from .. import adsconv, agent_pages, oauth_providers
 from ..domain import referrals
 from ..domain.catalog import store as catalog_store
 from ..domain.identity import session as sess
@@ -1048,7 +1048,7 @@ async def agent_page(request: Request, agent: str):
                      f'<p>{len(wspec.get("steps", ()))} steps, each a metered call, with the price shown before '
                      f'{_esc_html(name)} spends it.</p></a>'
                      for ws, wspec in agent_pages.WORKFLOWS.items())
-           + f'</div><p style="margin-top:20px"><a href="/workflows">All workflows &rarr;</a></p></div></section>'
+           + '</div><p style="margin-top:20px"><a href="/workflows">All workflows &rarr;</a></p></div></section>'
            if agent_pages.WORKFLOWS else "")
 
         + "".join(sections)
@@ -1652,7 +1652,7 @@ async def use_case_job_page(request: Request, job: str,
         f'<h2>What&rsquo;s the best way to ask {_esc_html(agent_name)}?</h2>'
         f'<div class="steplabel"><span class="n">1</span><b>Set your agent up, once</b></div>'
         + promptbox("in your agent's chat", setup)
-        + f'<div class="steplabel"><span class="n">2</span><b>Ask for the job</b></div>'
+        + '<div class="steplabel"><span class="n">2</span><b>Ask for the job</b></div>'
         + promptbox("the prompt", spec["prompt"])
         + f'<div class="provstrip"><div class="pl">works in</div><div class="ptiles">{agent_icons}</div></div>'
         + f'<h3>Why this prompt works</h3><div class="cards">{why_cards}</div>'
@@ -1682,8 +1682,8 @@ async def use_case_job_page(request: Request, job: str,
 
         + (f'<section id="related"><div class="wrap"><div class="seclab">Related</div>'
            f'<h2>Other jobs your agent can do</h2><div class="cards">{related}</div></div></section>' if related else "")
-        + (f'<section id="workflows"><div class="wrap"><div class="seclab">Run the full sequence</div>'
-           f'<h2>Workflows that use this job</h2><div class="cards">'
+        + ('<section id="workflows"><div class="wrap"><div class="seclab">Run the full sequence</div>'
+           '<h2>Workflows that use this job</h2><div class="cards">'
            + "".join(f'<a class="card" href="/workflows/{_esc_html(ws)}"><h3>{_esc_html(wsent)}</h3>'
                      f'<p>One prompt, every step priced, with the receipt from a real run.</p></a>'
                      for ws, wsent in job_workflows)
@@ -1898,7 +1898,7 @@ async def workflow_page(request: Request, slug: str,
                       f"{base}{s['link']}) | {price} | {rel} |")
         md += [""] + [f"- {s['name']}: {s['why']}" for s in steps]
         md += ["", f"At the rates above, {rows_in} rows where every call hits comes to ${worst:,.2f}. The receipt below is what it actually cost, and why it differs.", ""]
-        md += [f"## What it actually cost", "", f"Run on {run['date']}.", ""]
+        md += ["## What it actually cost", "", f"Run on {run['date']}.", ""]
         md += [f"- {k}: {v}" for k, v in run["receipt"]]
         md += [""] + list(run["narrative"])
         md += ["", f"Download the CSV of this run: {base}{run['csv']}", ""]
@@ -2008,7 +2008,7 @@ async def workflow_page(request: Request, slug: str,
         f'<h2>One prompt runs the whole thing</h2>'
         f'<div class="steplabel"><span class="n">1</span><b>Set your agent up, once</b></div>'
         + promptbox("in your agent's chat", setup)
-        + f'<div class="steplabel"><span class="n">2</span><b>Ask for the list</b></div>'
+        + '<div class="steplabel"><span class="n">2</span><b>Ask for the list</b></div>'
         + promptbox("the prompt", spec["prompt"])
         + f'<div class="provstrip"><div class="pl">works in</div><div class="ptiles">{agent_icons}</div></div>'
         + f'<h3>Why this prompt works</h3><div class="cards">{why_cards}</div>'
@@ -2327,7 +2327,7 @@ async def _hub_recent_runs(db: AsyncSession, tool_id: str, maker_org_id: int, *,
 async def _hub_reliability(db: AsyncSession, tool_id: str, maker_org_id: int) -> dict:
     """Runs by OTHERS, 30 days: count, success share, median duration. Counts only; never who."""
     from datetime import timedelta
-    from sqlalchemy import func, select as _select
+    from sqlalchemy import select as _select
     from ..models import HubRun
     since = _utcnow_naive() - timedelta(days=30)
     rows = (await db.execute(
@@ -3358,7 +3358,7 @@ def _spa_with_og(kind: str, name: str):
 
 @app.get("/app/marketplace/{service}", include_in_schema=False)
 async def dashboard_marketplace(
-    service: str, request: Request, treg_session: str = Cookie(default=""),  # noqa: ARG001 — the SPA reads the path itself
+    service: str, request: Request, treg_session: str = Cookie(default=""),
     db: AsyncSession = Depends(get_session),
 ):
     """One integration's page. Served as the plain SPA: unlike /app/skills/<x> there is no og meta
@@ -3485,7 +3485,7 @@ def _catalog_mtime() -> str:
     for f in (Path(catalog_store.__file__).parent / "catalog").rglob("*.yaml"):
         try:
             newest = max(newest, f.stat().st_mtime)
-        except OSError:  # noqa: PERF203 -- a file vanishing mid-scan is not worth failing the sitemap
+        except OSError:
             continue
     return _iso_day(newest)
 
@@ -4054,7 +4054,6 @@ _JEV_JUDGE_NS = "jev_judge"
 async def jev_xboost_json(db: AsyncSession = Depends(get_session)):
     """The latest launch-radar run: the worker's stored document, else the bundled snapshot so the
     page renders on a fresh or unconfigured server."""
-    from .. import ratestore
     from ..application import jev_xboost
 
     run = await _xboost_run(db)

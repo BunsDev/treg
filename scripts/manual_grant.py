@@ -75,8 +75,8 @@ def to_micro(amount: str) -> int:
     """USD string -> integer micro-USD. Decimal, never float: `100.10 * 1_000_000` is 100099999.99."""
     try:
         value = Decimal(amount)
-    except InvalidOperation:
-        raise SystemExit(f"--amount-usd {amount!r} is not a number")
+    except InvalidOperation as exc:
+        raise SystemExit(f"--amount-usd {amount!r} is not a number") from exc
     if value <= 0:
         raise SystemExit("--amount-usd must be positive")
     micro = value * 1_000_000

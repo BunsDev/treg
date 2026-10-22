@@ -14,7 +14,6 @@ import json
 import pytest
 from httpx import AsyncClient
 
-from treg import api as A
 from treg.application.call import evidence as call_evidence
 from treg.application.call import service as call_service
 from treg.application.call.types import UpstreamResponse

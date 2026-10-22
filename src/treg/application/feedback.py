@@ -148,7 +148,7 @@ async def _refresh_verdicts() -> None:
     assert _verdicts is not None
     try:
         fold = await _fold_verdicts()
-    except Exception:
+    except Exception:  # noqa: BLE001 - keep serving the previous fold on any refresh failure
         fold = _verdicts[1]   # keep serving the previous fold; retry after a full TTL, not per request
     _verdicts = (time.monotonic(), fold)
 

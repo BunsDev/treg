@@ -31,7 +31,7 @@ async def money_session(db: AsyncSession) -> AsyncIterator[AsyncSession]:
                 await asyncio.shield(cleanup)
             except asyncio.CancelledError as exc:
                 cancelled = exc
-            except Exception:  # Inspect the cleanup result without replacing an original error.
+            except Exception:  # noqa: BLE001 - cleanup.result() below inspects the outcome
                 break
         try:
             cleanup.result()

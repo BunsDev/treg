@@ -325,7 +325,7 @@ async def _relay_answer(request: Request, context, upstream: UpstreamResponse, r
             if kind == "review":
                 response.headers["X-Treg-Review"] = "requested"  # read by CLI <= 0.18
             _capture_hint(request, context, kind)
-    except Exception:
+    except Exception:  # noqa: BLE001 - a fault here can only lose the hint header
         pass  # A fault here can only lose the header; the answer is already built.
     if routed := _routed_alternative(context, response.status_code):
         response.headers["X-Treg-Routed-Tool"] = routed

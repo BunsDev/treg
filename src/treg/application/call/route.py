@@ -80,7 +80,7 @@ async def _observed_stats(endpoint_ids: list[str]) -> endpoint_stats.Observation
         return {}
     try:
         return await reader.get_many(endpoint_ids)
-    except Exception:  # noqa: BLE001 - routing evidence always degrades to deterministic ranking
+    except Exception:
         log.warning("endpoint stats unavailable for routed plan", exc_info=True)
         return {}
 
@@ -156,15 +156,15 @@ class RouteOptions:
         try:
             max_cost = int(round(float(mc) * 1_000_000)) if mc else (
                 default_max_cost_micro if default_max_cost_micro is not None else DEFAULT_MAX_COST_MICRO)
-        except (ValueError, OverflowError):
+        except (ValueError, OverflowError) as exc:
             raise ResolutionFailed("catalog_parameter_invalid", status_code=400,
-                                   detail=f"{MAX_COST_HEADER} must be a USD number, got {mc!r}")
+                                   detail=f"{MAX_COST_HEADER} must be a USD number, got {mc!r}") from exc
         wf = str(get(WATERFALL_HEADER) or "").strip().lower()
         try:
             mr = max(1, int(get(MIN_RESULTS_HEADER) or 1))
-        except ValueError:
+        except ValueError as exc:
             raise ResolutionFailed("catalog_parameter_invalid", status_code=400,
-                                   detail=f"{MIN_RESULTS_HEADER} must be a whole number, got {get(MIN_RESULTS_HEADER)!r}")
+                                   detail=f"{MIN_RESULTS_HEADER} must be a whole number, got {get(MIN_RESULTS_HEADER)!r}") from exc
         mg = str(get(MERGE_HEADER) or "").strip().lower()
         sf = str(get(STRICT_FILTERS_HEADER) or "").strip().lower()
         vf = str(get(VERIFY_HEADER) or "").strip().lower()
@@ -467,8 +467,8 @@ async def _run_routed(parent: CallContext, ep: dict, body_bytes: bytes, get_head
                       execute_child, pending: list, *, audit_client: str = "") -> tuple[UpstreamResponse, int]:
     try:
         given = json.loads(body_bytes or b"{}")
-    except ValueError:
-        raise ResolutionFailed("catalog_parameter_invalid", status_code=400, detail=f"{ep['id']} expects a JSON object body")
+    except ValueError as exc:
+        raise ResolutionFailed("catalog_parameter_invalid", status_code=400, detail=f"{ep['id']} expects a JSON object body") from exc
     if not isinstance(given, dict):
         raise ResolutionFailed("catalog_parameter_invalid", status_code=400, detail=f"{ep['id']} expects a JSON object body")
     parent.route_summary = {"identity": given, "size": len(body_bytes or b"")}
@@ -579,7 +579,9 @@ async def _run_routed(parent: CallContext, ep: dict, body_bytes: bytes, get_head
             poll_rule = descriptor.get("poll") or {}
             poll_ep = catalog_store.load().by_id.get(poll_rule.get("endpoint"))
 
-            async def poll_task(task_id: str, poll_number: int):
+            # The bridge awaits every poll in this iteration; the defaults pin this iteration's values.
+            async def poll_task(task_id: str, poll_number: int, *, poll_ep=poll_ep, poll_rule=poll_rule,
+                                remaining=remaining, child=child):
                 if poll_ep is None:
                     raise RuntimeError(f"async poll endpoint {poll_rule.get('endpoint')!r} is not catalogued")
                 param = poll_rule.get("param") or {}
@@ -799,7 +801,6 @@ async def _run_routed(parent: CallContext, ep: dict, body_bytes: bytes, get_head
         outcome = ("miss" if tried and any(t.outcome == "miss" for t in tried)
                    and all(t.outcome in ("miss", "skipped", "weak", "rejected") for t in tried) else "error")
         if outcome == "miss":
-            last = next(t for t in reversed(tried) if t.outcome == "miss")
             body_out = {"output": {k: None for k in plan.contract.output}, "raw": None,
                         "_treg": {"served_by": None, "outcome": "miss", "tried": [t.view() for t in tried], "charged_micro": spent,
                                   **({"verification": _unchecked("no_hit")} if options.verify else {}),
@@ -923,7 +924,7 @@ async def _run_check(parent: CallContext, check, output: dict, remaining: int | 
         raw = await _read(response)
     except CallFailure as exc:
         return _unchecked(_CHECK_REASONS.get(exc.kind, "checker_failed")), 0
-    except Exception:  # noqa: BLE001 - a broken check never fails the find it checks
+    except Exception:
         log.warning("check %s failed after %s", check.endpoint, parent.call_ref, exc_info=True)
         return _unchecked("checker_failed"), 0
     try:

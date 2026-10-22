@@ -1308,7 +1308,7 @@ async def _platform_settle(
             # goes to the log and leaves the hold for the reaper. No upstream call is repeated.
             await asyncio.sleep(0.5)
             charged = await _close()
-    except Exception as exc:  # noqa: BLE001 — loudly, but never into the caller's response
+    except Exception as exc:
         logging.getLogger("treg.ledger").error(
             "settle/release failed for call %s (%s, status %s): %s",
             call_id, mk.endpoint_id, status_code, exc, exc_info=True)
@@ -1370,7 +1370,7 @@ async def close_deferred(items: list[DeferredSettle], *, charge: bool, why: str 
                             await archive.note_org_uses_in_transaction(db, uses)
                 with timing.phase("commit"):
                     await db.commit()
-    except Exception as exc:  # noqa: BLE001 — loudly, but never into the caller's response
+    except Exception as exc:
         logging.getLogger("treg.ledger").error(
             "closing %d deferred routed holds (charge=%s) failed: %s", len(pending), charge, exc,
             exc_info=True)
@@ -1404,7 +1404,7 @@ async def _finish_cancelled_call(
         if response is not None:
             try:
                 await response.close()
-            except (Exception, asyncio.CancelledError):  # noqa: BLE001
+            except (Exception, asyncio.CancelledError):
                 logging.getLogger("treg.proxy").error(
                     "upstream close failed for cancelled call %s", call_ref, exc_info=True)
         if mk is not None and mk.metered:
@@ -1436,12 +1436,12 @@ async def _finish_cancelled_call(
                         for hold_id in (call_ref, f"{call_ref}:overflow")
                     ])
                     await cleanup_db.commit()
-            except (Exception, asyncio.CancelledError):  # noqa: BLE001
+            except (Exception, asyncio.CancelledError):
                 logging.getLogger("treg.ledger").error(
                     "cancellation release failed for call %s", call_ref, exc_info=True)
         try:
             await _release_idempotent_claim(claim)
-        except (Exception, asyncio.CancelledError):  # noqa: BLE001
+        except (Exception, asyncio.CancelledError):
             logging.getLogger("treg.idempotency").error(
                 "cancellation claim release failed for call %s", call_ref, exc_info=True)
 
@@ -1492,7 +1492,7 @@ async def _note_capacity_signal(mk: MarketplaceCall, status_code: int, headers, 
             capacity_events.emit("rate", **where, retry_after_s=signal.retry_after_s)
     except asyncio.CancelledError:
         raise
-    except Exception:  # noqa: BLE001 — the caller already has the provider's answer; a mark is a hint
+    except Exception:
         logging.getLogger("treg.capacity").warning("capacity signal handling failed", exc_info=True)
     return signal.kind if signal is not None else None
 
@@ -1528,7 +1528,7 @@ async def _note_capacity_recovery(mk: MarketplaceCall) -> None:
             capacity_view.invalidate()
     except asyncio.CancelledError:
         raise
-    except Exception:  # noqa: BLE001
+    except Exception:
         logging.getLogger("treg.capacity").warning("capacity recovery handling failed", exc_info=True)
 
 
@@ -1555,6 +1555,6 @@ async def _record_first_call(org_id: int) -> None:
                 if org_row is not None:
                     await adsconv.queue(db, org_row, adsconv.ACTION_FIRST_CALL)
                 await db.commit()
-    except Exception:  # noqa: BLE001 — loudly, but never into the caller's response
+    except Exception:
         logging.getLogger("treg.adsconv").error(
             "first_call_at update/queue failed for org %s", org_id, exc_info=True)

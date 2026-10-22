@@ -90,12 +90,12 @@ async def _enforce_trial_allowance(caller: Caller, provider: str, endpoint_id: s
                 CallRecord.tool_name.in_(paid_endpoint_ids),  # type: ignore[union-attr]
                 CallRecord.status_code >= 200, CallRecord.status_code < 300,
                 CallRecord.created_at >= day_start))).scalar_one()
-    except Exception as exc:  # noqa: BLE001 — cannot verify the pool ⇒ do not drain it
+    except Exception as exc:  # cannot verify the pool ⇒ do not drain it
         logging.getLogger("treg.ledger").warning(
             "trial-allowance check failed for org %s / %s: %s", caller.org_id, provider, exc)
         raise ReservationFailed("trial_allowance_unavailable", status_code=429, detail=(
             f"cannot verify today's {provider} trial usage right now — retry shortly, or use "
-            "your own key: treg connections connect"))
+            "your own key: treg connections connect")) from exc
     if used >= allowance:
         raise ReservationFailed("trial_allowance_reached", status_code=429, detail={
             "error": "trial_allowance_reached", "provider": provider,
@@ -117,12 +117,12 @@ async def _enforce_platform_daily_cap(caller: Caller, add_micro: int, db: AsyncS
         return
     try:
         spent = await ledger.spent_today(db, caller.org_id)
-    except Exception as exc:  # noqa: BLE001 — cannot verify the ceiling ⇒ do not spend
+    except Exception as exc:  # cannot verify the ceiling ⇒ do not spend
         logging.getLogger("treg.ledger").warning(
             "platform daily-cap check failed for org %s: %s", caller.org_id, exc)
         raise ReservationFailed("platform_cap_unavailable", status_code=429, detail=(
             "cannot verify today's platform spend right now — refusing to spend the team balance "
-            "(retry shortly, or use your own key: treg connections connect)"))
+            "(retry shortly, or use your own key: treg connections connect)")) from exc
     if spent + add_micro > cap:
         raise ReservationFailed("platform_daily_cap_reached", status_code=429, detail={
             "error": "platform_daily_cap_reached",
@@ -196,13 +196,13 @@ async def _enforce_tag_budgets(caller: Caller, meta: CallMeta, db: AsyncSession,
                     if isinstance(exc.detail, dict) else "tag_budget_unavailable")
             raise ReservationFailed(
                 kind, status_code=exc.status_code, detail=exc.detail) from exc
-        except Exception as exc:  # noqa: BLE001 — cannot verify a ceiling ⇒ do not spend
+        except Exception as exc:  # cannot verify a ceiling ⇒ do not spend
             logging.getLogger("treg.ledger").warning(
                 "tag budget check failed for org %s (%s=%s): %s", caller.org_id, dim, val, exc)
             raise ReservationFailed("tag_budget_unavailable", status_code=429, detail={
                 "error": "tag_budget_unavailable", "dim": dim, "val": val,
                 "message": "cannot verify this budget right now — retry shortly",
-            })
+            }) from exc
         if row is None:
             continue
         if add_micro is None:
@@ -344,4 +344,4 @@ async def _platform_reserve(mk: MarketplaceCall, caller: Caller, meta: CallMeta 
             "autotopup_enabled": auto_on,
             "provider": mk.provider,
             "endpoint_id": mk.endpoint_id,
-        })
+        }) from exc

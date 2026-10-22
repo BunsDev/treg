@@ -313,7 +313,7 @@ async def drain(session_factory=session_maker, *, max_seconds: float = 110.0) ->
     while True:
         try:
             backlog = await collect_batch(session_factory)
-        except Exception:  # noqa: BLE001 — a bad batch must not lose the last aggregate
+        except Exception:
             log.exception("Arena observation refresh failed; retaining the last database aggregate")
             return {"batches": batches, "backlog": True, "failed": True}
         batches += 1

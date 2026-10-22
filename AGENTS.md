@@ -182,6 +182,7 @@ uv run --frozen python -m pytest -q            # serial: debugging one test, or 
 uv run treg --help                             # the CLI from this checkout
 uv run python -m treg                          # the server
 uv run lint-imports                            # the import-linter contracts (CI runs this too)
+uv run ruff check                              # lint, config in pyproject.toml (CI runs this too)
 scripts/dev-local.sh up                        # live dev stack on :18790 with its own sqlite DB
 ```
 

@@ -255,7 +255,7 @@ async def _overflow_disclosure(ep: dict, cat) -> dict:
         return {}
     try:
         await overflow_routes_view.load()
-    except Exception:  # noqa: BLE001 - a disclosure must never take the catalog down
+    except Exception:
         logging.getLogger("treg.catalog").warning("overflow routes unavailable", exc_info=True)
         return {}
     for route in overflow_routes_view.for_endpoint(ep["id"]):
@@ -277,7 +277,7 @@ async def _observed_or_empty(
     """
     try:
         return await reader.get_many(endpoint_ids)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logging.getLogger("treg.catalog").warning("endpoint stats unavailable", exc_info=True)
         return {}
 
@@ -302,7 +302,7 @@ async def _verdicts_or_empty() -> dict[str, dict]:
     `_observed_or_empty`: an enrichment must never take the catalog down."""
     try:
         return await feedback_app.endpoint_verdicts()
-    except Exception:  # noqa: BLE001
+    except Exception:
         logging.getLogger("treg.catalog").warning("endpoint verdicts unavailable", exc_info=True)
         return {}
 

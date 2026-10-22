@@ -45,10 +45,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.find_bench import _frac, _provider_display, cached_apis, judge_cost, warm_semantic  # noqa: E402
-from treg.application import catalog_find, catalog_search  # noqa: E402
-from treg.config import get_settings  # noqa: E402
-from treg.domain.catalog import store  # noqa: E402
+from scripts.find_bench import _frac, _provider_display, cached_apis, judge_cost, warm_semantic
+from treg.application import catalog_find, catalog_search
+from treg.config import get_settings
+from treg.domain.catalog import store
 
 PAGES = ("v2", "baseline", "judged")
 
@@ -173,7 +173,7 @@ def _diff(run: dict, baseline: dict) -> None:
             continue
         if (old["verdict"], old.get("job_hit")) != (row["verdict"], row.get("job_hit")):
             flips.append((cid, row, old))
-    for cid, row, old in sorted(flips, key=lambda t: t[1]["q"]):
+    for _cid, row, old in sorted(flips, key=lambda t: t[1]["q"]):
         what = ("FIXED" if row.get("job_hit") and not old.get("job_hit") else
                 "BROKE" if old.get("job_hit") and not row.get("job_hit") else "MOVED")
         print(f"  {what} {row['q'][:60]!r:<64} {old['verdict']:<9} -> {row['verdict']}")

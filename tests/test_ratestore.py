@@ -61,7 +61,7 @@ async def test_rate_check_sliding_window_all_or_nothing():
     await _fresh_db()
     async with session_maker() as db:
         # cap of 3 for the key; the 4th within the window is refused
-        for i in range(3):
+        for _ in range(3):
             assert await ratestore.rate_check(db, "otp_start", [("e:x", 3)], window_s=900) is True
             await db.commit()
         assert await ratestore.rate_check(db, "otp_start", [("e:x", 3)], window_s=900) is False

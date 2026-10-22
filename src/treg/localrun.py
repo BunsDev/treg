@@ -132,14 +132,14 @@ def validate_cli_profile(cli: dict) -> None:
         try:
             re.compile(pat)
         except re.error as exc:
-            raise ValueError(f"cli.deny pattern {pat!r} is not a valid regex: {exc}")
+            raise ValueError(f"cli.deny pattern {pat!r} is not a valid regex: {exc}") from exc
     for e in cli.get("errors") or []:
         if not isinstance(e, dict) or not isinstance(e.get("pattern"), str):
             raise ValueError("cli.errors entries must be objects with a 'pattern'")
         try:
             re.compile(e["pattern"])
         except re.error as exc:
-            raise ValueError(f"cli.errors pattern {e['pattern']!r} is not a valid regex: {exc}")
+            raise ValueError(f"cli.errors pattern {e['pattern']!r} is not a valid regex: {exc}") from exc
         if e.get("verdict") is not None and e["verdict"] not in VERDICTS:
             raise ValueError(f"cli.errors verdict must be one of {VERDICTS}")
     inject = cli.get("inject")

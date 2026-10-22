@@ -242,7 +242,7 @@ async def gc(db: AsyncSession) -> int:
                 await cascade_delete_org(org, db)
             await db.delete(u)
             await db.flush()
-        except Exception:  # noqa: BLE001 - a reaper bug is logged per sandbox, never propagated
+        except Exception:
             await nested.rollback()
             logging.getLogger("treg").exception("could not reap sandbox user %s; skipping", u.id)
             continue

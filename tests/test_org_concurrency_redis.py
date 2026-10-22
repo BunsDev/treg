@@ -114,7 +114,7 @@ async def test_guard_fails_open_for_unavailable_redis_and_local_store(monkeypatc
     store = kv.RedisStore("redis://127.0.0.1:1")
     try:
         for backend in (store, kv.LocalStore()):
-            monkeypatch.setattr(kv, "store", lambda: backend)
+            monkeypatch.setattr(kv, "store", lambda backend=backend: backend)
             assert await guard.acquire(42, limit=1, version=7) is None
     finally:
         await store.aclose()

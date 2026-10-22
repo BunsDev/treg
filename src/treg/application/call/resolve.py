@@ -81,9 +81,9 @@ async def _resolve_call(rest: str, caller: Caller, db: AsyncSession) -> Resolved
     if norm.startswith("http://") or norm.startswith("https://"):
         try:
             host = urlsplit(norm).netloc.lower()
-        except ValueError:  # malformed passthrough URL (e.g. unbalanced IPv6 brackets) → 400, not 500
+        except ValueError as exc:  # malformed passthrough URL (e.g. unbalanced IPv6 brackets) → 400, not 500
             raise ResolutionFailed(
-                "invalid_target", status_code=400, detail="malformed upstream URL")
+                "invalid_target", status_code=400, detail="malformed upstream URL") from exc
         on_host = (await db.execute(
             select(Tool).where(Tool.host == host, Tool.org_id == org_id)
         )).scalars().all()
@@ -1519,7 +1519,7 @@ def _multipart_fields(body: bytes, content_type: str, ep_id: str) -> dict[str, o
             else:
                 fields[name] = value
         return fields
-    except Exception as exc:  # noqa: BLE001 - malformed multipart is one caller error
+    except Exception as exc:
         raise ResolutionFailed(
             "catalog_parameter_invalid", status_code=400,
             detail=f"{ep_id} requires a valid multipart/form-data request body",

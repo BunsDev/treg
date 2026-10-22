@@ -42,8 +42,8 @@ async def validate_bindings(bindings: list[dict], *, org_id: int, caller_email: 
             raise ToolConfigError("binding format must be a string")
         try:
             fmt.format(secret="x")  # an unexpected placeholder / literal brace would KeyError/ValueError → 500
-        except (KeyError, IndexError, ValueError):
-            raise ToolConfigError(f"invalid binding format {fmt!r} — use only {{secret}}")
+        except (KeyError, IndexError, ValueError) as exc:
+            raise ToolConfigError(f"invalid binding format {fmt!r} — use only {{secret}}") from exc
         # name/secret_field, if present, feed httpx header/param setters and the JSON extractor —
         # a null or non-string there AttributeErrors on the hot path; location is an explicit
         # transport target. JSON means one top-level field in a JSON object request body.
@@ -86,7 +86,7 @@ def validate_cli_profile(cli: dict | None) -> None:
     try:
         localrun.validate_cli_profile(cli)
     except ValueError as exc:
-        raise ToolConfigError(str(exc))
+        raise ToolConfigError(str(exc)) from exc
 
 
 async def validate_cli_secrets(cli: dict | None, *, org_id: int, caller_email: str,

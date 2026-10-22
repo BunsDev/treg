@@ -285,7 +285,7 @@ def search_rows(value, *, company=False):
     for item in value[:DISCOVERY_LIMIT]:
         if not isinstance(item, dict):
             continue
-        def pick(*paths):
+        def pick(*paths, item=item):
             for path in paths:
                 node = item
                 for part in path.split("."):

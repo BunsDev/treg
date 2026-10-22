@@ -106,7 +106,7 @@ class Slot:
             try:
                 if close is not None:
                     await close()
-            except Exception:
+            except Exception:  # noqa: BLE001 - preserve the original exception in cleanup
                 # Preserve the call/stream's original exception instead of replacing it in finally.
                 log.warning("org_concurrency upstream_close_failed during cleanup")
             finally:
@@ -131,7 +131,7 @@ def _unavailable(org_id: int, version: int) -> None:
         log.warning("org_concurrency acquire_unavailable org_id=%s config_version=%s "
                     "action=allow suppressed_since_last_log=%s", org_id, version,
                     _suppressed_unavailable_logs)
-    except Exception:
+    except Exception:  # noqa: BLE001 - logging cannot turn availability into a refusal
         pass  # Logging cannot turn the availability policy into a refusal.
     _suppressed_unavailable_logs = 0
     _next_unavailable_log = now + 5
@@ -156,7 +156,7 @@ async def acquire(org_id: int, *, limit: int | None, version: int = 0,
         return None
     try:
         store = kv.store()
-    except Exception:
+    except Exception:  # noqa: BLE001 - a store that cannot initialize reads as unavailable
         # URL options/client initialization can fail before a command exists to return unavailable.
         return _unavailable(org_id, version)
     slot = Slot(store, org_id, _LEASE_S)
@@ -190,7 +190,7 @@ async def acquire(org_id: int, *, limit: int | None, version: int = 0,
         try:
             log.warning("org_concurrency rejected org_id=%s limit=%s status=429 config_version=%s",
                         org_id, limit, version)
-        except Exception:
+        except Exception:  # noqa: BLE001 - observability must not replace the refusal
             pass  # Observability must not replace the original refusal.
         raise AdmissionRejected(retry_after_s=_RETRY_AFTER_S, version=version)
     # Includes an acquire reply received after the confirmed lease's conservative deadline.

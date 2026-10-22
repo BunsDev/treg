@@ -705,7 +705,7 @@ async def _shadow_v2(query: str, provider_display, platform: str | None, evidenc
             pass
     except asyncio.CancelledError:
         raise
-    except Exception:  # noqa: BLE001 - the shadow is a measurement; it never touches the answer
+    except Exception:
         log.warning("find shadow failed", exc_info=True)
 
 

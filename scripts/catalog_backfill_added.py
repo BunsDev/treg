@@ -31,7 +31,7 @@ from pathlib import Path
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from catalog_added import CATALOG, insert_added  # noqa: E402
+from catalog_added import CATALOG, insert_added
 
 ROOT = CATALOG.parent.parent.parent
 PREFIX = "src/treg/catalog/"

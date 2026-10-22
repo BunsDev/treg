@@ -238,7 +238,7 @@ async def _write_batch(rows: list[tuple[type, dict]]) -> bool:
             await mark_dirty(session, dirty)
             await session.commit()
         return True
-    except Exception:  # noqa: BLE001 — audit must never surface into a call's result
+    except Exception:
         # Swallowed on purpose, but neither silent nor local: the row is lost — that is the
         # contract — and ERROR is what puts that loss in front of someone. At WARNING it stayed
         # in the container's stdout, below the fault handler's threshold, so the only way to

@@ -134,7 +134,7 @@ def _materialize(item: _Pending) -> dict:
     if item.build is not None:
         try:
             event = {**event, **(item.build() or {})}
-        except Exception:  # noqa: BLE001 — the generic columns still go out
+        except Exception:
             counters["build_failed"] += 1
             log.warning("call event builder failed for %s", event.get("call_ref"), exc_info=True)
     return event

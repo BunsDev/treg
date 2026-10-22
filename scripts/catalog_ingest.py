@@ -1061,7 +1061,7 @@ def ingest_justoneapi(refresh: bool) -> tuple[Path, dict]:
                 f"justoneapi_{platform}__{endpoint}.json", refresh=refresh,
             )
             return rel, json.loads(blob)
-        except Exception:
+        except Exception:  # noqa: BLE001 - one unreadable spec page must not stop the ingest
             return rel, None
 
     todo = [p for p in pages if not p.endswith("/")]
@@ -2589,7 +2589,7 @@ def ingest_x(refresh: bool) -> tuple[Path, dict]:
 # the official reference page for that node. Accuracy over volume.
 #
 # Every path is relative to base_url, which already ends in /v25.0 — do NOT prefix the version.
-# Tuple: (slug, method, path, summary, scope_gap or "")
+# Each tuple holds slug, method, path, summary, then scope_gap or an empty string.
 
 META_GRAPH_DOCS = "https://developers.facebook.com/docs/graph-api/reference"
 

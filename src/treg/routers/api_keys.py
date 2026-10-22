@@ -364,9 +364,9 @@ async def rotate_api_key(
                 db, old, actor_email=caller.email,
             )
             await db.commit()
-        except (managed.RotationConflict, IntegrityError):
+        except (managed.RotationConflict, IntegrityError) as exc:
             await db.rollback()
-            raise HTTPException(status_code=409, detail="another rotation already replaced this key")
+            raise HTTPException(status_code=409, detail="another rotation already replaced this key") from exc
         secret = identity_session.make_identity(
             user.id, user.token_version, org=org.slug,
             key_generation=generation,
@@ -391,9 +391,9 @@ async def rotate_api_key(
             secret, new = await managed.rotate_agent_key(
                 db, membership, user, actor_email=caller.email, expected_key_id=old.id,
             )
-        except (managed.RotationConflict, IntegrityError):
+        except (managed.RotationConflict, IntegrityError) as exc:
             await db.rollback()
-            raise HTTPException(status_code=409, detail="another rotation already replaced this key")
+            raise HTTPException(status_code=409, detail="another rotation already replaced this key") from exc
     elif old.kind == managed.ADDITIONAL_KIND:
         if not _assigned(caller, old):
             raise HTTPException(status_code=403, detail="only the assigned human can rotate this key")
@@ -403,16 +403,16 @@ async def rotate_api_key(
             secret, new = await managed.rotate_human_key(
                 db, old, actor_email=caller.email,
             )
-        except (managed.RotationConflict, IntegrityError):
+        except (managed.RotationConflict, IntegrityError) as exc:
             await db.rollback()
-            raise HTTPException(status_code=409, detail="another rotation already replaced this key")
+            raise HTTPException(status_code=409, detail="another rotation already replaced this key") from exc
     else:
         raise HTTPException(status_code=409, detail="legacy human keys cannot be rotated here")
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="another rotation already replaced this key")
+        raise HTTPException(status_code=409, detail="another rotation already replaced this key") from exc
     response.headers["Cache-Control"] = "no-store"
     return {**_view(new, caller), "secret": secret,
             "note": "copy this key now; the old key was revoked"}

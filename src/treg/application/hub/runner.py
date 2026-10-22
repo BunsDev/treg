@@ -171,7 +171,7 @@ async def run_hub_tool(
         inputs = coerce_inputs(manifest["inputs"], given)
     except InputError as exc:
         raise ResolutionFailed("hub_input_invalid", status_code=422, detail={
-            "error": "hub_input_invalid", "field": exc.field, "rule": exc.rule})
+            "error": "hub_input_invalid", "field": exc.field, "rule": exc.rule}) from exc
     ceiling = _ceiling(get_header(RUN_MAX_COST_HEADER), manifest["limits"].get("cost_usd"))
     maker = await _maker_snapshot(parent, tool)
     catalog = catalog_store.load()
@@ -394,7 +394,7 @@ async def run_hub_tool(
     except (CallFailure, asyncio.CancelledError):
         await _close_price(tool, run_id, price_held, payer_org_id=parent.input.caller.org_id, success=False, reason="hub_run_stopped")
         raise
-    except Exception as exc:  # noqa: BLE001 - the last line of defence for the caller's money
+    except Exception as exc:
         await _close_price(tool, run_id, price_held, payer_org_id=parent.input.caller.org_id, success=False, reason="hub_run_crashed")
         raise ResolutionFailed("hub_run_failed", status_code=424, detail={
             "error": "hub_run_crashed", "run_id": run_id, "recipe": f"{tool.tool_id}@{tool.version}",
@@ -762,7 +762,7 @@ async def _run_script_road(parent, tool, inputs, ceiling, maker, catalog, own_to
             ms = int((time.monotonic() - t0) * 1000)
             trace.append(_entry(step, "failed", exc.status_code, ms, 0, key=None, error=_short(exc.detail)))
             if exc.kind in _GLOBAL_REFUSALS:
-                raise sandbox.SandboxError("refused", f"{exc.kind}: a refusal that applies to every call")
+                raise sandbox.SandboxError("refused", f"{exc.kind}: a refusal that applies to every call") from exc
             return {"status": exc.status_code, "headers": {}, "json": exc.detail if isinstance(exc.detail, dict) else None,
                     "text": str(exc.detail)[:4000]}
         raw, truncated = await _read(response)
@@ -800,7 +800,7 @@ async def _run_script_road(parent, tool, inputs, ceiling, maker, catalog, own_to
         await _record(tool, parent, run_id, "failed", counted, spent, ms_total,
                       masked(manifest["inputs"], inputs), trace, error=detail, log=log)
         _audit_parent(parent, tool, 424, spent, audit_client)
-        raise ResolutionFailed("hub_run_failed", status_code=424, detail=_public_detail(detail))
+        raise ResolutionFailed("hub_run_failed", status_code=424, detail=_public_detail(detail)) from exc
     missing = [f for f in fields if f not in output]
     ms_total = int((time.monotonic() - started) * 1000)
     if missing:

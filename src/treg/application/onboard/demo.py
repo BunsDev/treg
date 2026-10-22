@@ -89,7 +89,7 @@ async def provision(db: AsyncSession, owner: User, team_name: str) -> dict:
     await managed_keys.ensure_default_key(db, owner_membership, owner)
 
     # fake teammates — reuse the same User row across demo orgs (email is unique)
-    for full_name, handle, role in TEAMMATES:
+    for _full_name, handle, role in TEAMMATES:
         email = f"{handle}@{DEMO_DOMAIN}"
         u = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
         if u is None:

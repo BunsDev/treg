@@ -37,9 +37,9 @@ import sys
 def _need_server() -> None:
     try:
         import sqlalchemy  # noqa: F401
-    except ImportError:  # pragma: no cover — a base install has no DB stack
+    except ImportError as exc:  # pragma: no cover — a base install has no DB stack
         print("treg-worker needs the server extra: pip install 'treg[server]'", file=sys.stderr)
-        raise SystemExit(2)
+        raise SystemExit(2) from exc
 
 
 async def _capacity_sweep(args) -> int:
@@ -143,7 +143,6 @@ async def _overflow_verify(args) -> int:
     from . import oauth_providers
     from .infra.db import session_maker, verify_db
     from .domain.capacity import verify as V
-    from .domain.capacity import routes as R
     from .domain.catalog import store as catalog_store
     from .models import OverflowRoute
     from .timeutil import utcnow_naive

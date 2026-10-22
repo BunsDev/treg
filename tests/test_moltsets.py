@@ -8,7 +8,7 @@ from treg.application.call import service
 from treg.config import get_settings
 from treg.domain.capacity import collectors
 from treg.domain.capacity.policy import default_policy
-from test_marketplace_call import _balance, _entries, _fake_relay, platform_on
+from test_marketplace_call import _balance, _entries, _fake_relay, platform_on  # noqa: F401 - pytest fixtures
 
 
 @pytest.fixture

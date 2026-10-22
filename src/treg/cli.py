@@ -105,7 +105,7 @@ def _token_org_claim(token: str | None) -> str | None:
         payload = token.split(".", 1)[0]
         claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
         return claims.get("org") or None
-    except Exception:
+    except Exception:  # noqa: BLE001 - the caller decides whether this optional exchange is required
         return None
 
 
@@ -115,7 +115,7 @@ def _token_scope_claim(token: str | None) -> str | None:
         payload = token.split(".", 1)[0]
         claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
         return claims.get("scp") or None
-    except Exception:
+    except Exception:  # noqa: BLE001 - an edge/proxy response need not be JSON
         return None
 
 
@@ -136,7 +136,7 @@ def _pick_active_org(cfg: dict, *, pin: bool = True) -> None:
                 next((o for o in orgs if o.get("slug") == claimed), orgs[0]),
             )["slug"]
             _save_config(cfg)
-    except Exception:
+    except Exception:  # noqa: BLE001 - a transient failure just means "no smart hint"
         pass
     # Bake the chosen team into the token so it also works OUTSIDE the CLI (curl, MCP, an agent env),
     # where no X-Treg-Org header travels.
@@ -350,7 +350,7 @@ def _show(resp: httpx.Response) -> None:
     try:
         body = resp.json()
         print(json.dumps(body, indent=2))
-    except Exception:
+    except Exception:  # noqa: BLE001 - a walkthrough must survive an unreachable registry
         print(resp.text)
     if resp.status_code < 400:
         _show_charge_line(resp)
@@ -475,7 +475,7 @@ def _as_list(resp: httpx.Response) -> list[dict]:
     """A list-returning endpoint's rows, or [] if the body isn't the list we expect."""
     try:
         body = resp.json()
-    except Exception:
+    except Exception:  # noqa: BLE001 - a missing/odd config just means no registry host is added
         return []
     return body if isinstance(body, list) else []
 
@@ -575,7 +575,7 @@ def cmd_login(args, cfg) -> None:
             j = st.json(); lid = j["login_id"]; code = j.get("code")
         else:
             lid = _secrets.token_urlsafe(18)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         start_exc = exc
         lid = _secrets.token_urlsafe(18)
     # Detect localhost-with-nothing-listening: the install.sh sets base_url but if that failed, the
@@ -601,14 +601,14 @@ def cmd_login(args, cfg) -> None:
     print("Waiting for authorization…", flush=True)
     try:
         webbrowser.open(url)
-    except Exception:
+    except Exception:  # noqa: BLE001 - optional extras; the treg skill already installed
         pass
     for _ in range(180):  # ~3 min
         time.sleep(1)
         try:
             d = httpx.get(f"{base}/auth/cli/poll",
                           params={"login_id": lid}, headers={"ngrok-skip-browser-warning": "1"}, timeout=10).json()
-        except Exception:
+        except Exception:  # noqa: BLE001
             continue
         if d.get("token"):
             cfg.update(token=d["token"], email=d.get("email"), identity=True)
@@ -880,7 +880,7 @@ def _pause(yes: bool) -> None:
     try:
         input(f"  {_M}↵ enter to continue…{_R}")
     except (EOFError, KeyboardInterrupt):
-        raise SystemExit(0)
+        raise SystemExit(0) from None
 
 
 _ORG_CACHE: dict = {}  # (base_url, active_org) → summary; onboarding asks 2-3× per run — fetch once
@@ -954,7 +954,7 @@ def _maybe_offer_onboarding(cfg: dict) -> None:
     try:
         with _spinner("checking your account"):
             me = httpx.get(f"{base}/auth/me", headers={"X-Treg-Token": cfg["token"], "ngrok-skip-browser-warning": "1"}, timeout=10).json()
-    except Exception:
+    except Exception:  # noqa: BLE001 - can't reach the registry ≠ can't switch
         return
     if me.get("onboarded"):
         return
@@ -1290,7 +1290,7 @@ def _run_setup(cfg: dict, args) -> None:
                 for r in bad:
                     print(f"   {_M}✗ {r.get('name') or r.get('secret_id')}: {r.get('detail','invalid')}{_R}")
                 if unknown:
-                    _dim(f"   unchecked = registered before catalog probes; re-upload to validate:  treg upload env --dir . --replace")
+                    _dim("   unchecked = registered before catalog probes; re-upload to validate:  treg upload env --dir . --replace")
             else:
                 # No probe → nothing to validate (not a failure). Common for tools registered before the
                 # catalog gained probes, or re-runs where everything was already registered.
@@ -1666,7 +1666,7 @@ def _load_catalog(cfg) -> list:
             # classification. Server wins on ties (it's canonical + can grow without a CLI release).
             if int(body.get("version") or 0) >= prov.CATALOG_VERSION:
                 return body["providers"]
-    except Exception:
+    except Exception:  # noqa: BLE001 - questionary absent → fall back to a typed list
         pass
     try:
         if cache.exists():
@@ -1942,7 +1942,6 @@ def _import_add_cli(args, cfg) -> None:
     it authenticates via its own login → local tool) and the provider API base_url, registers it enabled,
     and prints a catalog-entry snippet to share so it can be added for everyone."""
     import shutil
-    from . import providers as prov
     bin_ = args.add.strip()
     if not shutil.which(bin_):
         sys.exit(f"'{bin_}' is not on your PATH — install it first (or check the name).")
@@ -2037,7 +2036,7 @@ def _print_cli_report(scanned, registered, report_only, verbose, cfg=None) -> No
     ni = buckets["not_installed"]
     if ni and verbose:
         print("\nIn the catalog, not installed here:")
-        for e, cli, d, _v in ni:
+        for _e, cli, d, _v in ni:
             print(f"  {cli['bin']:<12} {d.get('action') or ''}".rstrip())
     elif ni:
         print(f"\n{len(ni)} more catalog CLIs aren't installed. List them with: treg scan clis --status")
@@ -2089,7 +2088,7 @@ def _import_oauth_connect(c, det, vals: dict) -> None:
             time.sleep(2)
             try:
                 s = c.get(f"/oauth/status/{state}").json(); status = s.get("status")
-            except Exception:  # a flaky/non-JSON poll shouldn't abort the loop
+            except Exception:  # noqa: BLE001 - a flaky/non-JSON poll shouldn't abort the loop
                 continue
             if status == "done":
                 print(f"  ✓ {det.provider} connected (oauth secret id {s.get('secret_id')})"); return
@@ -2125,7 +2124,7 @@ def _import_llm(c, unknowns: list, env_path: str, args) -> None:
     print(f"\nAsking {args.llm_model} to resolve {len(names)} unknown key(s)…")
     try:
         text = _llm_chat(args.llm_base_url, token, args.llm_model, system, user)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         print(f"  ✗ LLM call failed: {exc}"); return
     resolved = prov.llm_parse(text)
     if not resolved:
@@ -2339,8 +2338,8 @@ def _parse_bind(spec: str) -> dict:
         if k in ("secret", "secret_id"):
             try:
                 b["secret_id"] = int(v)
-            except ValueError:
-                raise SystemExit(f"--bind secret= must be an integer id, got {v!r}")
+            except ValueError as exc:
+                raise SystemExit(f"--bind secret= must be an integer id, got {v!r}") from exc
         elif k in b:
             b[k] = v
         else:
@@ -3045,7 +3044,7 @@ def _run_helper(tool, user_args, cfg) -> None:
     scrub = bool(redact_vals)
     tee = bool(errors) or scrub  # capture stderr to match errors and/or to scrub it
     tail: deque[bytes] = deque(maxlen=256)
-    proc = subprocess.Popen(cmd, env=env,  # noqa: S603 — argv list, no shell
+    proc = subprocess.Popen(cmd, env=env,
                             stdout=subprocess.PIPE if scrub else None,
                             stderr=subprocess.PIPE if tee else None, bufsize=0)
 
@@ -3395,7 +3394,7 @@ def ensure_proxy_dependency(assume_yes: bool = False) -> None:
     worse than not shipping the feature — so treg works out how it was installed and offers to do it,
     in the right way, on the spot."""
     try:
-        import cryptography  # noqa: F401
+        import cryptography
         return
     except ModuleNotFoundError:
         pass
@@ -3423,7 +3422,7 @@ def ensure_proxy_dependency(assume_yes: bool = False) -> None:
 
     print(f"  {_M}{printable}{_R}", file=sys.stderr)
     try:
-        code = subprocess.call(argv)  # noqa: S603 — argv list, no shell
+        code = subprocess.call(argv)
     except FileNotFoundError:
         sys.exit(f"treg: {argv[0]!r} is not on your PATH. Install it by hand with:\n  {printable}")
     if code != 0:
@@ -3607,7 +3606,7 @@ def cmd_serve_start(args, cfg) -> None:
     if args.renew_ca:
         argv += ["--renew-ca"]
     with open(log, "ab") as fh:
-        subprocess.Popen(argv, stdout=fh, stderr=fh, stdin=subprocess.DEVNULL,  # noqa: S603 — argv list
+        subprocess.Popen(argv, stdout=fh, stderr=fh, stdin=subprocess.DEVNULL,
                          start_new_session=True, env=dict(os.environ))
     for _ in range(60):                       # wait for the child to publish its state
         time.sleep(0.1)
@@ -4092,7 +4091,7 @@ def cmd_skill_bootstrap(args, cfg) -> None:
         try:
             if legacy.is_dir() and [q.name for q in legacy.iterdir()] == ["SKILL.md"]:
                 (legacy / "SKILL.md").unlink(); legacy.rmdir()
-                print(f"    (removed the old tools-registry skill folder — renamed to treg)")
+                print("    (removed the old tools-registry skill folder — renamed to treg)")
         except OSError:
             pass
     # The other public skills this registry advertises (make-ugc, lead-signals, …): the same well-known
@@ -4261,7 +4260,7 @@ def _billing_autotopup(cfg: dict) -> dict | None:
             return None
         body = r.json()
         return body.get("autotopup") if body.get("configured") else None
-    except Exception:
+    except Exception:  # noqa: BLE001 - a comparison table is not worth a traceback
         return None
 
 
@@ -4275,7 +4274,7 @@ def _bonus_tiers_from_server(cfg: dict) -> dict[int, int]:
             return {}
         tiers = ((r.json().get("topup") or {}).get("bonus_tiers")) or {}
         return {int(k): int(v) for k, v in tiers.items()}
-    except Exception:
+    except Exception:  # noqa: BLE001 - the bonus tiers are an optional hint
         return {}
 
 
@@ -4371,7 +4370,7 @@ def _confirm_consent() -> bool:
             "Authorize treg to charge your saved card automatically?",
             default=False, style=_picker_style()).ask()
         return bool(answer)
-    except Exception:
+    except Exception:  # noqa: BLE001 - a prompt that cannot run means no consent
         return False
 
 
@@ -4387,10 +4386,10 @@ def cmd_health(args, cfg) -> None:
 
 def cli_version() -> str:
     """The installed treg version (from package metadata; falls back for an editable/source run)."""
+    from importlib.metadata import PackageNotFoundError, version
     try:
-        from importlib.metadata import version
         return version("tools-registry")
-    except Exception:
+    except PackageNotFoundError:
         return "0.0.1"
 
 
@@ -5283,7 +5282,7 @@ def _connected_providers(cfg) -> set:
             if r.status_code != 200:
                 return set()
             return {str(x.get("provider") or "") for x in r.json() if x.get("provider")}
-    except Exception:
+    except Exception:  # noqa: BLE001 - the connected-provider hint is optional
         return set()
 
 def cmd_catalog(args, cfg) -> None:
@@ -6235,16 +6234,16 @@ def _print_params(inp: dict) -> None:
         # leaf, because that is what the caller has to type.
         flat: list[tuple[str, dict]] = []
 
-        def walk(items: dict, prefix: str) -> None:
+        def walk(items: dict, prefix: str, out: list[tuple[str, dict]]) -> None:
             for name, spec in items.items():
                 spec = spec if isinstance(spec, dict) else {}
                 props = spec.get("properties")
                 if isinstance(props, dict) and props:
-                    walk(props, f"{prefix}{name}.")
+                    walk(props, f"{prefix}{name}.", out)
                 else:
-                    flat.append((f"{prefix}{name}", spec))
+                    out.append((f"{prefix}{name}", spec))
 
-        walk(params, "")
+        walk(params, "", flat)
         for name, spec in sorted(flat, key=lambda kv: (not kv[1].get("required"), kv[0])):
             # The NOTE column is the whole contract: the prose rule, then the closed set of values,
             # the default, the numeric range, the example. An agent choosing "the cheapest valid
@@ -6490,7 +6489,7 @@ def cmd_oauth_connect(args, cfg) -> None:
             try:
                 s = c.get(f"/oauth/status/{d['state']}").json()
                 status = s.get("status")
-            except Exception:  # a flaky/non-JSON status poll shouldn't abort the whole wait
+            except Exception:  # noqa: BLE001 - a flaky/non-JSON status poll shouldn't abort the whole wait
                 continue
             if status == "done":
                 print(f"✅ Connected. New oauth secret id: {s.get('secret_id')} ({s.get('name')})")

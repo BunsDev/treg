@@ -335,7 +335,7 @@ async def test_postgres_upgrade_does_not_lock_org_while_balance_writer_is_open()
                     ))).scalar_one() == 0
                     for model in MODELS:
                         assert await connection.run_sync(
-                            lambda sync: sa.inspect(sync).has_table(model.__tablename__))
+                            lambda sync, model=model: sa.inspect(sync).has_table(model.__tablename__))
             finally:
                 await transaction.rollback()
     finally:

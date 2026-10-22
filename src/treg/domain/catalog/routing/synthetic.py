@@ -78,7 +78,7 @@ def routed_endpoint(contract: Contract, children: list[dict], adapters: dict[str
                  # No single quote is honest when children bill their misses: an agent read the
                  # $0 floor as "free" and ran hundreds of billed searches. Quote nothing.
                  **({"varies": True} if billed_miss else {}),
-                 "note": (((f"NOT free: misses are billed too. " if billed_miss else "")
+                 "note": ((("NOT free: misses are billed too. " if billed_miss else "")
                            + f"the children's range ${lo:g}–${hi:g} per hit, 0% markup; you pay the child that served "
                            f"AND every child tried before it that bills a miss ({len(billed_miss)} of {len(kids)} do), "
                            f"up to X-Treg-Route-Max-Cost (default ${max_usd:g} a call). X-Treg-Route-Exclude them, or "

@@ -449,7 +449,7 @@ _STATIC_ANCHOR = ("/auth/cli-token", ("GET",), "auth_cli_token")
 
 try:
     from . import mcp as _mcp
-except Exception:  # pragma: no cover - exercised by deploys without the optional dependency
+except ImportError:  # pragma: no cover - exercised by deploys without the optional dependency
     _mcp = None
 
 
@@ -670,7 +670,7 @@ async def pool_gauge(*, sample_s: float = _POOL_GAUGE_SAMPLE_S,
                 peaks, samples, opened = {}, 0, time.monotonic()
         except asyncio.CancelledError:
             raise
-        except Exception:  # noqa: BLE001 - a gauge must never take the service down
+        except Exception:
             logging.getLogger("treg").exception("db pool gauge pass failed")
         await asyncio.sleep(sample_s)
 

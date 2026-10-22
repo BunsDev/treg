@@ -1210,7 +1210,7 @@ def main(argv: list[str]) -> int:
     taxonomy = tax.get("capabilities") or {}
     capabilities = set(taxonomy)
 
-    from treg.oauth_providers import REGISTRY  # noqa: E402
+    from treg.oauth_providers import REGISTRY
 
     only = set(argv)
     all_files = sorted(p for p in CATALOG.glob("*.yaml")

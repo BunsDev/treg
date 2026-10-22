@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 import json
-import logging
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -22,8 +21,7 @@ from ..config import get_settings
 from ..infra import kv
 from ..infra.db import get_admin_read_session, get_admin_session
 from ..domain import money
-from ..models import ArchiveEndpointStat, ArchiveKey, ArchiveSnapshot, Bundle, CallRecord, EndpointDayStat, LedgerEntry, Membership, Org, Referral, Secret, Tool, User
-from ..timeutil import as_naive as _as_naive
+from ..models import ArchiveEndpointStat, ArchiveSnapshot, Bundle, CallRecord, EndpointDayStat, LedgerEntry, Membership, Org, Referral, Secret, Tool, User
 from ..timeutil import utcnow_naive as _utcnow_naive
 from ..domain.identity.access import require_superadmin
 from ..domain.governance.teams import cascade_delete_org, delete_membership, drop_member_deny_rules
@@ -860,8 +858,8 @@ def _usd_to_micro(amount_usd: str | int | float) -> int:
     """
     try:
         value = Decimal(str(amount_usd))
-    except InvalidOperation:
-        raise HTTPException(status_code=400, detail=f"amount_usd {amount_usd!r} is not a valid number")
+    except InvalidOperation as exc:
+        raise HTTPException(status_code=400, detail=f"amount_usd {amount_usd!r} is not a valid number") from exc
     if value <= 0:
         raise HTTPException(status_code=400, detail="amount_usd must be positive")
     micro = value * 1_000_000

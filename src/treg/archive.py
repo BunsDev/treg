@@ -26,8 +26,12 @@ observations or learning evidence.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import logging
+import weakref
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from collections import Counter
 from collections.abc import Iterable
@@ -296,11 +300,6 @@ def content_hash(body: bytes) -> str:
 # A recording hiccup must NEVER surface into a call's result, and a burst must never OOM the
 # server. Unlike audit there is no shed-counter subtlety: a dropped snapshot is one lost sample
 # in a statistics stream that the next identical call re-supplies.
-
-import asyncio
-import logging
-import weakref
-from datetime import datetime, timedelta, timezone
 
 # Losing a recording is ERROR, not WARNING: the fault handler starts at ERROR, so anything below it
 # reaches stdout and nowhere else. Degradations that cost nothing (a lookup miss serving live, a
@@ -682,7 +681,7 @@ async def _store(
     except TimeoutError:
         reason = "record_timeout"
         _log.error("archive record_timeout for %s", endpoint_id)
-    except Exception:
+    except Exception:  # noqa: BLE001 - a lookup fault must degrade to a live call, never a 500
         reason = "record_failed"
         _log.error("archive recording dropped for %s", endpoint_id, exc_info=True)
     finally:
@@ -824,7 +823,7 @@ async def _ignored_matches(key_hash: str, body: bytes, paths: list[str],
                         initial_results[row.id] = classify(key.endpoint_id, row.status_code, previous)
                     if new_hash is not None and await _change_compute(_normalized_hash, previous, paths) == new_hash:
                         matches.add(row.id)
-    except Exception:
+    except Exception:  # noqa: BLE001
         change_outcomes["ignore_comparison_failed"] += 1
     return matches
 
@@ -905,7 +904,7 @@ async def _observe_change(previous_id: int, body: bytes, endpoint_id: str, provi
             analytics.capture("archive", "archive_change_observed",
                               dict(endpoint_id=endpoint_id, provider=provider, **props))
             change_outcomes["observed"] += 1
-    except Exception:
+    except Exception:  # noqa: BLE001 - one dead key must not stop the pass
         # Observation is optional and happens after commit. Never log provider bytes/errors.
         change_outcomes["observation_failed"] += 1
 

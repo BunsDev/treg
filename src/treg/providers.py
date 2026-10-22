@@ -688,13 +688,13 @@ def llm_parse(text: str) -> list[dict]:
         text = text[think_end + len("</think>"):]
     try:
         data = json.loads(text)
-    except Exception:
+    except ValueError:
         i, j = text.find("{"), text.rfind("}")
         if i < 0 or j <= i:
             return []
         try:
             data = json.loads(text[i:j + 1])
-        except Exception:
+        except ValueError:
             return []
     if not isinstance(data, dict):   # model returned a bare array/scalar — don't crash on .get
         return []
@@ -788,7 +788,8 @@ def _plan_report(env_dir: str) -> None:
 
 
 if __name__ == "__main__":
-    import argparse, os
+    import argparse
+    import os
     ap = argparse.ArgumentParser(description="treg provider env-scan (Phase 1 detect + Phase 2 plan)")
     ap.add_argument("--env-dir", default=os.getcwd())
     ap.add_argument("--plan", action="store_true", help="show the registration plan (dry-run, no network)")

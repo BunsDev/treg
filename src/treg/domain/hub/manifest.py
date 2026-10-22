@@ -141,13 +141,11 @@ def validate(
             raise _fail("script", f"must be {SCRIPT_FILE!r}, the file beside the manifest")
         steps = None
         output = _validate_output_script(raw.get("output"))
-        output_fields = set(output["fields"])
     else:
         kind = "steps"
         script = None
         steps = _validate_steps(raw["steps"], uses, limits["steps"])
         output = _validate_output_steps(raw.get("output"))
-        output_fields = set(output)
 
     pricing_public, pricing_micro = _validate_pricing(raw, is_script=has_script)
     # The job this tool does, in the catalog's words (docs/hub-listing-decisions.md round 3): only a

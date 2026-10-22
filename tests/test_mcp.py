@@ -1492,7 +1492,7 @@ async def test_the_SEARCH_TOOL_itself_ranks_on_evidence_not_just_the_helper(clie
 
 
 
-from test_marketplace_call import platform_on  # noqa: F401,E402 — tier 4 on for the check run
+from test_marketplace_call import platform_on  # noqa: E402 — tier 4 on for the check run
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1556,7 +1556,7 @@ async def _overflow_rescued(monkeypatch, price_cents: float = 0.3):
     return seen
 
 
-async def test_a_call_served_by_the_overflow_relay_says_so_and_prices_it(clients, overflow_on, monkeypatch):  # noqa: F811 - fixture imported above
+async def test_a_call_served_by_the_overflow_relay_says_so_and_prices_it(clients, overflow_on, monkeypatch):
     token = clients.headers["X-Treg-Token"]
     seen = await _overflow_rescued(monkeypatch)
     async with mcp_session(clients) as c:
@@ -1570,7 +1570,7 @@ async def test_a_call_served_by_the_overflow_relay_says_so_and_prices_it(clients
     assert "real price" in hint and len(seen) == 1
 
 
-async def test_a_direct_call_carries_no_served_via(clients, platform_on):  # noqa: F811 - fixture imported above
+async def test_a_direct_call_carries_no_served_via(clients, platform_on):
     token = clients.headers["X-Treg-Token"]
     async with mcp_session(clients) as c:
         out = await _call_tool(c, "call", {"endpoint_id": "tikhub.tiktok.video.comments",
@@ -1579,7 +1579,7 @@ async def test_a_direct_call_carries_no_served_via(clients, platform_on):  # noq
     assert "served_via" not in out and "overflow" not in (out.get("hint") or "")
 
 
-async def test_the_directory_surface_discloses_the_relay_the_same_way(clients, overflow_on, monkeypatch):  # noqa: F811 - fixture imported above
+async def test_the_directory_surface_discloses_the_relay_the_same_way(clients, overflow_on, monkeypatch):
     """`/mcp/v2/` builds the same result through `_call_impl`; reviewed against both on purpose."""
     from test_mcp_directory import _call_tool as _directory_call, directory_session
 
@@ -1594,7 +1594,7 @@ async def test_the_directory_surface_discloses_the_relay_the_same_way(clients, o
     assert "overflow relay (orthogonal)" in (out.get("hint") or "")
 
 
-async def test_catalog_get_shows_what_a_FREE_endpoint_bills_through_the_relay(clients, overflow_on):  # noqa: F811 - fixture imported above
+async def test_catalog_get_shows_what_a_FREE_endpoint_bills_through_the_relay(clients, overflow_on):
     """The price an agent quotes before calling must include the one it may actually pay."""
     from test_capacity_overflow import APOLLO_SEARCH_EP, APOLLO_SEARCH_PATH
     from test_mcp_directory import _call_tool as _directory_call, directory_session

@@ -1073,7 +1073,7 @@ async def _resolve_resource_call_token(
             resp = await client.get(
                 f"{provider.discovery_base.rstrip('/')}{path}", headers=headers)
             body = resp.json()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if not required:
                 return []
             raise ConnectError(
@@ -1188,7 +1188,7 @@ async def _run_resource_setup(
             provider.resource_setup_method,
             f"{provider.base_url.rstrip('/')}{path}", **kwargs,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ConnectError(
             "resource_setup_failed",
             f"could not set up the selected {provider.resource_label}",

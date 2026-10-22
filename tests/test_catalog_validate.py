@@ -1068,5 +1068,5 @@ def test_the_fast_catalog_loader_reads_every_file_like_the_pure_python_one():
     assert issubclass(store._Loader, yaml.CSafeLoader)
     for path in sorted(store.CATALOG_DIR.rglob("*.yaml")):
         text = path.read_text(encoding="utf-8")
-        assert yaml.load(text, Loader=store._Loader) == yaml.load(text, Loader=Pure), path.name  # noqa: S506
-    assert yaml.load("checked: 2026-09-01", Loader=store._Loader) == {"checked": "2026-09-01"}  # noqa: S506
+        assert yaml.load(text, Loader=store._Loader) == yaml.load(text, Loader=Pure), path.name
+    assert yaml.load("checked: 2026-09-01", Loader=store._Loader) == {"checked": "2026-09-01"}

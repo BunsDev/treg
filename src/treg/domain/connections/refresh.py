@@ -154,7 +154,7 @@ async def ensure_fresh(secret: Secret, db: AsyncSession, port: OAuthRefreshPort)
         await db.commit()
         try:
             fresh = await port.exchange(blob)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # Record WHY renewal failed. Without this a revoked refresh_token just 401s on every
             # call forever with nothing on the connection explaining it.
             await db.execute(

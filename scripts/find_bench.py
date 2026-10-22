@@ -52,13 +52,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-import yaml  # noqa: E402
+import yaml
 
-from treg.application import catalog_find, find_index  # noqa: E402
-from treg.config import get_settings  # noqa: E402
-from treg.domain.catalog import store  # noqa: E402
-from treg.infra import embed as embed_infra  # noqa: E402
-from treg.infra import judge as judge_infra  # noqa: E402
+from treg.application import catalog_find, find_index
+from treg.config import get_settings
+from treg.domain.catalog import store
+from treg.infra import embed as embed_infra
+from treg.infra import judge as judge_infra
 
 TASK_VERDICTS = ("strong", "closest")
 
