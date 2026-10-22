@@ -55,6 +55,8 @@ sources:
   - src/treg/web/astra.html
   - src/treg/web/media/astra/page.css
   - src/treg/web/media/astra/page.js
+  - src/treg/web/media/signin-sso.js
+  - frontend/src/components/SignInDialog.vue
   - src/treg/web/llms.txt
   - scripts/indexnow_submit.py
   - src/treg/web/support.html
@@ -444,11 +446,12 @@ sign-in opens in place), so every server-rendered page now gets that behaviour a
 produced the signup is recorded. Schema on the page: `SoftwareApplication`, `BreadcrumbList`, and
 a `FAQPage` whose questions are asserted to appear verbatim in the body.
 
-The public sign-in dialogs, including Astra's native dialog, share `media/signin-sso.js`: one email
-field appears first, with company SSO and email-code actions before social providers. Company
+The public sign-in dialogs, including Astra's native dialog, share `media/signin-sso.js`: email
+code is the primary action, with company SSO below it as an alternate mode. Selecting SSO
+keeps the email field, makes **Continue with SSO** primary, and offers a return to email code. Company
 discovery chooses the verified team
 route and never grants access itself. The direct employee link remains available when discovery
-cannot disambiguate teams. The dashboard dialog follows the same order.
+cannot disambiguate teams. The dashboard dialog uses the same mode switch.
 
 **An agent page has to be its own page, not the template with a name swapped** (2026-10-06). The
 first four were 95-98% identical word for word, and Google indexed `/agents/chatgpt` and left

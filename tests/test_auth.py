@@ -429,8 +429,15 @@ async def test_oauth_arena_return_cookie_encrypts_and_restores_query(gc):
                          if h.startswith("treg_arena_return="))
     assert "HttpOnly" in return_header and "SameSite=lax" in return_header
 
+
     state = gc.cookies.get("treg_oauth_state")
     response = await gc.get("/auth/github/callback", params={"code": "test", "state": state})
     assert response.status_code == 302
     assert response.headers["location"] == target
     assert gc.cookies.get("treg_arena_return") is None
+
+
+def test_arena_return_target_accepts_web_arena_only_on_local_path():
+    from treg.routers.auth import _arena_return_target
+    assert _arena_return_target("/web-arena") == "/web-arena"
+    assert _arena_return_target("https://other.example/web-arena") == ""

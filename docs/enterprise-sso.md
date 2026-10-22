@@ -5,7 +5,8 @@ accounts, team roles, browser sessions, and API keys. The team owner purchases a
 subscription and opens WorkOS setup from **Team → SSO**. The link is generated when clicked and
 expires after five minutes. The owner can invite an IT admin by email through WorkOS, or open the
 short-lived setup link directly. The owner can copy the employee sign-in link from **Team → SSO**;
-on any treg sign-in dialog, employees can enter their work email and choose **Continue with company SSO**.
+on any treg sign-in dialog, employees can choose **Company SSO**, enter their work email, and
+select **Continue with SSO**. Email code remains the default sign-in method.
 The lookup routes them to a verified company connection. It does not authenticate or join them.
 Their first successful sign-in joins the existing team as a member.
 The owner can change roles in **Members**.

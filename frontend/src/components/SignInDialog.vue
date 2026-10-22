@@ -3,8 +3,13 @@ import { useDashboard } from '../state/context'
 import BrandMark from './BrandMark.vue'
 export default {
   components: { BrandMark }, setup: useDashboard,
-  data: () => ({ ssoChoices: [], ssoBusy: false }),
+  data: () => ({ ssoChoices: [], ssoBusy: false, ssoMode: false }),
   methods: {
+    setSsoMode(enabled) {
+      this.ssoMode = enabled
+      this.ssoChoices = []
+      this.loginErr = ''
+    },
     async ssoLogin() {
       const email = this.emailInput.trim()
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { this.loginErr = 'Enter your work email.'; return }
@@ -45,22 +50,23 @@ export default {
       <p v-else class="sub">Sign in to connect your agent and manage your team.</p>
       <div v-if="!emailStage">
         <label for="sign-in-email" class="sub" style="display:block;text-align:left;margin:14px 0 4px">Email</label>
-        <div class="field"><input id="sign-in-email" v-model="emailInput" type="email" autocomplete="email" data-captcha="email_start" placeholder="you@work.com" @keyup.enter="ssoLogin"/></div>
-        <button class="btn primary" style="width:100%;margin-bottom:8px" :disabled="ssoBusy" @click="ssoLogin">{{ssoBusy?'Finding company…':'Continue with company SSO'}}</button>
-        <button class="btn" style="width:100%" @click="emailStart" :disabled="busy">{{busy?'Sending…':'Email me a sign-in code'}}</button>
+        <div class="field"><input id="sign-in-email" v-model="emailInput" type="email" autocomplete="email" data-captcha="email_start" placeholder="you@work.com" @input="ssoChoices=[];loginErr=''" @keyup.enter="ssoMode?ssoLogin():emailStart()"/></div>
+        <button v-if="ssoMode" class="btn primary" style="width:100%;display:flex;align-items:center;justify-content:center;gap:9px" :disabled="ssoBusy" @click="ssoLogin"><img src="/media/signin/shield.svg" alt="" aria-hidden="true" style="width:17px;height:17px;filter:invert(1)"/>{{ssoBusy?'Finding company…':'Continue with SSO'}}</button>
+        <button v-else class="btn primary" style="width:100%;display:flex;align-items:center;justify-content:center;gap:9px" @click="emailStart" :disabled="busy"><img src="/media/signin/mail.svg" alt="" aria-hidden="true" style="width:17px;height:17px;filter:invert(1)"/>{{busy?'Sending…':'Email me a sign-in code'}}</button>
         <div v-if="ssoChoices.length > 1" style="margin-top:10px">
           <p class="sub">Choose your company team:</p>
-          <button v-for="team in ssoChoices" :key="team.slug" class="btn" style="width:100%;margin-top:6px" @click="ssoGo(team.slug)">{{team.name}} · {{team.slug}}</button>
+          <button v-for="team in ssoChoices" :key="team.slug" class="btn" style="width:100%;margin-top:6px;display:flex;align-items:center;justify-content:center;gap:9px" @click="ssoGo(team.slug)"><img src="/media/signin/shield.svg" alt="" aria-hidden="true" style="width:17px;height:17px"/>{{team.name}} · {{team.slug}}</button>
         </div>
       </div>
       <div v-else>
         <p class="sub" style="font-size:11px;margin:2px 0 8px">Code sent to <b>{{emailInput}}</b><span v-if="devCode"> · dev code <b class="mono">{{devCode}}</b></span> · <a href="#" @click.prevent="emailStage=false">change</a></p>
         <div class="field"><input v-model="codeInput" inputmode="numeric" placeholder="6-digit code" @keyup.enter="emailVerify"/></div>
-        <button class="btn primary" style="width:100%" @click="emailVerify" :disabled="busy">{{busy?'Verifying…':'Sign in'}}</button>
+        <button class="btn primary" style="width:100%;display:flex;align-items:center;justify-content:center;gap:9px" @click="emailVerify" :disabled="busy"><img src="/media/signin/mail.svg" alt="" aria-hidden="true" style="width:17px;height:17px;filter:invert(1)"/>{{busy?'Verifying…':'Sign in'}}</button>
       </div>
       <div class="sub" style="margin:14px 0 8px;text-align:center">or sign in with</div>
-      <button v-if="meta.github" class="btn" style="width:100%;padding:11px;margin-bottom:8px" @click="githubLogin">Continue with GitHub</button>
-      <button v-if="meta.google" class="btn" style="width:100%;padding:11px;margin-bottom:8px" @click="googleLogin">Continue with Google</button>
+      <button v-if="!emailStage" class="btn" style="width:100%;padding:11px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:9px" @click="setSsoMode(!ssoMode)"><img :src="ssoMode?'/media/signin/arrow-left.svg':'/media/signin/shield.svg'" alt="" aria-hidden="true" style="width:17px;height:17px"/>{{ssoMode?'Email sign-in code':'Company SSO'}}</button>
+      <button v-if="meta.github" class="btn" style="width:100%;padding:11px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:9px" @click="githubLogin"><img src="/media/recruit/github.svg" alt="" aria-hidden="true" style="width:17px;height:17px"/>GitHub</button>
+      <button v-if="meta.google" class="btn" style="width:100%;padding:11px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:9px" @click="googleLogin"><img src="/media/aeo/logos/google.svg" alt="" aria-hidden="true" style="width:17px;height:17px"/>Google</button>
       <details v-if="!oauthSignin" style="margin-top:12px;text-align:left">
         <summary class="sub" style="cursor:pointer;text-align:center">or paste an org token (agents &amp; CLI)</summary>
         <div class="field" style="margin-top:8px"><input v-model="tokenInput" type="password" placeholder="X-Treg-Token" @keyup.enter="addToken(tokenInput)"/></div>
