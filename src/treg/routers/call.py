@@ -50,7 +50,6 @@ from ..models import Tool
 from .auth import _client_ip
 
 
-# The app alias preserves the moved handlers' decorator text byte-for-byte.
 app = APIRouter()
 router = app
 
@@ -264,11 +263,6 @@ async def _stamp_call_exit(
             _capture_exceptional_call(
                 request, call_ref=call_ref, status_code=status_code, failure_kind=failure_kind)
         request.state.call_audited = True
-    # A failed call must not keep its idempotency label. The claim is taken before the upstream
-    # call, and a request that dies anywhere after that — a bad parameter, a deny rule, an empty
-    # balance, a saturated pool — would otherwise hold the label for the whole window and answer
-    # every retry with 409. Worse than the problem this feature exists to solve, and found by the
-    # test for it.
     await _release_idempotent_claim(request)
 
 
@@ -325,7 +319,7 @@ async def _relay_answer(request: Request, context, upstream: UpstreamResponse, r
             if kind == "review":
                 response.headers["X-Treg-Review"] = "requested"  # read by CLI <= 0.18
             _capture_hint(request, context, kind)
-    except Exception:
+    except Exception:  # noqa: BLE001 - a fault here can only lose the hint header
         pass  # A fault here can only lose the header; the answer is already built.
     if routed := _routed_alternative(context, response.status_code):
         response.headers["X-Treg-Routed-Tool"] = routed

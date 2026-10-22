@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from treg.domain import money as ledger
 from treg.application.call import service as call_service
 from treg.application.call.types import GatewayFailed
-from treg.routers import call as call_routes
 from treg.api import app
 from treg.config import get_settings
 from treg.infra.db import session_maker

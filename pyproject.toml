@@ -77,6 +77,7 @@ dev = [
     "import-linter>=2.13",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
+    "ruff>=0.17.1",
     "tools-registry[server]",   # the test suite imports the server (api, models, …), so dev pulls it in
 ]
 test = [
@@ -87,6 +88,31 @@ test = [
 # uv.lock is `revision = 3`; uv < 0.8.4 silently rewrites it to revision 2 (a ~650-line diff
 # that changes no versions). Refuse to run on an old uv rather than teach everyone to avoid `uv lock`.
 required-version = ">=0.12"
+
+[tool.ruff]
+target-version = "py312"
+extend-exclude = ["src/treg/web/dashboard"]
+
+[tool.ruff.lint]
+select = [
+    "E4", "E7", "E9", "F",  # ruff's defaults: syntax, imports, undefined and unused names
+    "B",                    # bugbear: likely bugs
+    "BLE",                  # a blind `except Exception` must say why it may swallow everything
+    "ERA",                  # no commented-out code
+    "PGH",                  # a `type: ignore` names its error code
+    "RUF100",               # a `noqa` that suppresses nothing is deleted
+]
+ignore = [
+    "E701", "E702",  # one-line compound statements are house style
+    "E741",          # `l` and `I` names are fine in a monospace editor
+    "B905",          # `zip(strict=)` changes behavior at each call site; adopt it site by site
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["F811"]  # pytest fixtures are imported and then named as parameters
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends"]
 
 [tool.importlinter]
 root_package = "treg"

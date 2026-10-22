@@ -9,20 +9,13 @@ from __future__ import annotations
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .domain.connections.oauth_flow import consent_url, pkce_challenge
+from .domain.connections.oauth_flow import pkce_challenge as pkce_challenge
 from .domain.connections.refresh import (
-    EXPIRING_SOON_DAYS,
-    _DEFAULT_TOKEN_URI,
-    _SKEW,
-    _expires_at,
-    _locks,
-    connection_view,
+    EXPIRING_SOON_DAYS as EXPIRING_SOON_DAYS,
+    _expires_at as _expires_at,
     ensure_fresh as _ensure_fresh,
-    expiry_of,
-    expiry_state,
-    is_refreshable,
-    is_stale,
-    secret_is_refreshable,
+    expiry_state as expiry_state,
+    secret_is_refreshable as secret_is_refreshable,
 )
 from .infra.oauth_exchange import HTTPXOAuthExchangePort
 from .infra.oauth_refresh import HTTPXOAuthRefreshPort

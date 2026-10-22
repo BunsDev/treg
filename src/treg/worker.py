@@ -37,9 +37,9 @@ import sys
 def _need_server() -> None:
     try:
         import sqlalchemy  # noqa: F401
-    except ImportError:  # pragma: no cover — a base install has no DB stack
+    except ImportError as exc:  # a base install has no DB stack
         print("treg-worker needs the server extra: pip install 'treg[server]'", file=sys.stderr)
-        raise SystemExit(2)
+        raise SystemExit(2) from exc
 
 
 async def _capacity_sweep(args) -> int:
@@ -143,7 +143,6 @@ async def _overflow_verify(args) -> int:
     from . import oauth_providers
     from .infra.db import session_maker, verify_db
     from .domain.capacity import verify as V
-    from .domain.capacity import routes as R
     from .domain.catalog import store as catalog_store
     from .models import OverflowRoute
     from .timeutil import utcnow_naive
@@ -162,13 +161,9 @@ async def _overflow_verify(args) -> int:
     keys = {"orthogonal": s.overflow_key_orthogonal, "monid": s.overflow_key_monid}
     tally = {"passed": 0, "failed": 0, "aggregator": 0, "inconclusive": 0}
     skipped, over_budget, spent_usd, key_failures = 0, 0, 0.0, []
-    # One SHORT transaction per route. The first prod run (2026-08-28) kept a single session open
-    # across every network round-trip: each `db.get` autoflushed the previous row's UPDATE, the row
-    # locks piled up for minutes, and the run died at route 60 with LockNotAvailableError. Where
-    # that 5 s bound came from is NOT db.py — its pools set no lock_timeout, and `alembic/env.py`'s
-    # applies only to the migration connection, which this worker never opens. Most likely the
-    # database role carries one. Recorded as observed rather than explained: the fix (one short
-    # transaction per route) is right whatever set it.
+    # One SHORT transaction per route. A single session held open across every network round-trip
+    # autoflushes each row's UPDATE on the next `db.get`, and the row locks pile up until a lock
+    # timeout kills the run.
     async with httpx.AsyncClient(timeout=60) as c:
         for r, cap in todo:
             ep = by_id.get(r.endpoint_id)

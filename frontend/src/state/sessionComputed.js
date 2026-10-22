@@ -45,13 +45,12 @@ canAdmin(){ return ['admin','owner'].includes(this.activeRole); },
 canRegister(){ return this.activeRole!=='viewer'; },
 // members+ may create secrets/tools
     secretRowsReady(){ return this.secretRows.filter(r=>(r.name||'').trim()&&r.value).length; },
-// The names the marketplace credential ladder actually matches: tier 2 finds an org secret
+// The names the credential ladder actually matches: tier 2 finds an org secret
     // NAMED exactly for the provider (Secret.name == service), so these are the names worth
     // suggesting — a key called APOLLO_API_KEY works as a plain secret but the catalog never sees it.
     keyNameSuggestions(){ return (this.providers||[])
       .filter(p=>this.pastedCredential(p))
       .sort((a,b)=>a.service.localeCompare(b.service)); },
-// ---- detail pages ----
     accessNames(){  // the grantable universe: tool names + recipe-only skill names (an integration
       // skill is reachable through its tool's name; recipe-only bundles need their own entry)
       return [...new Set([...this.tools.map(t=>t.name), ...this.recipes.map(r=>r.name)])].sort(); }

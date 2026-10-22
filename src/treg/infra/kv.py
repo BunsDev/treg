@@ -41,7 +41,12 @@ return redis.call('GETRANGE', KEYS[1], 0, 32768)
 """
 log = logging.getLogger("treg.kv")
 _clock = time.monotonic
-_utcnow = lambda: datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+
+
+def _utcnow() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+
+
 _lease_error_lock = threading.Lock()
 _lease_errors: dict[tuple[str, str], dict] = {}
 _lease_timings: dict[tuple[str, str], dict] = {}
@@ -336,7 +341,7 @@ class RedisStore:
             return value
         except UnicodeError:
             return FlowControlReadFailure.INVALID
-        except Exception:
+        except Exception:  # noqa: BLE001
             # No URL, raw JSON, or exception text in the admission path.
             return FlowControlReadFailure.UNAVAILABLE
 
@@ -345,7 +350,7 @@ class RedisStore:
             # No contention wait or retry queue. Ambiguous writes are cleaned by owner token.
             async with asyncio.timeout(_TIMEOUT_S):
                 return int(await self._client.eval(script, 1, key, *args))
-        except Exception:
+        except Exception:  # noqa: BLE001 - any Redis fault reads as unavailable admission
             # No URL, token, request data or exception text in this admission signal.
             return None
 
@@ -377,7 +382,7 @@ class RedisStore:
                 return OrgAdmissionResult("unavailable")
             outcomes = ("acquired", "busy", "rate_limited", "unavailable")
             return OrgAdmissionResult(outcomes[result[0]], result[1])
-        except Exception:
+        except Exception:  # noqa: BLE001 - any Redis fault reads as unavailable admission
             # Cancellation propagates; logs never receive Redis URLs or exception data.
             return OrgAdmissionResult("unavailable")
 

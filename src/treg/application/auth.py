@@ -22,7 +22,6 @@ from sqlmodel import select
 
 from .. import audit, crypto, email as email_sender, ratestore
 from ..application.onboard import demo as demo_seed
-from ..application.onboard import first_run
 from ..infra import db as database
 from ..infra import turnstile
 from ..config import get_settings
@@ -595,8 +594,7 @@ async def start_google_login(cli: str, callback_base: Callable[[], str]) -> Soci
     return SocialLoginStart(state=state, url=url)
 
 
-async def _provision_social_user(email: str, state: str, door: str, entry_surface: str = "",
-                                 *, github_login: str = "", name: str = "") -> SocialLoginProof:
+async def _provision_social_user(email: str, state: str, door: str, entry_surface: str = "") -> SocialLoginProof:
     created: set[int] = set()
     proven: set[int] = set()
     async with database.session_maker() as db:
@@ -614,9 +612,7 @@ async def _provision_social_user(email: str, state: str, door: str, entry_surfac
         if proven:
             await signup.grant_signup_promo_on_proof(user.id)
         signup.track_signup(user, created, door, entry_surface)
-        if user.id in created:  # what the door knew, for the first-run lookup (onboard.first_run)
-            await first_run.remember_hints(user.id, user.email, door=door, github_login=github_login, name=name)
-        # Browser session OR `treg login` handshake — both go through the /login team picker now.
+        # Browser session OR `treg login` handshake - both go through the /login team picker.
         return SocialLoginProof(user=user, cli_state=await _consume_cli_state(state))
 
 
@@ -649,11 +645,10 @@ async def complete_github_login(
             raise SocialLoginError("github_no_verified_email")
     except SocialLoginError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"[auth] github callback error: {exc}")  # keep internals server-side, not in the response
         raise SocialLoginError("callback_failed") from exc
-    login = prof.get("login") if isinstance(prof.get("login"), str) else ""
-    return await _provision_social_user(email, state, "github", entry_surface, github_login=login)
+    return await _provision_social_user(email, state, "github", entry_surface)
 
 
 async def complete_google_login(
@@ -687,11 +682,10 @@ async def complete_google_login(
             raise SocialLoginError("google_unverified_email")
     except SocialLoginError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"[auth] google callback error: {exc}")  # keep internals server-side, not in the response
         raise SocialLoginError("callback_failed") from exc
-    name = prof.get("name") if isinstance(prof.get("name"), str) else ""
-    return await _provision_social_user(email, state, "google", entry_surface, name=name)
+    return await _provision_social_user(email, state, "google", entry_surface)
 
 
 async def current_identity(x_treg_token: str, session_cookie: str) -> CurrentIdentity:
@@ -732,10 +726,10 @@ async def current_identity(x_treg_token: str, session_cookie: str) -> CurrentIde
         org_slug = None
         role = None
         if membership is not None:
-            # The org this token IS. A machine identity cannot call GET /orgs — `require_identity`
+            # The org this token IS. A machine identity cannot call GET /orgs - `require_identity`
             # refuses it on purpose, since `create_org` hangs off that dependency and an agent could
             # otherwise mint an org it owns. But it still has to learn its OWN org id to reach any
-            # /orgs/{id}/... route, and being unable to told `treg balance` there was "no active org".
+            # /orgs/{id}/... route.
             org = await db.get(Org, membership.org_id)
             org_id = membership.org_id
             org_slug = org.slug if org else None
@@ -822,7 +816,7 @@ async def confirm_invite_signin(email_token: str) -> InviteSigninProof:
         if proven:
             await signup.grant_signup_promo_on_proof(user.id)
         # A share-born invite lands on the shared page itself (the SPA auto-accepts + switches org);
-        # a plain invite lands on the dashboard with the accept banner, as before. `landing` was
+        # a plain invite lands on the dashboard with the accept banner. `landing` was
         # allowlist-validated at create time, so this can never redirect off-app.
         destination = (
             f"{invite.landing}?invite_org={invite.org_id}"
@@ -1034,9 +1028,7 @@ async def prepare_oauth_authorization(
             if org is not None and not org.suspended:
                 # The BALANCE belongs on this list. Choosing a team here decides which balance the
                 # client spends for the life of the grant, and a list of slugs makes the one question
-                # that matters — "which of these can actually pay?" — invisible at the moment of
-                # choosing. Unclecode picked a $0.00 team on the first real ChatGPT connect and the call
-                # was refused; nothing on the page could have told him.
+                # that matters - "which of these can actually pay?" - invisible at the moment of choosing.
                 teams.append({"org_id": org.id, "slug": org.slug, "role": membership.role,
                               "balance_usd": round((org.balance_micro or 0) / 1_000_000, 4)})
         if not teams:
@@ -1152,10 +1144,8 @@ async def _refresh_grant(*, refresh_token: str, client_id: str, resource: str) -
                 "invalid_grant", "the team on this grant is no longer available",
             )
         # STILL a member? The grant is the user's consent to spend a TEAM's balance, and leaving (or
-        # being removed from) that team ends the standing they consented with. Without this a grant
-        # kept minting tokens forever: every downstream call was refused by `require_member`, so the
-        # damage was bounded, but the grant lay dormant and sprang back to life — with no new consent —
-        # the day the membership was restored.
+        # being removed from) that team ends the standing they consented with. Otherwise a dormant
+        # grant would spring back to life - with no new consent - the day the membership was restored.
         still_in = (await db.execute(select(Membership).where(
             Membership.user_id == row.user_id, Membership.org_id == live_org_id))).scalar_one_or_none()
         if still_in is None and mcp_oauth.is_sheets_resource(row.resource):
@@ -1287,9 +1277,9 @@ async def list_oauth_grants(user_id: int) -> list[dict]:
                 "team_name": org.name if org else None,
                 "granted": grant.granted_at.isoformat(timespec="seconds") if grant else None,
             })
-        # GET normally reads only, but repairing a family created by an old rolling-deploy instance is
-        # a durable compatibility backfill. Without this commit the response looks healed once while
-        # the inserted authority row is rolled back when the request session closes.
+        # GET normally reads only, but repairing a family created by an older instance is a durable
+        # compatibility backfill. Without this commit the response looks healed once while the
+        # inserted authority row is rolled back when the request session closes.
         await db.commit()
         return out
 

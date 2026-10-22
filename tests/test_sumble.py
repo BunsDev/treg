@@ -13,7 +13,7 @@ from test_marketplace_call import _balance, _entries, _mk, platform_on  # noqa: 
 
 
 @pytest.fixture
-def sumble_on(monkeypatch, platform_on):  # noqa: F811
+def sumble_on(monkeypatch, platform_on):
     monkeypatch.setenv('TREG_PLATFORM_KEY_SUMBLE', 'PLATFORM-SUMBLE')
     monkeypatch.setenv('TREG_PLATFORM_PROVIDERS', 'sumble')
     get_settings.cache_clear()

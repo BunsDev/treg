@@ -17,37 +17,29 @@ from .. import client_ip, crypto
 from ..application import auth as auth_use_cases
 from ..application import signup
 from ..application import images
-from ..application.onboard import first_run
 from ..application.auth import (
-    CLI_APPROVE_MAX_TRIES,
-    EMAIL_CODE_TTL,
-    HANDSHAKE_TTL,
-    MAX_OTP_ATTEMPTS,
-    OTP_NS,
-    OTP_START_MAX_PER_EMAIL,
-    OTP_START_MAX_PER_IP,
-    OTP_START_NS,
-    OTP_START_WINDOW_S,
+    CLI_APPROVE_MAX_TRIES as CLI_APPROVE_MAX_TRIES,
+    MAX_OTP_ATTEMPTS as MAX_OTP_ATTEMPTS,
+    OTP_START_MAX_PER_EMAIL as OTP_START_MAX_PER_EMAIL,
+    OTP_START_MAX_PER_IP as OTP_START_MAX_PER_IP,
 )
 from ..config import get_settings
 from ..domain.identity import mcp_oauth
 from ..domain.identity import session as sess
 from ..domain.identity.access import require_identity
-from ..domain.identity.mcp_oauth import REFRESH_TTL_S
 from ..models import User
 from .auth_helpers import _is_https, _remember_oauth_return, _same_origin, require_managed_cli
 from .web import _esc_html
 
-# The app alias preserves the moved handlers' original @app.post decorator text byte-for-byte.
 app = APIRouter()
 email_router = app
 
 
-# ---- human login via email one-time code (the third identity door) ------------------------
-# OTP code + its brute-force counter, and the /auth/email/start throttle, live in the DB (treg.ratestore
-# over the Ephemeral table) — NOT per-process dicts — so a restart can't reset them and they stay correct
-# across instances (backlog #3). The 'otp' namespace holds {code_hash, attempts} keyed by email; the
-# 'otp_start' namespace holds the per-email + per-IP sliding windows (email-bomb + brute-force guard).
+# Human login via email one-time code. OTP code + its brute-force counter, and the
+# /auth/email/start throttle, live in the DB (treg.ratestore over the Ephemeral table) - NOT
+# per-process dicts - so a restart can't reset them and they stay correct across instances. The
+# 'otp' namespace holds {code_hash, attempts} keyed by email; the 'otp_start' namespace holds the
+# per-email + per-IP sliding windows (email-bomb + brute-force guard).
 
 
 class EmailStartIn(BaseModel):
@@ -204,7 +196,6 @@ def _login_callback_base(request: Request) -> str:
     return get_settings().public_url.rstrip("/")
 
 
-# The app alias preserves the moved handlers' original @app.get decorators byte-for-byte.
 app = APIRouter()
 social_router = app
 
@@ -234,7 +225,6 @@ def _social_http_error(exc: auth_use_cases.SocialLoginError) -> HTTPException:
     return HTTPException(status_code=status_code, detail=detail)
 
 
-# ---- human login via GitHub OAuth (dashboard sessions) ------------------------------------
 @app.get("/auth/github")
 async def auth_github(request: Request, cli: str = "", return_to: str = ""):
     try:
@@ -371,7 +361,6 @@ async def auth_google_callback(
     return _finish_oauth_login(request, proof.user, proof.cli_state)
 
 
-# The app alias preserves the moved handlers' original @app decorators byte-for-byte.
 app = APIRouter()
 cli_router = app
 
@@ -482,8 +471,6 @@ async def login_page(request: Request, cli: str = "", treg_session: str = Cookie
 def _login_page_html(login_id: str, *, session_email: str | None, github: bool, google: bool) -> str:
     """Server-rendered /login card. login_id is whitelist-validated by the caller; the session email
     is HTML-escaped (it's the only other interpolated value)."""
-    from html import escape
-
     # A pairing-code block sits above everything: whichever door the user takes, approve() won't complete
     # the CLI handshake until the code shown in their own terminal is echoed back (phishing guard — a
     # login they didn't start has no matching code). A `treg login` link carries the code in the URL
@@ -643,7 +630,6 @@ async function verifyCode(){err('');const em=document.getElementById('em').value
 if(HAS_SESSION)loadOrgs();
 """
 
-# The app alias preserves the moved handlers' original @app decorators byte-for-byte.
 app = APIRouter()
 session_router = app
 
@@ -673,12 +659,6 @@ async def auth_me(
     out = {"email": identity.email, "is_superadmin": identity.is_superadmin, "onboarded": identity.onboarded,
            "github": identity.github, "avatar_url": images.public_url(identity.avatar_key),
            "uploads": images.enabled()}
-    if first_run.enabled(identity.email):
-        out["onboarding_v2"] = True
-    elif not identity.onboarded and first_run.in_experiment(identity.email):
-        out["onboarding_v2_experiment"] = True     # the dashboard reads the flag `onboarding-v2`
-    if first_run.may_preview(identity.email, identity.is_superadmin):
-        out["onboarding_preview"] = True
     if (ich := _intercom_user_hash(identity.email)):
         out["intercom_user_hash"] = ich
     if identity.org_id is not None:
@@ -697,7 +677,6 @@ async def auth_logout(request: Request) -> JSONResponse:
     return resp
 
 
-# The app alias preserves the moved handlers' original @app decorators byte-for-byte.
 app = APIRouter()
 invite_router = app
 
@@ -725,7 +704,6 @@ async def auth_invite_signin(
     email through a real door (OTP / GitHub / Google) and the invite auto-appears via /invites/mine.
     An invalid/expired secret of either kind just lands on the site."""
     from urllib.parse import quote
-    base = get_settings().public_url.rstrip("/")
     try:
         landing = await auth_use_cases.invite_signin_landing(t, code, treg_session)
     except auth_use_cases.InviteSigninError as exc:
@@ -789,7 +767,6 @@ async def auth_invite_signin_confirm(request: Request):
     return resp
 
 
-# The app alias preserves the moved handlers' original @app decorators byte-for-byte.
 app = APIRouter()
 oauth_server_router = app
 
@@ -1011,9 +988,7 @@ async def oauth_authorize(
         return _oauth_server_failure(exc, redirect_uri, state)
     if view is None:
         # Sign in first, then come back to THIS request. Parked in a cookie rather than a `?next=`
-        # query the sign-in page would have to understand — the first version invented that
-        # convention and nothing implemented it, so the user signed in and landed on the dashboard
-        # with the authorization silently dropped.
+        # query the sign-in page would have to understand.
         # The query is only a UI cue. The validated request stays in the HttpOnly return cookie.
         resp = RedirectResponse("/?signin=oauth", status_code=302)
         _remember_oauth_return(resp, request)
@@ -1178,7 +1153,6 @@ async def openai_apps_challenge():
     return PlainTextResponse(token, headers={"Cache-Control": "no-store"})
 
 
-# The app alias preserves the moved handlers' original @app decorators byte-for-byte.
 app = APIRouter()
 grants_router = app
 
@@ -1221,7 +1195,6 @@ async def oauth_grant_set_team(family_id: str, body: GrantTeamIn,
         raise HTTPException(status_code=404, detail=exc.detail) from exc
 
 
-# The app alias preserves the moved handlers' original @app decorators byte-for-byte.
 app = APIRouter()
 token_router = app
 

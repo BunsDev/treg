@@ -190,11 +190,6 @@ An application rollback leaves the table in place; a schema downgrade deletes it
 
 ## Registry tables
 
-- **`OnboardingProfile`** - one new user's first-run lookup: `user_id` (unique, no FK, like
-  `ArenaRun`), the team it made, `status` (pending | running | done | failed), an encrypted payload
-  (setup rows, evidence, ranked tasks, filled inputs) and what the lookup cost the house team.
-  Revision `0062`; `application.onboard.first_run` is the only writer. See
-  [onboarding](../interface/onboarding.md#the-first-run-flow-onboarding_v2).
 - **`Feedback`** - durable team-scoped problem reports and suggestions. Contains the submitted
   category/message/references, authenticated org and user attribution, and the references verified
   against that team's call records or ledger. Revision `0025`; `domain.feedback` owns inserts;
@@ -230,9 +225,6 @@ uses this metadata, never the encrypted token's shape.
   FIRST page, first touch wins, 90 days), persisted once at signup in both doors. This is the column
   set that answers "how many teams did campaign X bring" - the `ad_*` columns only know Google
   clicks. `utm_referrer` is the referring hostname, kept even when no `utm_*` tag was present.
-  The first page itself is a separate first-touch cookie, `treg_landing` (path only, set on every
-  first visit, utm or not); it is ranking evidence for the first-run onboarding and is not stored
-  on the team.
   **`first_call_at`** (same migration as `ad_*`) -
   set once by a guarded UPDATE in the `/call/` handler,
   deliberately NOT derived from `CallRecord` (which `audit.py` sheds under load, undercounting exactly

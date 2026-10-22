@@ -165,7 +165,7 @@ async def quote(caller, *, task: str, value: str, query: str = "", mode: str = "
     requested = set(providers) if providers is not None else None
     if requested is not None and (not requested or len(requested) > 30):
         raise rules.WebArenaError("Select 1 to 30 providers.")
-    for plan, c in ((plan, c) for plan in plans for c in plan.candidates):
+    for plan, c in ((p, c) for p in plans for c in p.candidates):
         ep, adapter = c.endpoint, c.adapter
         provider = ep["provider"]
         if not _in_lineup(task, ep["id"]):

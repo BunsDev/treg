@@ -21,7 +21,6 @@ switchTo(o){ this.switchOrg(o); },
       if(o.slug!==this.activeSlugNow){ if(!this.sessionMode && !this.connected(o.slug)){ this.addOrg=true; return; } this.switchOrg(o); }
       this.go('orgs'); },
 resetConfirms(){ this.confirmDelTool=null; this.confirmDelSecret=null; this.confirmDelBundle=null; this.confirmRemove=null; this.confirmAgent=null; this.keyMenu=null; this.keyConfirm=null; this.confirmLeave=false; this.confirmDel=''; this.confirmAdmUser=null; this.confirmAdmOrg=null; },
-// ---- tab addresses ----
 // Only Activity and Team carry their tab in the address, and the Calls tab also its key filter:
 // '#activity/calls?key=7', '#activity/usage', '#orgs/billing'. The Usage tab's key filter belongs
 // to its spend chart alone, so it stays out of the address. Every other view keeps its
@@ -57,10 +56,9 @@ go(v, fromPop){ this.resetConfirms(); this.mobileNav=false; this.drawerTool=null
       if(!fromPop) window.scrollTo(0,0);
       this.startAgentOpen=false; this.orgMenu=false;
       if(this.elements.accountMenu) this.elements.accountMenu.open=false; },
-// ---- detail pages (shareable deep links) ----
     routeFromPath(path){ const m=/^\/app\/(skills|tools)\/(.+)$/.exec(path||'');
       return m ? {kind:m[1]==='skills'?'skill':'tool', name:decodeURIComponent(m[2])} : null; },
-// Marketplace deep links are their own route: they resolve against `providers` (already in
+// Provider deep links (/app/marketplace/<service>) are their own route: they resolve against `providers` (already in
     // memory) rather than fetching a detail payload, so they can't share openDetail's loader.
     mkFromPath(path){ const m=/^\/app\/marketplace\/([^/]+)$/.exec(path||'');
       return m ? decodeURIComponent(m[1]) : null; },

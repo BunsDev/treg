@@ -97,7 +97,7 @@ class R2ObjectStore:
         try:
             await self._client.put_async(
                 key, body, attributes={"Content-Type": "application/octet-stream"}, use_multipart=False)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - wrap every storage failure; from None keeps keys out
             raise self._failure(exc) from None
 
     async def _get(self, key: str) -> bytes | None:
@@ -113,7 +113,7 @@ class R2ObjectStore:
             return None
         except ObjectStoreError:
             raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - wrap every storage failure; from None keeps keys out
             raise self._failure(exc) from None
 
     async def head(self, content_hash: str) -> ObjectInfo | None:
@@ -122,7 +122,7 @@ class R2ObjectStore:
             meta = await self._client.head_async(key)
         except FileNotFoundError:
             return None
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - wrap every storage failure; from None keeps keys out
             raise self._failure(exc) from None
         return ObjectInfo(key, int(meta["size"]))
 
@@ -143,7 +143,7 @@ class R2ObjectStore:
             await self._client.delete_async(key)
         except FileNotFoundError:
             return
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - wrap every storage failure; from None keeps keys out
             raise self._failure(exc) from None
 
     async def put_named(self, name: str, body: bytes) -> None:

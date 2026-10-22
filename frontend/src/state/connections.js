@@ -1,6 +1,5 @@
 
 export default {
-// ---- connections (registry OAuth) ----
     async loadConnections(){
       this.connErr=''; const live=this.ticket('connections');
       this.loadPlatforms();  // fire-and-forget, and first: the catalog must neither hold up nor wait for the connect UI

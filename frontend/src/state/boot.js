@@ -8,13 +8,13 @@ export default async function boot(){
     document.documentElement.dataset.theme=this.theme;
     listen(document, 'click', ()=>{ if(this.mdMenu) this.mdMenu=false; if(this.keyMenu) this.keyMenu=null; });  // outside-click closes compact menus
     listen(document, 'keydown', e=>{
-      // Escape closes any open modal/drawer (a universal expectation the modals didn't honour)
+      // Escape closes any open modal/drawer
       if(e.key==='Escape'){ const orgWasOpen=this.orgMenu; this.closeOverlays(); if(orgWasOpen) this.elements.orgmain?.focus(); if(this.startAgentOpen){ this.startAgentOpen=false; this.elements.startAgentTrigger?.focus(); } else if(this.elements.accountMenu?.open){ this.elements.accountMenu.open=false; this.elements.accountMenu.querySelector('summary').focus(); } return; }
-      // "/" focuses the search box (the "/" glyph in the box advertised a shortcut that didn't exist)
+      // "/" focuses the search box
       const t=e.target, typing = t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'||t.isContentEditable);
       if(e.key==='/' && !typing && this.authed && (this.view==='tools'||this.view==='resources'||this.view==='catalog')){ e.preventDefault(); this.elements.search && this.elements.search.focus(); }
     });
-    listen(document, 'click', e=>{  // the org dropdown didn't close on an outside click
+    listen(document, 'click', e=>{  // the org dropdown closes on an outside click
       if(this.elements.accountMenu && !e.target.closest('.rd-account-menu')) this.elements.accountMenu.open=false;
       if(this.startAgentOpen && !e.target.closest('.rd-agent-picker')) this.startAgentOpen=false;
       if(this.orgMenu && !e.target.closest('.orgblock') && !e.target.closest('.dropdown')) this.orgMenu=false;
@@ -22,7 +22,7 @@ export default async function boot(){
     // the fixed-position dropdown must follow its trigger when anything scrolls or resizes
     listen(window, 'scroll', ()=>{ if(this.orgMenu) this.placeOrgMenu(); if(this.keyMenu)this.keyMenu=null; }, true);
     listen(window, 'resize', ()=>{ if(this.orgMenu) this.placeOrgMenu(); if(this.keyMenu)this.keyMenu=null; });
-    listen(window, 'popstate', e=>{  // browser Back moves between views (was exiting the app)
+    listen(window, 'popstate', e=>{  // browser Back moves between views
       const mk=(e.state&&e.state.mk)||this.mkFromPath(location.pathname);
       if(mk){ this.openProvider(mk, true); return; }
       const pf=(e.state&&e.state.platform)||this.platformFromHash();
@@ -42,7 +42,7 @@ export default async function boot(){
       if(['tools','orgs','activity','usage','admin','help','secrets','start','resources','catalog','connections','referrals','hub'].includes(v)) this.go(v, true);
     });
     // Catalog data does not depend on the session, so a view that shows it starts fetching now,
-    // alongside /meta and /auth/me, instead of after them (the shelves used to arrive last).
+    // alongside /meta and /auth/me, instead of after them.
     const catalogShelf=this.catalogFromPath(location.pathname)?.slug || this.platformFromHash();
     if(this.catalogFromPath(location.pathname) || catalogShelf || location.hash==='#catalog') this.loadPlatforms();
     if(catalogShelf) this.prefetchPlatform(catalogShelf);
@@ -68,7 +68,7 @@ export default async function boot(){
     const qs = new URLSearchParams(location.search);
     const linkOrg = qs.get('invite_org'), inv = qs.get('invite'), ref = qs.get('ref'), oauthSignin = qs.get('signin')==='oauth';
     this.oauthSignin=oauthSignin;
-    if(ref) storageSet('treg-ref', ref);  // survives the sign-in reload so the welcome can preselect the agent the landing was about (see maybeOnboard)
+    if(ref) storageSet('treg-ref', ref);  // survives the sign-in reload so Getting started can preselect the agent the landing was about (see maybeOnboard)
     if(linkOrg || inv || qs.get('invite_expired') || ref || oauthSignin){ history.replaceState(null,'',location.pathname+location.hash); }  // strip one-shot params so reload/share doesn't replay them
     if(linkOrg){ this.inviteLinkOrg=parseInt(linkOrg,10)||null; }
     // A shared detail deep link (/app/skills/<x>, /app/tools/<x>) — from the URL itself, or stashed
@@ -76,7 +76,7 @@ export default async function boot(){
     let route=this.routeFromPath(location.pathname);
     let mkRoute=this.mkFromPath(location.pathname);
     const runRoute=this.runFromPath(location.pathname);   // /app/runs/<id>: the hub's run page, members only
-    // A public catalog URL renders the marketplace views with or without a session. Set BEFORE the
+    // A public catalog URL renders the catalog views with or without a session. Set BEFORE the
     // /auth/me check so the first paint is already in public mode, and drop the server-rendered
     // fallback (see `_spa_catalog_page`) now that the real UI is about to take over.
     const catRoute=this.catalogFromPath(location.pathname);
@@ -90,9 +90,7 @@ export default async function boot(){
     this._restoreAgent();
     const me = await meReq.catch(()=>null);
     this.sessionChecked=true;
-    if(me){ this.sessionMode=true; this.me=me.email; this.isAdmin=!!me.is_superadmin; this.onboarded=!!me.onboarded; this.onboardingV2=!!me.onboarding_v2; this.onboardingV2Exp=!!me.onboarding_v2_experiment; this.icHash=me.intercom_user_hash||''; this.meAvatar=me.avatar_url||null; this.uploadsOn=!!me.uploads; await this.loadAll(); this.analyticsIdentify(); this.initIntercom();
-      // /app#onboarding-preview: the first-run flow for any email, for the people allowed to run it.
-      if(me.onboarding_preview){ const pv=()=>{ if(location.hash==='#onboarding-preview') this.onboardingPreviewOn=true; }; pv(); listen(window, 'hashchange', pv); }
+    if(me){ this.sessionMode=true; this.me=me.email; this.isAdmin=!!me.is_superadmin; this.onboarded=!!me.onboarded; this.icHash=me.intercom_user_hash||''; this.meAvatar=me.avatar_url||null; this.uploadsOn=!!me.uploads; await this.loadAll(); this.analyticsIdentify(); this.initIntercom();
       // Share-born arrival (/app/skills/x?invite_org=N from the invite email): accept silently and
       // enter that team — the emailed "Sign in & accept" click was the consent. Otherwise the normal
       // first-run / invite-banner flow.
@@ -131,10 +129,10 @@ export default async function boot(){
       else { const hv=this.viewFromHash(); if(hv) this.go(hv, true);
         else { this.go('start', true); history.replaceState({view:'start'},'','/app#start'); } }
       return; }      // token-in-browser fallback
-    // A marketplace link is only meaningful to a member, so a logged-out visitor gets the front
+    // A catalog link is only meaningful to a member, so a logged-out visitor gets the front
     // door rather than the share gate (which exists to accept skill/tool shares).
     // Logged out on a /catalog URL: render the catalog anyway. Its API is unauthenticated, so this
-    // is the SAME marketplace UI a member sees, minus what needs a session — not a second build of
+    // is the SAME catalog UI a member sees, minus what needs a session - not a second build of
     // it. This is the branch that makes the catalog crawlable.
     if(catRoute){
       // loadConnections, not just loadPlatforms: /oauth/providers is an open endpoint, so the
@@ -145,6 +143,6 @@ export default async function boot(){
       return; }
     if(!inv && !linkOrg && !route && !qs.get('invite_expired') && !ref && !oauthSignin){ location.replace('/'); return; }  // logged-out plain visit → the marketing landing owns the front door. `ref` is a use-case page's CTA (/app?ref=p1), so keep that attribution while opening sign-in in place.
     if(route){ this.shareGate=route; this.demo.signin=true; }  // shared link while logged out: the focused gate (no sandbox mint, no tour); after sign-in the boot lands on it (email verify reloads in place; OAuth restores via the treg-next stash)
-    else this.demo.signin=true;  // OAuth returns, use-case CTA arrivals (?ref=) and every other logged-out flow open sign-in; nothing mints a sandbox any more
+    else this.demo.signin=true;  // OAuth returns, use-case CTA arrivals (?ref=) and every other logged-out flow open sign-in
     if(inv){ this.invitePrefill=inv; this.emailInput=inv; this.emailStage=false; this.demo.signin=true; }  // legacy code link while logged out: prefill + open sign-in; the invite auto-accepts after login (maybeOnboard)
   }

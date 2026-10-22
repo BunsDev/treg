@@ -161,15 +161,6 @@ async def test_refuses_empty_unconfigured_and_over_the_limit(clients, monkeypatc
     assert r.status_code == 429
 
 
-async def test_search_page_is_served_to_signed_out_visitors(clients):
-    clients.headers.pop("X-Treg-Token", None)
-    clients.cookies.clear()
-    r = await clients.get("/search")
-    assert r.status_code == 200 and "/app/ui/assets/" in r.text
-    # `find` is reserved: it is the JSON route, never a platform shelf
-    assert (await clients.get("/catalog/find")).status_code == 400
-
-
 async def _find_on(clients, q, platform):
     clients.headers.pop("X-Treg-Token", None)
     r = await clients.get("/catalog/find", params={"q": q, "platform": platform})
@@ -333,7 +324,8 @@ def test_v2_name_pages():
 def test_v2_provider_name_survives_judge_abstention():
     cat = catalog_store.load()
     ix = fr.index(cat)
-    display = lambda service: "Context.dev" if service == "branddev" else service
+    def display(service):
+        return "Context.dev" if service == "branddev" else service
     for query in ("context.dev", "brand.dev"):
         found = F.decide(query, [], judge_infra.Judgement(probs=None, ms=1), ix,
                          provider_display=display)

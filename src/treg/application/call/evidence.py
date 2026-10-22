@@ -15,7 +15,6 @@ from ...infra.upstream import injectors
 from ...models import Secret, Tool
 
 
-# ---- failure evidence: what a failed call is allowed to leave behind ----------------------------
 # Sized to hold a real provider error whole — a typical 400 body is 80-300 characters and a verbose
 # JSON one about 800 — while still capping a ~14KB CDN error page and a caller stuck in a retry loop.
 _ERROR_RESPONSE_MAX = 2000
@@ -38,12 +37,11 @@ _QUERY_CRED_RE = re.compile(
 _URL_USERINFO_RE = re.compile(r"://[^/\s:@]+:[^/\s@]+@")
 
 # `_ARGV_SECRET_RE`'s catch-all masks ANY 24+ run of [A-Za-z0-9_-], which is right for an argv log and
-# wrong here: it deletes 100% of provider correlation identifiers — UUIDs, ULIDs, 32-char trace ids,
-# request ids — which are exactly what you quote to a provider's support desk. Measured on real error
-# bodies: the prose always survived, the correlation field never did. So for evidence we keep the
-# TARGETED half (known key prefixes, JWTs) and drop the catch-all. Platform credentials do not depend
-# on it — they have exact masking plus the fail-closed backstop below — and the owner has accepted
-# that a third-party secret may occasionally survive here.
+# wrong here: it deletes every provider correlation identifier - UUIDs, ULIDs, 32-char trace ids,
+# request ids - which are exactly what you quote to a provider's support desk. So for evidence we keep
+# the TARGETED half (known key prefixes, JWTs) and drop the catch-all. Platform credentials do not
+# depend on it - they have exact masking plus the fail-closed backstop below - and a third-party
+# secret may occasionally survive here by accepted design.
 _EVIDENCE_SECRET_RE = re.compile(
     r"\b(?:sk|pk|rk|ghp|gho|ghs|ghu|glpat|AKIA|ASIA|AIza|xox[baprs])[A-Za-z0-9_\-]{6,}\b"
     # Anchored + possessive for the same reason as the argv rule above, and it matters MORE here:
@@ -110,7 +108,7 @@ def _secret_renderings(tool: Tool, secrets: dict[int, Secret]) -> list[str]:
         fmt = str(binding.get("format") or "{secret}")
         # A constant provider header can share the binding's credential reference so the normal
         # injector owns the whole protocol shape, but it does not inject that credential. Treating
-        # its literal format as a secret spelling masked ordinary dates such as Crustdata's API
+        # its literal format as a secret spelling would mask ordinary dates such as Crustdata's API
         # version from every failure-evidence snippet.
         if "{secret}" not in fmt:
             continue
@@ -281,7 +279,6 @@ def _error_response_evidence(
     return evidence or "<no response body or headers>"
 
 
-# ---- caller-facing response redaction --------------------------------------------------------
 # Masks injected credentials out of an error body BEFORE it reaches the caller. The admin evidence
 # redaction above reads an 8 KiB slice; this reads every byte the caller is about to receive.
 #

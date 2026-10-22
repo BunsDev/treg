@@ -71,9 +71,8 @@ MAX_BYTES = 2_000
 
 RATE_LIMIT_PER_SEC = 8.0  # provider allows 10/s; leave headroom so we are never the cause of a 429
 
-# Per-call ceiling. Was 60s, which sat right on top of the slowest real endpoint we have measured:
-# DataForSEO's /v3/merchant/amazon/products/live/advanced answered in 55.3s on a live probe. A
-# timeout gets recorded as the endpoint's verdict, so a margin that thin turns a slow-but-working
+# Per-call ceiling, with a wide margin over the slowest real endpoint measured. A
+# timeout gets recorded as the endpoint's verdict, so a thin margin turns a slow-but-working
 # route into an intermittent "unverified" — the failure mode this file exists to avoid.
 CALL_TIMEOUT = 180
 
@@ -232,7 +231,7 @@ def read_balance(client: httpx.Client, service: str, base: str, headers: dict, q
             value = dig(r.json(), route[1])
             if isinstance(value, (int, float)):
                 return value
-        except Exception:
+        except Exception:  # noqa: BLE001 - any failed probe is retried, then reported as no value
             pass
         time.sleep(1.0 * (attempt + 1))
     return None
@@ -256,8 +255,7 @@ def unclamped(ep: dict) -> dict | None:
 
 
 # TikHub answers a failed SCRAPE with 400 and this text — the request was well-formed, their
-# upstream fetch just did not come back. LinkedIn measured ~1-in-3 on first attempt and passed on
-# a retry, so a single attempt would have written off 44 working endpoints as broken. Retrying is
+# upstream fetch just did not come back, and a retry often passes. Retrying is
 # free (nothing is billed unless the call succeeds), which makes "try again" strictly better than
 # recording a verdict we know is unreliable.
 RETRYABLE = re.compile(r"please retry|timed? ?out|temporarily|try again|too fast", re.I)
@@ -266,8 +264,7 @@ RETRY_ATTEMPTS = 3
 # RATE_LIMIT_PER_SEC paces. The global throttle cannot help here — it spaces consecutive requests
 # across DIFFERENT routes — so any retry, which by definition hits the same route again, must wait
 # out that second itself. A sub-second backoff turns a retry into a guaranteed 429, and the 429
-# then gets recorded as if the endpoint had failed. That mistake cost 66 endpoints a real verdict
-# on the first full run.
+# then gets recorded as if the endpoint had failed.
 PER_ROUTE_GAP = 1.3
 
 
@@ -358,12 +355,11 @@ class _Elapsed(threading.local):
 LAST_ELAPSED = _Elapsed()
 # `observed_time` is OUR wall-clock around the request, not a number read out of the response.
 # Only DataForSEO reports its own duration, and TikHub's `time` field is a TIMESTAMP
-# ("2026-07-27 23:27:48") — an extractor that trusted the field name would write a date string
+# ("YYYY-MM-DD hh:mm:ss") - an extractor that trusted the field name would write a date string
 # into a numeric column. Client-side is also the number that matters here: CALL_TIMEOUT applies to
 # our client, so what tells us a route is near the ceiling is how long WE waited. Recorded because
-# a timeout is written down as the endpoint's verdict, and DataForSEO's
-# /v3/merchant/amazon/products/live/advanced answered in 55.3s and 26.2s on two identical calls —
-# a 2x spread that would have made a healthy route intermittently "unverified" under the old 60s.
+# a timeout is written down as the endpoint's verdict, and one route's duration can vary 2x
+# between identical calls.
 
 # service -> how to read what the provider says THIS call cost, from its own response.
 # `cost` in the catalog is a rate card: what the price list claims, entered by hand and liable to
@@ -463,8 +459,7 @@ def merge_results(service: str, paths: list[Path]) -> int:
                 if field in res:
                     # an EMPTY value counts as absent, never as a claim. A state key present but
                     # blank passes a "has a state" check while saying nothing, which is worse than
-                    # no key at all — the entry looks handled and isn't. (Same bug the dataforseo
-                    # run hit when a re-run dropped a curated reason string.)
+                    # no key at all - the entry looks handled and isn't.
                     if res[field] is None or res[field] == "":
                         ep.pop(field, None)
                     else:

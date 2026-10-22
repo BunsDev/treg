@@ -16,7 +16,6 @@ from sqlmodel import select
 
 from treg.application import asynctasks as task_app
 
-_real_poll = task_app._poll
 from treg.application.call import service as call_service
 from treg.application.call.resolve import MarketplaceCall
 from treg.application.call.types import UpstreamResponse
@@ -32,6 +31,8 @@ from treg.models import (
     Tool,
 )
 from treg.timeutil import utcnow_naive
+
+_real_poll = task_app._poll
 
 
 EP = "replicate.image-gen.flux-schnell"
@@ -1481,7 +1482,7 @@ async def test_cancellation_at_the_pending_row_commit_boundary_leaves_a_coherent
 
     monkeypatch.setattr(task_app, "defer_submission", defer_then_cancel)
     # The request path re-raises CancelledError after compensating; the ASGI client surfaces it.
-    with pytest.raises(BaseException):
+    with pytest.raises(asyncio.CancelledError):
         await _submit(clients, monkeypatch, {
             "id": "prediction-cancel", "urls": {"get": "https://api.replicate.com/v1/predictions/c"}})
     async with session_maker() as db:

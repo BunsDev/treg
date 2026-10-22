@@ -64,10 +64,10 @@ export default { ...controller, components: { ...controller.components, ...dialo
         <!-- FIND: /search, a described job answered over the platform pile -->
         <SearchPage v-if="view==='find'" />
 
-        <!-- MARKETPLACE: one integration -->
+        <!-- CATALOG: one integration -->
         <ProviderPage v-if="view==='provider' && (mkProvider || mkPaused)" />
 
-        <!-- MARKETPLACE: one platform, from the endpoint catalog -->
+        <!-- CATALOG: one platform, from the endpoint catalog -->
         <PlatformPage v-if="view==='platform'" />
 
         <ToolsPage v-if="view==='tools'" />
@@ -75,21 +75,16 @@ export default { ...controller, components: { ...controller.components, ...dialo
         <!-- DETAIL (shareable deep links: /app/skills/<name> + /app/tools/<name>) -->
         <DetailPage v-if="view==='detail' && detail" />
 
-        <!-- SECRETS -->
         <SecretsPage v-if="view==='secrets'" />
 
         <TeamResourcesPage v-if="view==='resources'" />
 
-        <!-- ORGS -->
         <TeamPage v-if="view==='orgs'" />
 
-        <!-- ACTIVITY -->
         <ActivityPage v-if="view==='activity'" />
 
-        <!-- ADMIN -->
         <AdminPage v-if="view==='admin'" />
 
-        <!-- GETTING STARTED -->
         <GettingStartedPage v-if="view==='start'" />
 
         <!-- REFERRALS — a person's link and everyone who used it. A top-level view (never nested):
@@ -98,7 +93,6 @@ export default { ...controller, components: { ...controller.components, ...dialo
         <HubPage v-if="view==='hub'" />
         <HubRunPage v-if="view==='run'" />
 
-        <!-- HELP -->
         <HelpPage v-if="view==='help'" />
       </main>
     </div>
@@ -124,10 +118,8 @@ export default { ...controller, components: { ...controller.components, ...dialo
       </div>
     </div>
 
-    <!-- REGISTER SKILL (bundle) -->
-    <!-- Marketplace dialogs. App-ROOT level, like every other dialog: nested inside the
-         catalog view's template they simply did not render on an integration page, so
-         Connect looked dead and the modal appeared on the list view once you navigated back. -->
+    <!-- Catalog dialogs. App-ROOT level, like every other dialog: nested inside the catalog
+         view's template they do not render on an integration page. -->
     <ConnectTokenDialog v-if="tokenAsk" />
 
     <!-- TOP UP. Four presets + Other, the bonus each earns, and auto top-up as a toggle that is
@@ -145,7 +137,6 @@ export default { ...controller, components: { ...controller.components, ...dialo
 
     <ExtraCredentialDialog v-if="newSkill" />
 
-    <!-- ADD / EDIT TOOL -->
     <EditToolDialog v-if="newTool" />
 
     <!-- JOIN BY CODE -->
@@ -162,11 +153,6 @@ export default { ...controller, components: { ...controller.components, ...dialo
          Opens on first run (no team yet) AND whenever an invite link lands (?invite_org=), even for
          users already in other teams. Decline → create-your-own (first run) or just close. -->
     <AcceptInvitesDialog v-if="inviteChoice && pendingInvites.length" />
-
-    <!-- FIRST-RUN WELCOME: name your team → pick your agent → the setup line (the primary onboarding path) -->
-    <WelcomeDialog v-if="welcome.on" />
-    <OnboardingFlow v-if="onboardingPreviewOn" key="preview" preview @done="onboardingPreviewOn=false" />
-    <OnboardingFlow v-else-if="onboardingV2On" key="first-run" @done="onboardingV2On=false" @fallback="onboardingV2On=false; openWelcome()" />
 
     <!-- CREATE TEAM -->
     <div class="scrim" role="dialog" aria-labelledby="new-team-title" aria-modal="true" v-if="newOrg" v-dialog="() => { newOrg=false }" @click.self="newOrg=false">
@@ -188,7 +174,6 @@ export default { ...controller, components: { ...controller.components, ...dialo
         </div></div>
     </div>
 
-    <!-- COPY -->
     <CopyToolDialog v-if="copyTool" />
 
     <!-- INSTALL A RECIPE (recipe-only bundle: how to install/use, no proxy call) -->
@@ -224,18 +209,16 @@ export default { ...controller, components: { ...controller.components, ...dialo
     <!-- VIEW A RECIPE (the SKILL.md content) -->
     <RecipeDialog v-if="viewRecipe" />
 
-    <!-- TRY -->
     <!-- USE drawer: one entry point, two verbs — API call (proxy) / CLI run (server) -->
     <RunToolDialog v-if="tryTool" />
 
-    <!-- Try a MARKETPLACE endpoint right here. Same relay as any call — served by the org's own
-         key when one exists, else by a verified public upstream route when declared, else treg's
-         key billed to the team balance — and logged in Activity exactly like a CLI call. -->
     <!-- Activity → one call. The archive's copy of what was asked and what came back (metered
          platform calls only — own-key and own-tool calls are relayed without being stored). -->
     <CallDetailsDialog v-if="callView" />
+    <!-- Try a catalog endpoint right here. Same relay as any call - served by the org's own
+         key when one exists, else by a verified public upstream route when declared, else treg's
+         key billed to the team balance - and logged in Activity exactly like a CLI call. -->
     <TryEndpointDialog v-if="epTry" />
-    <!-- YOUR AVATAR (account menu) -->
     <UserAvatarDialog v-if="avatarDialog" />
 
     <!-- Toasts, bottom right: a newer dashboard build is live, and the access reminder (fired when
@@ -250,9 +233,8 @@ export default { ...controller, components: { ...controller.components, ...dialo
     </div>
   </template>
 
-  <!-- SIGN-IN MODAL — a SIBLING of both branches. It used to live inside the logged-out
-       landing, which meant the public catalog (which renders the app shell, not that branch)
-       had no way to sign anyone in and every CTA had to navigate away to find one. -->
+  <!-- SIGN-IN MODAL - a SIBLING of both branches, so the public catalog (which renders the app
+       shell, not the logged-out landing) can sign anyone in without navigating away. -->
   <FishVoiceDialog v-if="fishVoiceDialog" />
   <SignInDialog  />
 </div>

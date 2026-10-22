@@ -45,7 +45,7 @@ def _send(key: str, host: str, config_path: Path, properties: dict) -> None:
             client.capture("cli_command_completed", distinct_id=identifier, properties=properties)
         finally:
             client.shutdown()
-    except Exception:
+    except Exception:  # noqa: BLE001 - analytics must never change command output
         pass  # Analytics must never change command output or its exit status.
 
 
@@ -68,5 +68,5 @@ def track_command(*, command: str, exit_code: int, duration_ms: int,
         }), daemon=True)
         worker.start()
         worker.join(EXIT_WAIT_SECONDS)
-    except Exception:
+    except Exception:  # noqa: BLE001 - analytics must never change the exit status
         pass

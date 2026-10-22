@@ -2,10 +2,9 @@
 // with `{POSTHOG_KEY}` / `{POSTHOG_HOST}` substituted server-side (empty key = analytics off) and
 // loaded by EVERY public page (landing, use-case pages, resources, the SPA).
 //
-// Why this exists: the landing page had no analytics at all, so a visitor's first hop (the one
-// carrying `utm_*` and the referrer) was invisible — PostHog first saw them on /app after the OAuth
-// round-trip, as "$direct". And the signup doors persisted only Google click ids. The result was
-// zero source attribution for a campaign we paid for. Two fixes, one script:
+// Why this exists: without it a visitor's first hop (the one carrying `utm_*` and the referrer) is
+// invisible - PostHog first sees them on /app after the OAuth round-trip, as "$direct". Two parts,
+// one script:
 //
 //   1. A first-party `treg_utm` cookie: first touch wins (never overwritten), 90 days, carrying
 //      utm_source|medium|campaign|term|content|referring-host. The signup POST carries it to the
@@ -64,16 +63,6 @@
       // Lax so it survives the cross-site GET from the referring page and the sign-in detour.
       document.cookie = 'treg_utm=' + v + ';path=/;max-age=7776000;samesite=lax' +
         (window.location.protocol === 'https:' ? ';secure' : '');
-    }
-  } catch (e) { /* never break the page for an attribution cookie */ }
-  // 3. A first-party `treg_landing` cookie: the first page this browser landed on, always (a direct
-  //    visit has no utm or referrer, but the page it chose says what it came for). First touch
-  //    wins, 90 days, path only. The first-run onboarding reads it as a ranking signal; it is never
-  //    shown and never stored on the team.
-  try {
-    if (!/(^|;\s*)treg_landing=/.test(document.cookie)) {
-      document.cookie = 'treg_landing=' + encodeURIComponent(window.location.pathname.slice(0, 200)) +
-        ';path=/;max-age=7776000;samesite=lax' + (window.location.protocol === 'https:' ? ';secure' : '');
     }
   } catch (e) { /* never break the page for an attribution cookie */ }
 

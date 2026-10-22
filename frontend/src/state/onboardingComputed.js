@@ -1,7 +1,7 @@
 import * as TregAgentSetup from '../agent-setup/data'
 
 export default {
-// first-run welcome: the agent picker (step 1) and the per-agent setup line (step 2)
+// Getting started: the agent picker and the per-agent setup line
     welcomeAgents(){ return TregAgentSetup.agents; },
 welcomeMoreAgents(){ return TregAgentSetup.moreAgents; },
 welcomeAgent(){ return this.welcomeAgents.concat(this.welcomeMoreAgents).find(a=>a.id===this.welcome.agent) || this.welcomeAgents[0]; },

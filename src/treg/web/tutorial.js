@@ -50,14 +50,12 @@
   };
 
   const STEPS = [
-    // ---- Setup ------------------------------------------------------------
     { part: "Setup", who: "sys", title: "Simulate three people on one machine",
       explain: "We play three users on one laptop by giving each its own <code>HOME</code>, so each gets an isolated <code>~/.treg/config.json</code> pointed at the registry. In real life every person is on their own machine and drops the <code>HOME=</code> prefix.",
       cmd: `for u in tom bob alice; do\n  mkdir -p ~/.treg-personas/$u\n  HOME=~/.treg-personas/$u treg config --base-url https://treg.to\ndone`,
       out: `# each persona now points at the registry`,
       notice: "Prefix any command with <code>HOME=~/.treg-personas/&lt;name&gt;</code> to act as that person." },
 
-    // ---- Part 1 - the catalog (before any team machinery) -----------------
     // Deliberately FIRST: everything below this needs a team, a secret and a registered tool before
     // anything happens. The catalog needs none of them, so it is the shortest path from "installed"
     // to "got real data" — and it is what the product now leads with.
@@ -85,7 +83,6 @@
       out: `  Balance  $0.9990   (999000 micro-USD)\n\n  RECENT\n  settle   -$0.0010   tikhub.tiktok.user.profile`,
       notice: "Only calls on treg's key cost balance. Your own keys, your own tools and vendor CLIs are all free of it." },
 
-    // ---- Part 2 - Tom founds Superdesign ---------------------------------
     { part: "Part 2 · Tom founds Superdesign", who: "tom", title: "Tom signs in (the email door)",
       explain: "There is no <code>register</code>. Tom proves his email with a one-time code - and since it's his first time, that same act <b>creates</b> him plus a personal org (so there's never an empty state). The code is <b>emailed</b> to him; he checks his inbox and types it in.",
       cmd: `HOME=~/.treg-personas/tom treg login --email tom@superdesign.dev`,
@@ -98,7 +95,6 @@
       out: `{\n  "org": "superdesign",\n  "org_id": 2,\n  "name": "Superdesign",\n  "role": "owner",\n  "token": "<per-org token - agents/CI; a human doesn't need it>"\n}`,
       notice: "Personal orgs are auto-made on sign-in; <b>teams are created explicitly</b> with <code>org create</code>." },
 
-    // ---- Part 2 - Bob joins via the email door ---------------------------
     { part: "Part 3 · Bob joins (email door)", who: "tom", title: "Tom invites Bob",
       explain: "Tom invites a teammate by <b>email</b>. The invite attaches to that email and Tom gets a one-time code he <i>could</i> hand over - but Bob won't even need it.",
       cmd: `HOME=~/.treg-personas/tom treg org invite bob@superdesign.dev --role member`,
@@ -129,7 +125,6 @@
       out: `  bob-superdesign-dev    bob@superdesign.dev    owner\n* superdesign            Superdesign            member   (active)`,
       notice: "The <code>*</code> marks the active org. Switch anytime with <code>treg org use &lt;slug&gt;</code>." },
 
-    // ---- Part 3 - Alice joins via the code door --------------------------
     { part: "Part 4 · Alice joins (code door)", who: "tom", title: "Tom invites Alice as a viewer",
       explain: "The other door: the <b>code</b>. First Tom invites Alice as a <b>viewer</b> - she'll be able to read and call, but not register anything.",
       cmd: `HOME=~/.treg-personas/tom treg org invite alice@superdesign.dev --role viewer`,
@@ -148,7 +143,6 @@
       out: `{\n  "detail": "viewers can call and read, but cannot register"\n}`,
       notice: "Alice was granted <i>use</i>, not <i>write</i> - the role gate doing its job." },
 
-    // ---- Part 4 - A tool through the proxy -------------------------------
     { part: "Part 5 · A tool through the proxy", who: "bob", title: "Bob registers a secret",
       explain: "Unlike Alice, a <b>member</b> can register. Bob adds an API key - encrypted server-side, its value never returned again.",
       cmd: `HOME=~/.treg-personas/bob treg secret add echo-key --value "sk-demo-secret-123"`,
@@ -173,7 +167,6 @@
       out: `[\n  {\n    "id": 1,\n    "user_email": "alice@superdesign.dev",\n    "tool_name": "echo",\n    "method": "GET",\n    "path": "https://postman-echo.com/get",\n    "status_code": 200,\n    "created_at": "2026-07-02T…"\n  }\n]`,
       notice: "Even though Alice used Bob's secret, the ledger records <b>who</b> actually made the call." },
 
-    // ---- Part 5 - Call shapes & skills -----------------------------------
     { part: "Part 6 · Call shapes & skills", who: "alice", title: "Call by full URL (agent-native)",
       explain: "An agent often already knows the real upstream URL. Instead of <code>call &lt;tool&gt; &lt;path&gt;</code>, hand treg the <b>whole URL</b> - it matches the host to a registered tool and injects the key. No treg-specific knowledge needed.",
       cmd: `HOME=~/.treg-personas/alice treg call https://postman-echo.com/get`,
@@ -198,7 +191,6 @@
       out: `{\n  "id": 1, "name": "echo-svc", "owner": "bob@superdesign.dev",\n  "recipe": "# echo-svc\\n…the SKILL.md…",\n  "tools":   [{ "id": 2, "name": "echo-svc", "base_url": "https://postman-echo.com", "bundle_id": 1 }],\n  "secrets": [{ "id": 2, "name": "echo-svc", "kind": "env", "bundle_id": 1 }]\n}`,
       notice: "Everything shares a <code>bundle_id</code>, so a skill deletes as one unit too." },
 
-    // ---- Part 5b - Import: the magic bulk on-ramp ------------------------
     { part: "Part 6b · Import - the magic bulk on-ramp", who: "bob", title: "Turn your whole .env into tools",
       explain: "The steps above, but for your <i>entire</i> environment at once. <code>treg upload env</code> reads your <code>.env</code>, matches each variable against the providers treg recognizes (OpenAI, Stripe, Resend, Render…), and registers the ones you pick as ready-to-call tools. It reads <b>names only</b> to detect - the value is loaded just for the keys you confirm. Config vars (<code>*_HOST</code>, <code>*_MODEL</code>) and your app's own secrets (<code>SECRET_KEY</code>, <code>DATABASE_URL</code>) are excluded automatically.",
       cmd: `HOME=~/.treg-personas/bob treg upload env --select openai,stripe,resend`,
@@ -211,7 +203,6 @@
       out: `Scanned ~/.claude/skills: 5 API-tool skill(s), 23 recipe-only.\n  ✓ render          (tool)   [wrote treg.json]\n  ✓ intercom        (tool)\n  ✓ seo-blog-writer (recipe)\n  … \nImported 27/28 skills.`,
       notice: "A teammate then pulls any of them with <code>treg skill install &lt;name&gt;</code> - the shared library, installable in one command. Bare <code>treg upload</code> does both env + skills for the current dir." },
 
-    // ---- Part 5c - Run a vendor CLI --------------------------------------
     { part: "Part 6c · Run a CLI tool", who: "tom", title: "Turn on `run` for a CLI tool",
       explain: "Every tool so far was an HTTP <b>API</b> you <code>call</code>. Many providers also ship a <b>command-line tool</b> (stripe, gh, gcloud…). <code>treg run</code> executes that CLI with the org's credential injected - so a teammate uses it <i>without</i> owning the key or logging in. Because a run hands the credential to a machine, the owner opts each tool in first (the dashboard's <b>⌘ run</b> toggle is the same switch). Here Tom enables it for the <code>stripe</code> tool (its id from <code>tool ls</code>).",
       cmd: `HOME=~/.treg-personas/tom treg tool update 4 --local-run on`,
@@ -230,7 +221,6 @@
       out: `[\n  {\n    "id": 1,\n    "user_email": "bob@superdesign.dev",\n    "bundle_name": "stripe",\n    "argv": ["get", "/v1/balance"],\n    "exit_code": 0,\n    "duration_ms": 812,\n    "created_at": "2026-07-02T…"\n  }\n]`,
       notice: "The mnemonic: <code>treg call</code> → <code>treg calls</code>; <code>treg run</code> → <code>treg runs</code>. Two verbs, two ledgers." },
 
-    // ---- Part 6 - Org administration -------------------------------------
     { part: "Part 7 · Org administration", who: "tom", title: "See the team",
       explain: "The owner lists everyone and their roles. Role changes reference a member by <code>user_id</code>.",
       cmd: `HOME=~/.treg-personas/tom treg org members`,
@@ -267,7 +257,6 @@
       out: `{\n  "detail": "admin role in this org is required"\n}`,
       notice: "Roles, cleanly enforced: <b>owner</b> &gt; <b>admin</b> &gt; <b>member</b> &gt; <b>viewer</b>." },
 
-    // ---- Part 7 - Super-admin --------------------------------------------
     { part: "Part 8 · Super-admin", who: "ops", title: "Become the platform operator",
       explain: "Super-admin sits <i>above</i> orgs - it reads and manages every tenant. Two ways to authorise: the platform bearer <code>TREG_ADMIN_TOKEN</code>, or a user flagged <code>is_superadmin</code>. We use the bearer, read from <code>.env</code> so it never appears on screen.",
       cmd: `treg admin login --token "$(grep -E '^TREG_ADMIN_TOKEN=' .env | cut -d= -f2-)"`,
@@ -292,14 +281,12 @@
       out: `{\n  "user_id": 1,\n  "is_superadmin": true\n}`,
       notice: "After the grant, Tom's normal identity token works on <code>admin</code> commands - and the dashboard's Admin panel lights up for him." },
 
-    // ---- Part 8 - The dashboard -----------------------------------------
     { part: "Part 9 · The dashboard", who: "tom", title: "The same registry, in the browser",
       explain: "Open <b>treg.to</b> and sign in with the <b>email code</b> door (the same one you used in the terminal): type your email → click <b>Email me a sign-in code</b> → <b>check your inbox</b> for the 6-digit code → paste it in and <b>Sign in</b>. You land on your team org - Tools shows the <code>echo</code> tool, Activity shows the call, and (since Tom is now super-admin) an <b>Admin</b> panel appears.",
       cmd: `open https://treg.to/`,
       out: `# Sign in with email → land on Superdesign\n#   Tools    → the echo tool (Copy a snippet · Try it live)\n#   Activity → Alice's GET echo · 200\n#   Admin    → cross-tenant stats + orgs (super-admin only)`,
       notice: "The dashboard now does it all in the browser - create teams, invite members, add secrets, register tools & skills, plus the super-admin surface - not just read + call." },
 
-    // ---- Part 9 - Cleanup ------------------------------------------------
     { part: "Part 10 · Cleanup", who: "bob", title: "Delete the tool",
       explain: "Bob (its creator, and an admin) removes the tool. The bound secret stays - only the tool goes. A member can't delete a teammate's resource.",
       cmd: `HOME=~/.treg-personas/bob treg tool rm 1`,
@@ -312,7 +299,6 @@
       out: `{\n  "deleted_org": 2\n}`,
       notice: "Bob and Alice keep their personal orgs - they were separate tenants all along. That's the full lifecycle: sign in → team → invite (both doors) → roles → tool → proxied call → audit → admin → tear down. 🏁" },
 
-    // ---- Further, focused tutorials --------------------------------------
     { part: "Further tutorials", who: "sys", title: "Two deep-dive tutorials",
       explain: "Two features have their own step-by-step tutorials - <b>Import &amp; shell</b> and <b>Team access control</b>. Both are cards on the Tutorial page (← Tutorials, top left), and both also exist as plain markdown.",
       cmd: `open https://treg.to/tutorial-import-shell.md   # import + shell + the security sandbox\nopen https://treg.to/tutorial-access.md         # per-member tool access control`,
@@ -320,7 +306,6 @@
       notice: "Pick them from the Tutorial page like this one, or open the markdown URLs directly (agent-friendly)." },
   ];
 
-  // ---- Focused tutorial: Import & shell ----------------------------------
   // Prose twin: src/treg/web/tutorial-import-shell.md (served at /tutorial-import-shell.md).
   const IMPORT_SHELL = [
     { part: "Part 1 · Auto-import", who: "you", title: "Preview what would be registered",
@@ -347,7 +332,6 @@
       out: `In the catalog, not installed here:\n  glab          brew install glab\n  render        brew install render-oss/render/render\n  neonctl       npm i -g neonctl\n  …`,
       notice: "<code>--add</code> also prints a catalog-entry snippet you can share. An off-catalog CLI isn't on the server's allow-list, so it runs <b>locally</b> until an admin allow-lists its program name." },
 
-    // ---- Shell mode --------------------------------------------------------
     { part: "Part 2 · Shell mode", who: "you", title: "Start the shell",
       explain: "Typing <code>treg run</code> before every command is friction. <code>treg shell start</code> opens a subshell where every <b>registered</b> CLI runs with the team credential injected automatically - you just type <code>stripe</code>, <code>gh</code>, <code>gcloud</code> as normal.",
       cmd: `treg shell start`,
@@ -378,7 +362,6 @@
       out: `[\n  { "tool": "stripe", "argv": ["--version"], "exit_code": 0, "duration_ms": 92, "where": "server" }\n]`,
       notice: "<code>stripe</code> is marked <code>(server)</code> in the banner and its run is logged with <code>\"where\": \"server\"</code> - it executed on the registry, not your laptop." },
 
-    // ---- The local-run security sandbox ------------------------------------
     { part: "Part 3 · The security sandbox", who: "sys", title: "Set it up (once, as admin)",
       explain: "A local run puts a shared team key on a member's machine for the length of one command. That is only safe if the member cannot capture the key. <code>sudo treg setup-local-run</code> (Linux and macOS) builds a sandbox with three layers.",
       cmd: `sudo treg setup-local-run`,
@@ -410,7 +393,6 @@
       notice: "Local runs are <b>off by default</b> per tool - a run hands a credential to a machine, so the owner opts in. Prose version of this whole tutorial: <code>/tutorial-import-shell.md</code>." },
   ];
 
-  // ---- Focused tutorial: Team access control ------------------------------
   // Prose twin: src/treg/web/tutorial-access.md (served at /tutorial-access.md).
   const ACCESS = [
     { part: "Setup", who: "sys", title: "Two dials, two people",
@@ -486,7 +468,6 @@
       notice: "<code>null</code> = all tools; a list = the allow-list (validated - unknown names → 422; all tools collapses to <code>null</code>). Admin/owner only; an owner cannot be restricted. Prose version: <code>/tutorial-access.md</code>." },
   ];
 
-  // ---- tiny self-contained highlighter (shell + json) -------------------
   const RULES = {
     shell: [
       { re: /#[^\n]*/,                     cls: "comment" },

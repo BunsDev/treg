@@ -67,7 +67,7 @@ from ...models import AsyncTaskRecord, CreditBlock, Hold, LedgerEntry, Org, TagS
 # kind must be added here or it silently gets the most expensive treatment available.
 # `bonus` (the tiered extra on a manual top-up, `billing.bonus_for_topup`) is the same kind of thing:
 # marketing spend keyed to a payment, never refundable, so it burns first too.
-# `earned`: a hub seller's credit (docs/HUB-DECISIONS.md round 3) — spent after the free kinds and
+# `earned`: a hub seller's credit (docs/HUB-DECISIONS.md) - spent after the free kinds and
 # before purchased money, so a maker's own dollars are used last.
 _KIND_ORDER = {"promotional": 0, "referral": 0, "bonus": 0, "earned": 1, "purchased": 2}
 
@@ -165,7 +165,6 @@ async def _add_balance(db: AsyncSession, org_id: int, delta_micro: int, *,
         await db.execute(update(Org).where(Org.id == org_id).values(**values))
 
 
-# ---- funding -----------------------------------------------------------------------------------
 async def grant(
     db: AsyncSession, org_id: int, *, amount_micro: int | None = None,
     kind: str = "promotional", meta: dict | None = None, once: bool = True,
@@ -239,7 +238,7 @@ async def topup(
         # same answer as the sequential path, no 500, and the caller's pending writes survive.
         await nested.rollback()
         winner = await _block_for_payment(db, payment_ref)
-        if winner is None:  # pragma: no cover — the constraint fired, so a row exists
+        if winner is None:  # the constraint fired, so a row exists
             raise
         return winner
     await _add_balance(db, org_id, int(amount_micro))
@@ -255,7 +254,6 @@ async def _block_for_payment(db: AsyncSession, payment_ref: str) -> CreditBlock 
         )).scalars().first()
 
 
-# ---- the call path -----------------------------------------------------------------------------
 async def reserve(
     db: AsyncSession, org_id: int, endpoint_id: str, est_micro: int, *, meta: dict | None = None,
     tags: dict[str, str] | None = None, call_id: str | None = None,
@@ -366,8 +364,8 @@ async def _claim_hold(db: AsyncSession, call_id: str) -> _ClaimedHold | None:
         # Lost the claim: somebody else is closing this hold. Deliberately NO rollback — the DELETE
         # matched nothing and only a read precedes it, so there is nothing to discard, and rolling
         # back would EXPIRE every object in the session. `reap_stale_holds` shares one session across
-        # a loop of preloaded Hold rows, so that expiry made the next `hold.id` attempt implicit async
-        # I/O (MissingGreenlet) and killed the rest of the sweep.
+        # a loop of preloaded Hold rows, so that expiry would make the next `hold.id` implicit async
+        # I/O (MissingGreenlet) and kill the rest of the sweep.
         return None
     return claimed
 
@@ -457,8 +455,8 @@ async def settle_to_in_transaction(
     meta: dict | None = None,
 ) -> int:
     """Close a hold and credit the settled amount to `payee_org_id` as an `earned` block — a hub
-    seller's price (docs/HUB-DECISIONS.md round 3 q5, q7). `actual_micro` is the real price for a
-    variable-price tool (per_unit or cost_plus, docs/hub-pricing-decisions.md 2026-09-14): that much
+    seller's price (docs/HUB-DECISIONS.md). `actual_micro` is the real price for a
+    variable-price tool (per_unit or cost_plus, docs/hub-pricing-decisions.md): that much
     is settled, and the rest of the reserved hold is refunded to the payer. `None` settles the FULL
     reserved hold (a flat price). One transaction, two ledger entries: a `settle` on the payer (meta
     names the payee) and a `grant` on the payee (block kind `earned`, meta names the payer's run).
@@ -629,8 +627,7 @@ async def _consume_blocks(
     if amount_micro <= 0:
         return 0, 0
     # FOR UPDATE: two concurrent settles both read remaining=100, both subtract in memory, last
-    # write wins and one draw is LOST — the blocks then show more credit than the ledger's truth
-    # (found live 2026-08-30: $1.70 of draws lost under an agent's parallel burst, org 2867).
+    # write wins and one draw is LOST - the blocks then show more credit than the ledger's truth.
     # Postgres locks the rows; SQLite ignores FOR UPDATE and is single-writer anyway.
     # Lock in unique primary-key order so concurrent settles cannot acquire blocks in reverse
     # order. This is NOT consumption priority: keep the promotional/age sort below unchanged.
@@ -648,7 +645,6 @@ async def _consume_blocks(
     return consumed, left
 
 
-# ---- reaper ------------------------------------------------------------------------------------
 def hold_ttl_s() -> int:
     """How long a hold may stay open before it is presumed stranded: the relay's own upstream
     timeout plus a grace window for our settle to land."""
@@ -676,17 +672,14 @@ async def reap_stale_holds(db: AsyncSession, *, org_id: int | None = None, limit
     return len(stale)
 
 
-# ---- reads -------------------------------------------------------------------------------------
 async def spent_today(db: AsyncSession, org_id: int) -> int:
     """Micro-USD this org has committed since midnight UTC: everything SETTLED today plus everything
     still HELD from today - the number a daily spend cap is checked against.
 
     Runs on EVERY metered call, inside the reserve transaction, on an api-pool connection, so its
     cost is the platform's throughput: ONE primary-key read of the org row. The counter is kept by
-    reserve/settle/release inside the balance UPDATE (`_spent_today_values`); it was an aggregate
-    over `ledgerentry` until 2026-09-06, when that aggregate - O(rows the platform wrote today) for
-    a heavy org, whatever the index - was what emptied the API pool. `spent_today_from_ledger` is
-    the same number from the journal, for reconciliation.
+    reserve/settle/release inside the balance UPDATE (`_spent_today_values`).
+    `spent_today_from_ledger` is the same number from the journal, for reconciliation.
 
     Deliberately not "sum of reserve entries": a reserve is refunded at settle, so counting both would
     double-charge every call. Settled + still-open is exactly the money that is gone or promised.

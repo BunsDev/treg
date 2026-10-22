@@ -11,7 +11,7 @@ registry.
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 
 import pytest
@@ -279,7 +279,7 @@ async def _calls(org_id, at, n, *, provider="tikhub", endpoint="tikhub.tiktok.us
 
 async def test_the_fold_counts_only_new_upstream_calls_in_small_batches(clients):
     _, org_id = await _tim()
-    app_id = await _approved(org_id)
+    await _approved(org_id)
     monday = datetime(NEWEST.year, NEWEST.month, NEWEST.day, 9)
     await _calls(org_id, rules.window_start(TODAY) - timedelta(days=3), 7)          # before the window
     await _calls(org_id, monday, 3)
@@ -306,7 +306,7 @@ async def test_the_fold_counts_only_new_upstream_calls_in_small_batches(clients)
 
 async def test_a_capped_run_resumes_where_it_stopped(clients):
     _, org_id = await _tim()
-    app_id = await _approved(org_id)
+    await _approved(org_id)
     await _calls(org_id, datetime(NEWEST.year, NEWEST.month, NEWEST.day, 9), 5)
     first = await showcase.refresh_activity(now=NOW, max_rows=3, batch_rows=2)
     assert (first["calls"], first["caught_up"]) == (3, False)
@@ -370,7 +370,7 @@ async def test_a_cursor_is_created_once_even_when_two_runs_find_none(clients):
 
 async def test_weeks_that_leave_the_window_are_dropped(clients):
     _, org_id = await _tim()
-    app_id = await _approved(org_id)
+    await _approved(org_id)
     async with session_maker() as db:
         old = (rules.keep_from(TODAY) - timedelta(days=7)).isoformat()
         db.add(ShowcaseWeek(org_id=org_id, api_key_id=0, week_start=old, calls=9, active_days=1))

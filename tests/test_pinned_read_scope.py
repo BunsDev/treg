@@ -13,7 +13,7 @@ from treg.domain import money
 from treg.infra.db import session_maker
 from treg.models import AsyncResourceRecord, AsyncTaskRecord, CallRecord, Feedback, LedgerEntry, RunRecord
 from treg.timeutil import utcnow_naive
-from test_asynctasks import EP, _response, replicate_platform, legacy_async_platform, minimax_platform
+from test_asynctasks import EP, _response, replicate_platform, legacy_async_platform, minimax_platform  # noqa: F401 - pytest fixtures
 from test_tag_billing import _mint_agent, _mk_echo_tool, _org_id
 from test_run import _register_runnable
 from test_marketplace_call import platform_on  # noqa: F401

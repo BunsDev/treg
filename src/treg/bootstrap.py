@@ -24,7 +24,6 @@ from starlette.routing import BaseRoute, Mount
 from . import adsconv, analytics, archive, audit, call_events
 from .application.call import route as routed_call
 from .application import arena, find_index
-from .application.onboard import first_run
 from . import bootstrap_handlers, policy
 from .bootstrap_http import (
     _BodyDecodeMiddleware,
@@ -46,8 +45,6 @@ from .routers import call as call_routes
 AppRole = Literal["all", "dataplane", "control"]
 RouteKey = tuple[str, tuple[str, ...], str]
 
-# Every HTTP route has one workload owner. A new decorator in api.py fails app creation until its
-# key is placed here, so the dataplane cannot silently acquire a management or runner endpoint.
 _CONTROL_ROUTE_KEYS: frozenset[RouteKey] = frozenset({
     ('/enrich-arena', ('GET',), 'enrich_arena_page'),
     ('/web-arena', ('GET',), 'web_arena_page'),
@@ -266,13 +263,7 @@ _CONTROL_ROUTE_KEYS: frozenset[RouteKey] = frozenset({
     ('/onboard/demo', ('POST',), 'onboard_demo'),
     ('/onboard/skip', ('POST',), 'onboard_skip'),
     ('/onboard/reset', ('POST',), 'onboard_reset'),
-    ('/onboarding/start', ('POST',), 'onboarding_start'),
-    ('/onboarding', ('GET',), 'onboarding_view'),
-    ('/onboarding/answer', ('POST',), 'onboarding_answer'),
-    ('/onboarding/preview', ('POST',), 'onboarding_preview_start'),
-    ('/onboarding/preview/{preview_id}', ('GET',), 'onboarding_preview_view'),
-    ('/onboarding/preview/{preview_id}/answer', ('POST',), 'onboarding_preview_answer'),
-    ('/onboarding/preview/{preview_id}/call', ('POST',), 'onboarding_preview_call'),
+    ('/onboard/team', ('POST',), 'onboard_team'),
     ('/demo/sandbox', ('POST',), 'demo_sandbox_mint'),
     ('/demo/sandbox/live', ('GET',), 'demo_sandbox_live'),
     ('/stripe/webhook', ('POST',), 'stripe_webhook'),
@@ -427,10 +418,8 @@ _DATAPLANE_ROUTE_KEYS: frozenset[RouteKey] = frozenset({
 })
 
 ROLE_BACKGROUND_TASKS: dict[AppRole, tuple[str, ...]] = {
-    # Arena statistics moved out of the web processes: `treg-worker arena insights` (a cron)
-    # walks `callrecord` on its own schedule, so web processes no longer compete for the cursor
-    # row and a deploy no longer multiplies that scan. Only `/arena/insights` (a
-    # snapshot read) stays here.
+    # Arena statistics are built by `treg-worker arena insights` (a cron) walking `callrecord`, so
+    # web processes never compete for its cursor row. Only `/arena/insights` (a snapshot read) is here.
     "all": ("treg.adsconv.worker",),
     "dataplane": (),
     "control": ("treg.adsconv.worker",),
@@ -456,7 +445,7 @@ _STATIC_ANCHOR = ("/auth/cli-token", ("GET",), "auth_cli_token")
 
 try:
     from . import mcp as _mcp
-except Exception:  # pragma: no cover - exercised by deploys without the optional dependency
+except ImportError:
     _mcp = None
 
 
@@ -677,7 +666,7 @@ async def pool_gauge(*, sample_s: float = _POOL_GAUGE_SAMPLE_S,
                 peaks, samples, opened = {}, 0, time.monotonic()
         except asyncio.CancelledError:
             raise
-        except Exception:  # noqa: BLE001 - a gauge must never take the service down
+        except Exception:
             logging.getLogger("treg").exception("db pool gauge pass failed")
         await asyncio.sleep(sample_s)
 
@@ -793,11 +782,9 @@ def _lifespan(role: AppRole):
                         _mcp.clear_endpoint_observation_reader(endpoint_observations)
                     routed_call.clear_endpoint_observation_reader(endpoint_observations)
                     await arena.shutdown()
-                    await first_run.shutdown()
                     await endpoint_observations.aclose()
                     # analytics LAST: it is the sink the other two report their losses into, and a
-                    # drop during their drain is the one most worth hearing about. Draining it first
-                    # left those events queued behind a cancelled flusher.
+                    # drop during their drain is the one most worth hearing about.
                     await audit.drain()
                     await archive.drain()
                     await call_events.drain()

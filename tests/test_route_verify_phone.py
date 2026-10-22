@@ -43,7 +43,7 @@ def _hlr(live_status: str, credits: float = 1, error: str = "NONE") -> tuple[int
 
 
 @pytest.fixture
-def phone_on(monkeypatch, platform_on):  # noqa: F811
+def phone_on(monkeypatch, platform_on):
     monkeypatch.setenv("TREG_PLATFORM_KEY_TOMBA", "PLATFORM-TOMBA-KEY")
     monkeypatch.setenv("TREG_PLATFORM_KEY_TOMBA_SECRET", "PLATFORM-TOMBA-SECRET")
     monkeypatch.setenv("TREG_PLATFORM_KEY_HLRLOOKUP", "PLATFORM-HLR-KEY")
@@ -58,7 +58,7 @@ tools: list[tuple[str, str]] = []
 
 
 @pytest.fixture
-def quickenrich_on(monkeypatch, platform_on):  # noqa: F811
+def quickenrich_on(monkeypatch, platform_on):
     monkeypatch.setenv("TREG_PLATFORM_KEY_QUICKENRICH", "PLATFORM-QUICKENRICH-KEY")
     monkeypatch.setenv("TREG_PLATFORM_KEY_HLRLOOKUP", "PLATFORM-HLR-KEY")
     monkeypatch.setenv("TREG_PLATFORM_KEY_HLRLOOKUP_SECRET", "PLATFORM-HLR-SECRET")

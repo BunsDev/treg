@@ -8,7 +8,23 @@ the UPLOAD is asynchronous. Nothing here may route through audit.py.
 
 from __future__ import annotations
 
-# Fixed FX, set 2026-08-17: 1 AUD = 0.70 USD. Deliberately a constant rather than a live
+import asyncio
+import hashlib
+import logging
+import re
+import time
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from .config import get_settings
+from .domain.identity.access import AGENT_DOMAIN
+from .models import AdConversion, Membership, Org, User
+
+# Fixed FX: 1 AUD = 0.70 USD. Deliberately a constant rather than a live
 # rate so reported conversion value stays stable — a change in ROAS should mean the
 # business moved, not that the currency market did. Revisit if the rate drifts far.
 AUD_PER_USD_NUM = 10
@@ -18,7 +34,7 @@ ACTION_SIGNUP = "signup"
 ACTION_FIRST_CALL = "first_call"
 ACTION_PAID = "paid"
 
-# Created live on account 5149790776 on 2026-08-17 (type UPLOAD_CLICKS).
+# Conversion actions of type UPLOAD_CLICKS.
 CONVERSION_ACTION_IDS: dict[str, str] = {
     ACTION_SIGNUP: "7723667014",
     ACTION_FIRST_CALL: "7723667017",
@@ -38,22 +54,6 @@ def usd_micro_to_aud_micro(usd_micro: int) -> int:
     """
     return usd_micro * AUD_PER_USD_NUM // AUD_PER_USD_DEN
 
-
-import asyncio
-import hashlib
-import logging
-import re
-import time
-from datetime import datetime, timedelta, timezone
-
-from sqlalchemy import or_
-from sqlalchemy.exc import IntegrityError
-from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
-
-from .config import get_settings
-from .domain.identity.access import AGENT_DOMAIN
-from .models import AdConversion, Membership, Org, User
 
 
 def user_data_enabled() -> bool:
@@ -158,9 +158,6 @@ async def queue(db: AsyncSession, org: Org, action: str, *,
     return True
 
 
-# ---- the uploader ---------------------------------------------------------------------------
-
-
 def _utcnow_naive() -> datetime:
     """Naive UTC. Our datetime columns are TIMESTAMP WITHOUT TIME ZONE and asyncpg rejects a
     tz-aware value into one; see `_now` in models.py, which every other table already follows.
@@ -187,9 +184,9 @@ _ACKNOWLEDGED_ROW_ERRORS: frozenset[str] = frozenset()
 _RETRYABLE_ROW_ERRORS = frozenset({"INTERNAL_ERROR"})
 # Description substrings (these violations carry no reason code) that mean "not yet", not "never":
 # the destination account has not clicked through the Customer Data Terms / Enhanced conversions
-# for leads switch, so every hashed-email event is refused until an operator does. Verified live
-# with validateOnly on 2026-09-21: `events.events[0].destination_references[0]: The destination
-# account hasn't agreed to the terms for enhanced conversions.` Rows must wait, not dead-letter.
+# for leads switch, so every hashed-email event is refused until an operator does. The violation
+# reads `events.events[0].destination_references[0]: The destination account hasn't agreed to the
+# terms for enhanced conversions.` Rows must wait, not dead-letter.
 _RETRYABLE_ROW_DESCRIPTIONS = ("terms for enhanced conversions",)
 # Matches the event index out of a `google.rpc.BadRequest.FieldViolation.field` path such as
 # "events[2].userData..." or "events.events[2]...", and equally out of a `FieldWarning.fieldPath`.
@@ -266,9 +263,8 @@ def _payload_and_rows(
             # Stable per outbox row, so a resend after an ambiguous prior outcome dedupes into the
             # SAME conversion on Google's side instead of double-counting. The `treg-` prefix is
             # REQUIRED, not cosmetic: Data Manager rejects a purely numeric transactionId with a
-            # bare 400 INVALID_ARGUMENT on `events[N]` (verified live 2026-08-18 — "2"/"3" fail,
-            # "row-2"/"row-3" succeed with every other field identical). validateOnly does NOT
-            # catch it, so only a real ingest surfaces this.
+            # bare 400 INVALID_ARGUMENT on `events[N]`. validateOnly does NOT catch it, so only a
+            # real ingest surfaces this.
             "transactionId": f"treg-{row.id}",
         }
         if org.ad_gclid:
@@ -295,7 +291,7 @@ def _payload_and_rows(
     if any("userData" in e for e in events):
         # How the hashed identifiers are encoded. REQUIRED whenever any event carries userData —
         # Data Manager rejects the whole request with `events.encoding: Required field is missing`
-        # otherwise (validateOnly caught this live on 2026-09-21).
+        # otherwise.
         payload["encoding"] = "HEX"
     return payload, payload_rows
 

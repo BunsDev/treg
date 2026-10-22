@@ -55,10 +55,7 @@ _HOP_BY_HOP = frozenset(
     }
 )
 # The edge's forwarding headers + third-party infra — never leak to the upstream. treg's OWN headers
-# are handled by the `x-treg-` PREFIX rule below, not by name: this set used to enumerate them and the
-# enumeration silently failed. `x-treg-client` was never listed, so every provider we relay to has been
-# receiving the caller's runtime name; `x-treg-meta` would have leaked a builder's customer ids the same
-# way. A prefix is the only form of this rule that stays correct when the next header is added.
+# are handled by the `x-treg-` PREFIX rule below, not by name, so the next one added is covered too.
 _CONTROL = frozenset(
     {
         "ngrok-skip-browser-warning",
@@ -157,17 +154,13 @@ async def relay(
          if not _is_dropped_request_header(k.decode("latin-1").lower(), req_drop)]
     )
     _scrub_treg_cookies(headers)  # keep caller cookies, drop treg's own session cookie
-    # Mirror the caller's compression choice. We relay the upstream body RAW (aiter_raw), so if the
-    # upstream compresses, the caller receives compressed bytes. httpx supplies its own
-    # `Accept-Encoding: gzip,…` whenever the request doesn't carry one — which would make us hand
-    # gzip to a caller who never asked for it (binary garbage to any plain HTTP client or agent).
-    # Asking for identity keeps what the caller gets matching what the caller requested.
+    # The body is relayed RAW (aiter_raw), and httpx adds its own `Accept-Encoding: gzip,...` when
+    # the request has none: ask for identity so a caller never gets gzip it did not ask for.
     if "accept-encoding" not in headers:
         headers["accept-encoding"] = "identity"
     # Metered marketplace calls OVERRIDE the caller's choice: the settle path must json-parse the
     # buffered body for the provider's own reported charge, and a caller-requested gzip would hand
-    # it ciphertext — the charge silently falls back to the estimate (real bug: dataforseo billed
-    # $0.003 instead of its reported $0.00015 whenever the caller was httpx/a browser).
+    # it compressed bytes, and the charge would silently fall back to the estimate.
     if force_identity:
         headers["accept-encoding"] = "identity"
     # Query: a list of pairs preserves duplicate keys verbatim (?tag=a&tag=b). A marketplace
@@ -235,7 +228,7 @@ async def relay(
     # the caller's, unaltered, so the caller's own Content-Length is exact — carry it, and httpx
     # frames the upstream request with it instead. Meta's Graph API edge does not read a chunked
     # request body: every JSON/form/multipart POST arrived as a bodyless request, and an ad creative
-    # sent that way failed "Ad incomplete" (live 2026-09-19). A caller who streamed chunked stays chunked.
+    # sent that way failed "Ad incomplete". A caller who streamed chunked stays chunked.
     if json_body is not None:
         headers["content-length"] = str(len(content))
     elif content is not None and (cl := _header_value(request.raw_headers, "content-length")):
@@ -250,7 +243,7 @@ async def relay(
     upstream_req = client.build_request(request.method, url, headers=headers, content=content)
     # Call-time SSRF guard: resolve the upstream host NOW and refuse an internal target — defeats DNS
     # rebinding (base_url was public at registration, its DNS now points at 169.254.169.254 / localhost).
-    from . import health  # local: health imports proxy-adjacent modules, so keep the cycle lazy
+    from . import health
     if get_settings().proxy_ssrf_check and not health.host_is_public(upstream_req.url.host):
         raise GatewayFailed(
             "ssrf_refused", status_code=502,
@@ -271,10 +264,8 @@ async def relay(
         for k, v in upstream_resp.headers.multi_items()
         if k.lower() not in drop_resp and not _is_treg_setcookie(k, v)
     ]
-    # The proxy is for API calls, but a browser could navigate to /call/… (authorized by the session
-    # cookie) and render arbitrary upstream text/html AS AN ACTIVE DOCUMENT under treg's own origin —
-    # reflected XSS with access to the operator's same-origin session. Neutralize it: nosniff + a
-    # sandbox CSP (no script execution, no same-origin) on every relayed response. Agents ignore these.
+    # A browser navigating to /call/... must not render upstream HTML as an active document under
+    # treg's origin (reflected XSS with the session cookie). Agents ignore both headers.
     raw_headers.append((b"x-content-type-options", b"nosniff"))
     raw_headers.append((b"content-security-policy", b"sandbox"))
     return UpstreamResponse(

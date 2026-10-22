@@ -228,7 +228,6 @@ def boards(apps: dict[int, tuple[Activity, Consent, int]]) -> dict[str, list[int
     return {"most_loved": loved, "most_active": active, "rising": rising, "longest_streak": streak}
 
 
-# ---- applications ---------------------------------------------------------------------------
 # What a team submits. Checked here so the /showcase form, the dashboard and the staff API refuse
 # the same things. Text is stored as given and escaped wherever it is shown.
 
@@ -286,12 +285,12 @@ def clean_revision(raw: dict) -> dict:
     if unknown:
         raise ApplicationInvalid(sorted(unknown)[0], "unknown field")
     out: dict = {}
-    for field, (low, high) in TEXT_LIMITS.items():
-        value = " ".join(str(raw.get(field) or "").split()) if field != "description" \
-            else str(raw.get(field) or "").strip()
+    for name, (low, high) in TEXT_LIMITS.items():
+        value = " ".join(str(raw.get(name) or "").split()) if name != "description" \
+            else str(raw.get(name) or "").strip()
         if not low <= len(value) <= high:
-            raise ApplicationInvalid(field, f"use {low}-{high} characters" if low else f"use at most {high} characters")
-        out[field] = value
+            raise ApplicationInvalid(name, f"use {low}-{high} characters" if low else f"use at most {high} characters")
+        out[name] = value
     out["url"] = _https_url(raw.get("url", ""), "url", required=True)
     out["launch_post_url"] = _https_url(raw.get("launch_post_url", ""), "launch_post_url", required=False)
     category = raw.get("category") or ""

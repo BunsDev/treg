@@ -182,6 +182,7 @@ uv run --frozen python -m pytest -q            # serial: debugging one test, or 
 uv run treg --help                             # the CLI from this checkout
 uv run python -m treg                          # the server
 uv run lint-imports                            # the import-linter contracts (CI runs this too)
+uv run ruff check                              # lint, config in pyproject.toml (CI runs this too)
 scripts/dev-local.sh up                        # live dev stack on :18790 with its own sqlite DB
 ```
 
@@ -211,6 +212,9 @@ so parallel runs and side-by-side runs never share one.
 - Keep the suite green; add tests for new behavior. Conventional Commits (`feat(scope): ...`,
   `fix: ...`, `docs: ...`); one logical change per commit; the PR says what changed and why and
   names the fragments it updated.
+- **Comments only for external constraints and public contracts**: behavior a vendor, platform
+  or protocol forces on us, or a public API contract. History goes in the commit message, an
+  invariant goes in a test, design goes in `docs/context` (`.agents/skills/code-quality`).
 - `/mcp/` and `/mcp/v2/` differ on purpose. A change to either or to shared MCP code is reviewed
   against both; do not unify them in passing. `/mcp/v2/`'s tools and hidden platforms match the
   Claude directory submission: change them only with a resubmission. New features go to `/mcp/`.

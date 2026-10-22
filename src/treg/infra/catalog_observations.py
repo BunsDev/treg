@@ -241,7 +241,7 @@ class CachedEndpointObservationReader:
                         refreshed = exc.completed
                         failed = True
                         log.warning("endpoint stats fold unavailable")
-                    except Exception:  # noqa: BLE001 - optional telemetry always degrades to stale/empty
+                    except Exception:
                         refreshed = {}
                         failed = True
                         log.warning("endpoint stats refresh unavailable", exc_info=True)

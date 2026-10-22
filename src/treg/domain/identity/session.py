@@ -57,7 +57,7 @@ def _make(
     scope: str | None = None,
 ) -> str:
     # `tv` binds the token to the user's current token_version; bumping that row invalidates every
-    # token minted at an older version (see api._revoke path). Callers pass user.token_version.
+    # token minted at an older version. Callers pass user.token_version.
     #
     # `org` is optional and stateless like the rest of the claim: an identity token that PINS a team.
     # It exists so a copyable "API key" works as a bare bearer where no `X-Treg-Org` header can travel

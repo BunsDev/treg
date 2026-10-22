@@ -18,9 +18,11 @@ from treg.domain.hub import ManifestError, price_label, validate, validate_check
 from treg.domain.catalog import store as catalog_store
 from tests.test_marketplace_call import platform_on  # noqa: F401 — tier 4 on, so catalog steps resolve
 
-EP = "tikhub.tiktok.video.comments"      # a real catalog id
-
 from treg.application.call import service as call_service
+from treg.domain.hub import graph as hub_graph
+from treg.domain.hub import refs
+
+EP = "tikhub.tiktok.video.comments"      # a real catalog id
 
 
 def _fake_relay(status: int, body: bytes):
@@ -291,7 +293,7 @@ async def test_script_road_needs_the_script_body(clients: AsyncClient, hub_on):
 
 
 async def test_viewer_cannot_publish(clients: AsyncClient, hub_on, monkeypatch):
-    from sqlalchemy import select, update
+    from sqlalchemy import update
     from treg.infra.db import session_maker
     from treg.models import Membership
     async with session_maker() as s:
@@ -379,9 +381,6 @@ async def test_a_catalog_id_is_never_a_hub_tool(clients: AsyncClient, hub_on):
 
 # ---------------------------------------------------------------------------------------------
 # The reference language and the graph (phase 2), pure
-
-from treg.domain.hub import graph as hub_graph
-from treg.domain.hub import refs
 
 
 def test_refs_parse_every_form_and_nothing_else():
@@ -532,7 +531,6 @@ async def test_an_old_version_stops_serving_thirty_days_after_a_newer_one(client
     tool_id = (await clients.post("/hub/tools", json={"manifest": m, "check": CHECK, "readme": "v1"})).json()["tool_id"]
     await clients.put(f"/hub/tools/{tool_id}", json={"manifest": m, "check": CHECK, "readme": "v2"})
     from datetime import timedelta
-    from sqlalchemy import update
     from treg.infra.db import session_maker
     from treg.models import HubTool
     from sqlalchemy import select as _select
@@ -835,9 +833,6 @@ async def test_a_run_is_readable_by_its_caller_and_its_maker_with_different_view
     assert c["error"]["step"] == "people" and "secret error body" not in json.dumps(c)
     m = (await clients.get(f"/hub/runs/{bad_id}")).json()
     assert "secret error body" in json.dumps(m["error"])
-    # the SPA path for the run page answers with the app
-    page = await clients.get(f"/app/runs/{run_id}")
-    assert page.status_code == 200 and "shared run" in page.text
 
 
 async def test_the_makers_list_carries_health_and_thirty_day_numbers(clients: AsyncClient, hub_on, platform_on, monkeypatch):

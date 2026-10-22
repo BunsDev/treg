@@ -42,8 +42,7 @@ class Contract:
     # true — a found contact the provider did not confirm deliverable, which an agent should verify
     # before outreach. Empty = no advice. A search contract has no `verified` output, so advice
     # set there attaches to EVERY hit — deliberate for `people.search`, whose rows carry emails
-    # nobody vouched for (2026-09-08: 73 of 79 bounces were unverified directory rows). A
-    # suggestion only unless the caller asks for the check (`check`, below).
+    # nobody vouched for. A suggestion only unless the caller asks for the check (`check`, below).
     advice_unverified: str = ""
     # False = the contract exists so the archive can judge found/empty (`results.has_result_rules`
     # needs a verified adapter, and an adapter verifies only against a contract); no
@@ -272,8 +271,6 @@ def parse_adapters(doc: dict) -> dict[str, Adapter]:
     return out
 
 
-# ---- identity -------------------------------------------------------------------------------
-
 def miss_status(endpoint: dict) -> int | None:
     """The ERROR status this endpoint's YAML declares as "no result" (`miss: {status, means}`),
     or None. Only a 4xx counts: a `status: 200` block documents a 2xx the adapter's own `miss`
@@ -347,8 +344,7 @@ def canonical_identity(contract: Contract, given: dict[str, Any]) -> tuple[dict[
         return ident, None
     if isinstance(ident.get("linkedin_url"), str):
         # One normalisation for every adapter that forwards the URL raw: a scheme-less
-        # `linkedin.com/in/x` reached quickenrich as-is and 422'd "must be a valid URL"
-        # (311 routed calls in two days, 2026-09-18); a handle becomes the public URL.
+        # `linkedin.com/in/x` is refused by some providers; a handle becomes the public URL.
         ident["linkedin_url"] = P.linkedin_url(ident["linkedin_url"]) or ident["linkedin_url"]
     for _ in range(2):  # derive until stable (join needs first+last; split needs full_name)
         for k, expr in contract.derive.items():
@@ -366,8 +362,6 @@ def adapter_accepts(adapter: Adapter, identity: dict[str, Any]) -> tuple[str, ..
     """The first accepted variant fully present in the (derived) identity, or None."""
     return next((v for v in adapter.accepts if all(identity.get(k) not in (None, "") for k in v)), None)
 
-
-# ---- verification ---------------------------------------------------------------------------
 
 def verify(adapter: Adapter, contract: Contract, endpoint: dict, example: Any) -> tuple[bool, str]:
     """Fixture round-trip: `in` must reproduce the endpoint's own `test_request` from the contract's

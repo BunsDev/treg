@@ -59,7 +59,7 @@ async def _publish(body: PublishIn, request: Request, caller: Caller, db: AsyncS
         if exists is None:
             raise HTTPException(status_code=404, detail=f"your team has no hub tool named {name!r}; POST /hub/tools creates one")
     # A team whose name reads as treg, as official, or as a catalog provider publishes only by a
-    # superadmin: its tools would pass for ours or theirs (hub simulation run 2). Teams made before
+    # superadmin: its tools would pass for ours or theirs. Teams made before
     # the name rule keep their name; this stops their tools.
     from ..application.signup import reserved_team_names
     from ..domain.governance.teams import reserved_reason
@@ -68,7 +68,7 @@ async def _publish(body: PublishIn, request: Request, caller: Caller, db: AsyncS
         raise HTTPException(status_code=403, detail={"error": "team_name_reserved", "rule": why +
                             "; rename the team (treg org rename) before publishing a hub tool"})
     # The serving version's price before this publish: a new version's recipe.json replaces it, which
-    # undid a `treg hub price` without a word (hub simulation run 2).
+    # would silently undo a `treg hub price`.
     name = body.manifest.get("name") if isinstance(body.manifest, dict) else None
     before = (await db.execute(select(HubTool).where(
         HubTool.org_id == caller.org_id, HubTool.name == name, HubTool.status == "live")
@@ -103,7 +103,7 @@ async def _publish(body: PublishIn, request: Request, caller: Caller, db: AsyncS
         out["call"] = f"POST /call/{published.tool_id}"
         out["page"] = f"{get_settings().public_url.rstrip('/')}/hub/{published.tool_id}"
     elif row.status == "review":
-        # Say what callers get NOW: with every approved version retired, nothing (hub simulation run 3).
+        # Say what callers get NOW: with every approved version retired, nothing.
         serving = (await db.execute(select(HubTool.version).where(
             HubTool.tool_id == published.tool_id, HubTool.status == "live").order_by(HubTool.version.desc()).limit(1))).scalar_one_or_none()
         now = (f"callers keep version {serving} until this one is approved" if serving is not None
@@ -213,7 +213,7 @@ async def hub_run(
         if row.error:
             e = dict(row.error)
             # a caller sees the failing step's name, status and the tool's own name, never the
-            # upstream error body (round 4 q10); the maker reads the full error in their log
+            # upstream error body; the maker reads the full error in their log
             e.pop("log", None)
             for s in e.get("trace", []) or []:
                 s.pop("error", None)
@@ -248,7 +248,7 @@ async def get_hub_tool(
         out["readme"] = row.readme
     else:
         # another team reads the public contract only: not the maker's tools, not who
-        # published, not the check's trace (8.1 review)
+        # published, not the check's trace
         for k in ("uses", "created_by", "check_result"):
             out.pop(k, None)
         out["made_of"] = len(row.manifest.get("uses", []))
@@ -467,7 +467,6 @@ async def hub_tool_health(
                      for r in runs]}
 
 
-# ---------------------------------------------------------------------------------------------
 # Listing review (docs/hub-listing-decisions.md round 2): a maker's `treg hub list` is a request;
 # a superadmin approves or rejects it here. Only an approved tool is in catalog search.
 
@@ -513,7 +512,7 @@ async def admin_hub_listing_decide(
     return {"tool_id": tool_id, **hub_app.listing_view(lst)}
 
 
-# Updates to an approved tool (round 4): a new version or a price change waits here. Approve makes
+# Updates to an approved tool: a new version or a price change waits here. Approve makes
 # it serve everyone; reject keeps the approved one and tells the maker why.
 
 class UpdateDecisionIn(BaseModel):

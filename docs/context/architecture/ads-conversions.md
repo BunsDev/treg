@@ -48,16 +48,12 @@ read-side Ads catalog calls (`oauth_providers.GOOGLE_ADS`), a separate credentia
    `ccm/collect` consent ping still goes out on every load regardless) and fires exactly one event,
    `treg Signup (web)` (`AW-18392771132/0usqCIeQrO0cELzUrcJE`, action `7745505287`, SECONDARY
    and excluded from the Conversions column, so it never double counts against the outbox below),
-   right after the first team exists: from `welcomeCreate()` (`frontend/src/state/onboarding.js`)
-   after `POST /orgs`, and from the `onboarding_v2` flow (`frontend/src/onboarding/OnboardingFlow.vue`)
-   after `POST /onboarding/start`, with `transaction_id = treg-web-signup-<org id>` (the v2 response
-   carries only the slug, so it keys by slug) so a retry cannot count a team twice. A future consent UI grants
+   right after the first team exists: from `autoTeam()` (`frontend/src/state/onboarding.js`)
+   after `POST /onboard/team` made it, with `transaction_id = treg-web-signup-<org id>` so a retry
+   cannot count a team twice. A future consent UI grants
    cookies via `window.tregAdsConsent('granted')`; nothing else depends on it.
-   Every public landing surface must load `adtrack.js`. Tests cover named destinations in
-   `test_every_public_landing_surface_loads_the_capture_script`, and
-   `test_every_public_html_route_carries_the_capture_script`, which sweeps every flat GET route and
-   requires the tag on anything answering `200 text/html`, so a new page is in scope the moment its
-   route exists. See `interface/seo.md` for the page-by-page scope.
+   Every public landing surface must load `adtrack.js`; no test sweeps every route, so a new
+   landing page adds the tag itself. See `interface/seo.md` for the page-by-page scope.
    `adtrack.js` also restores an existing cookie when the URL has no click id, preserves the id
    on the current URL with `history.replaceState`, and carries it on delegated same-origin link
    clicks (including new links and middle clicks). During that visit it also wraps

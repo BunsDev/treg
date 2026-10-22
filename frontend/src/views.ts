@@ -43,7 +43,7 @@ export function loadScript(src: string): Promise<void> {
       const script = document.createElement('script')
       script.src = src
       script.onload = () => resolve()
-      // The Help view has empty fallbacks for missing data, as it did when the tag failed.
+      // The Help view has empty fallbacks for missing data.
       script.onerror = () => { scripts.delete(src); console.error('Failed to load', src); resolve() }
       document.head.appendChild(script)
     })
@@ -76,7 +76,6 @@ export const pages = {
 type View = keyof typeof pages
 
 export const dialogs = {
-  OnboardingFlow: lazy(() => import('./onboarding/OnboardingFlow.vue')),
   FishVoiceDialog: lazy(() => import('./dialogs/FishVoiceDialog.vue')),
   ConnectTokenDialog: lazy(() => import('./dialogs/ConnectTokenDialog.vue')),
   TopUpDialog: lazy(() => import('./dialogs/TopUpDialog.vue')),
@@ -86,7 +85,6 @@ export const dialogs = {
   ExtraCredentialDialog: lazy(() => import('./dialogs/ExtraCredentialDialog.vue')),
   EditToolDialog: lazy(() => import('./dialogs/EditToolDialog.vue')),
   AcceptInvitesDialog: lazy(() => import('./dialogs/AcceptInvitesDialog.vue')),
-  WelcomeDialog: lazy(() => import('./dialogs/WelcomeDialog.vue')),
   CopyToolDialog: lazy(() => import('./dialogs/CopyToolDialog.vue')),
   ImportSkillDialog: lazy(() => import('./dialogs/ImportSkillDialog.vue')),
   RequestToolDialog: lazy(() => import('./dialogs/RequestToolDialog.vue')),

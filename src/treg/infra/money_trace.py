@@ -34,7 +34,12 @@ _KEY = "treg_money_trace"
 _CONNECTION_KEY = "treg_money_trace_transaction"
 _PACKAGE_PREFIX = __file__.replace("\\", "/").rsplit("/", 2)[0] + "/"
 _clock = time.monotonic
-_utcnow = lambda: datetime.now(timezone.utc)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 _lock = threading.RLock()
 _enabled = True
 _serial = itertools.count(1)

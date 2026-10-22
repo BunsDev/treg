@@ -43,7 +43,7 @@ async def serve_media(token: str) -> Response:
     row = await media_app.get(token)
     if row is None:
         raise HTTPException(status_code=404, detail="no such media, or it expired")
-    # `sandbox` CSP + nosniff: user bytes served on the treg.to origin must be inert even if a
+    # `sandbox` CSP + nosniff: user bytes served on treg's origin must be inert even if a
     # scriptable type ever slips past the allow-list. Vendors' fetchers ignore both headers.
     return Response(content=row.body, media_type=row.content_type, headers={
         "Content-Length": str(row.size), "Cache-Control": "public, max-age=3600",

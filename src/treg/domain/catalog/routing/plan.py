@@ -183,14 +183,11 @@ def rank(candidates: list[Candidate], *, prefer: list[str] | None = None, exclud
         pref = prefer.index(c.endpoint["provider"].lower()) if c.endpoint["provider"].lower() in prefer else len(prefer)
         # A provider that USES more of what the caller said answers the question asked: given
         # {company_domain, title}, a title-aware search outranks a cheaper domain-only one that
-        # would return the whole company (live 2026-08-29: a free domain-only provider won and
-        # answered 100 unnamed rows). Price decides among candidates of equal specificity.
+        # would return the whole company. Price decides among candidates of equal specificity.
         specificity = -covers(c.variant) if given else 0
         # A provider that cannot express a filter the caller SENT answers a looser question, and a
         # non-empty answer to the looser question still counts as a hit — so it must never win on
-        # price alone (live 2026-08-29: `{q, title, location: London, country: GB}` went to the
-        # cheapest candidate, which dropped both geo filters and returned people in Bengaluru and
-        # San Francisco). It stays reachable, just last among equals.
+        # price alone. It stays reachable, just last among equals.
         cost = c.expected_cost_per_hit
         lead = (len(c.ignored), cost, specificity) if one_subject else (specificity, len(c.ignored), cost)
         return (tier, pref, *lead,

@@ -257,7 +257,7 @@ class Catalog:
         One predicate, so the API, the validator and the proxy cannot drift apart. A missing or
         unknown price must read as "refuse", never as free (docs/context/architecture/catalog.md,
         Cost). Three things must hold: the USD cost is computable, the price provenance is at least
-        `documented` (2026-07-31 policy: a provider-published rate is billable — `verified` remains
+        `documented` (a provider-published rate is billable - `verified` remains
         the gold standard the drift reports police; `inferred`/`unknown` stay refused), and the
         route is not the caller's own account's business (`own_account` scope / `account` kind).
         The live-verified stamp is deliberately NOT required anymore: a broken route fails
@@ -278,11 +278,8 @@ class Catalog:
         cost = self.cost_view(endpoint.get("cost"), endpoint.get("provider"))
         if not cost or cost.get("usd") is None:
             return False
-        # A FREE route needs no price provenance: `confidence` exists to say how much we trust a
-        # NUMBER we are about to charge, and there is no number here. Requiring it anyway refused 61
-        # endpoints across 8 providers — 28 of Hunter's 35 — as though "costs nothing" were the same
-        # answer as "we don't know", which is the exact distinction the rest of this file is careful
-        # to keep apart.
+        # A FREE route needs no price provenance: `confidence` says how much we trust a NUMBER we
+        # are about to charge, and there is no number here.
         priced_or_free = (cost.get("type") == "free" and not cost.get("usd")) \
             or cost.get("confidence") in ("verified", "documented")
         kind = endpoint.get("kind") or DEFAULT_KIND
@@ -318,8 +315,8 @@ def load(*, refresh: bool = False, directory: Path | None = None) -> Catalog:
 
 # libyaml's C parser reads the catalog about 9x faster than the pure-Python one (141 files: 7.7 s ->
 # 0.9 s), with the same safe constructor and the same resolvers, so the documents are identical.
-# A worker process pays the whole load on its first call; at pure-Python speed that was ~27 s on a
-# small instance, longer than the async worker's per-poll timeout.
+# A worker process pays the whole load on its first call; at pure-Python speed that can outlast
+# the async worker's per-poll timeout.
 _SafeBase = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 
 
@@ -336,7 +333,7 @@ _Loader.yaml_implicit_resolvers = {
 
 def _read_yaml(path: Path) -> dict:
     try:
-        data = yaml.load(path.read_text(encoding="utf-8"), Loader=_Loader)  # noqa: S506 - SafeLoader subclass
+        data = yaml.load(path.read_text(encoding="utf-8"), Loader=_Loader)
     except (OSError, yaml.YAMLError):
         return {}
     return data if isinstance(data, dict) else {}
@@ -467,9 +464,8 @@ def _parse(directory: Path) -> Catalog:
                 raw = {**raw, "cache": meta["cache"]}
             # Same inheritance for the provider's SUCCESS rule. A vendor's "HTTP 200 always, read
             # `code`" convention is one fact about the whole provider, and stating it per endpoint
-            # means an ingest that adds routes silently ships them without one — 33 of justoneapi's
-            # 260 were missing it, and settle.py bills the estimate when it cannot tell a failure
-            # from a hit.
+            # means an ingest that adds routes silently ships them without one, and settle.py bills
+            # the estimate when it cannot tell a failure from a hit.
             if "expect" not in raw and doc.get("expect") is not None:
                 raw = {**raw, "expect": doc["expect"]}
             effective_async = effective_async_descriptor(doc.get("async"), raw.get("async"))
@@ -563,7 +559,7 @@ def _load_routing(directory: Path, by_id: dict[str, dict]):
             return None
     try:
         return load_routing(directory, by_id, _read_yaml, _example)
-    except Exception:  # noqa: BLE001 — a broken routing file must not take the catalog down
+    except Exception:
         import logging
         logging.getLogger("treg.catalog").warning("routing files failed to load", exc_info=True)
         return {}, {}
@@ -586,16 +582,13 @@ DOMAIN_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("feed", "feed"), ("publish", "publishing"),
 )
 DOMAIN_OTHER = "other"
-# Path segments that say how a route is CALLED, not what it is about. DataForSEO ends every
-# synchronous route in `/live`, which read as a subject and filed 33 unrelated SEO endpoints under a
-# "live" heading — the same trap for a version prefix or a `/json` suffix.
+# Path segments that say how a route is CALLED, not what it is about: DataForSEO ends every
+# synchronous route in `/live`; the same trap for a version prefix or a `/json` suffix.
 DOMAIN_NOISE = {"live", "task_post", "task_get", "task_ready", "tasks_ready", "tasks_fixed",
                 "json", "html", "xml", "api", "rest", "open", "web", "app", "mobile", "desktop",
                 # provider BRAND/family segments: how the vendor organises its API, not what the
-                # route is about — reading them as a subject put a "dataforseo_labs" heading on the
-                # Google page. Filtered here so such routes classify by their function keywords.
-                # `web_vN` is the "web" delivery marker with a version glued on (TikHub's
-                # `/xiaohongshu/web_v3/…`); left in, it grew a "web_v3"/"web_v2" section per platform.
+                # route is about. `web_vN` is the "web" delivery marker with a version glued on
+                # (TikHub's `/xiaohongshu/web_v3/…`).
                 "dataforseo_labs", "appendix", "ai_optimization", "web_v2", "web_v3", "web_v4"}
 _VERSION_SEG = re.compile(r"v\d+(?:\.\d+)*")
 _WORD_SEG = re.compile(r"[a-z][a-z0-9_]*")
@@ -624,9 +617,8 @@ def _domain(raw: dict, capability: str, platform: str) -> str:
     # The PATH only, never the summary. Prose says "the Live SERP API…" and "your own post…" about
     # endpoints that are neither, and one false heading is worse than a row in `other`: a section a
     # visitor doesn't trust is a section they stop reading. Match keywords at WORD boundaries, not by
-    # raw substring: substring put an "ads" section on the People page (it lives inside `leads`) and a
-    # "user" one on abuse reports (inside `abuser`). A stem key (`keyword` → `keywords`) still matches
-    # by prefix; a short key (`ads`, `llm`) must hit a whole word, so `ads` ≠ `leads`/`adset`.
+    # raw substring. A stem key (`keyword` → `keywords`) still matches by prefix; a short key (`ads`,
+    # `llm`) must hit a whole word, so `ads` ≠ `leads`/`adset`.
     words = [w.lower() for seg in segments for w in _WORDS.findall(seg)]
     for key, domain in DOMAIN_KEYWORDS:
         stem = key.rstrip("_")  # `ad_` → `ad`: the singular still matches the `ad`/`adGroup` word
@@ -676,10 +668,6 @@ def _validate_cache(cache, *, header: bool = False, scope: str = "") -> None:
     if not isinstance(cache, dict):
         return
     if "sharing" in cache:
-        # Whose question an answer is (docs/context/architecture/archive.md, "Sharing") is an
-        # ENDPOINT judgment: a provider's licence permitting storage says nothing about whether
-        # the answer depends on who asked, so a header may not declare it for every endpoint
-        # below, and an `own_account` answer is about the credential's account by definition.
         if header:
             raise ValueError("cache.sharing is declared per endpoint, never on a provider header")
         if cache["sharing"] != "public":
@@ -706,36 +694,26 @@ def _normalize(raw: dict, provider: str, directory: Path) -> dict:
         "platform": platform,
         "domain": _domain(raw, capability, platform),
         "scope": raw.get("scope") or "",
-        # what the endpoint IS (see KINDS): default `data`, so every un-annotated route stays on the
-        # browse surface and only the deliberately-marked plumbing (account/utility) is tucked away.
         "kind": str(raw.get("kind") or DEFAULT_KIND).strip().lower() or DEFAULT_KIND,
         "method": (raw.get("method") or "GET").upper(),
         "path": raw.get("path") or "",
         # Optional alternate provider host. Resolution accepts it only when the provider registry
         # maps this exact hostname to an approved HTTPS base URL and credential profile.
         "host": str(raw.get("host") or "").strip().lower(),
-        # optional short display title; `summary` stays the provider's own description, verbatim
         "name": str(raw.get("name") or "").strip(),
         "summary": raw.get("summary") or "",
         "input": raw.get("input") or {},
-        # Provider-owned OAuth routes can support more than one explicit grant. Keep this generic
-        # metadata on the normalized row so resolution and every client read the same contract.
         "authorization_method": str(raw.get("authorization_method") or ""),
         "authorization_methods": list(raw.get("authorization_methods") or []),
         "authorization_paths": dict(raw.get("authorization_paths") or {}),
         "required_scopes": list(raw.get("required_scopes") or []),
         "required_resource": str(raw.get("required_resource") or ""),
         "token_type": str(raw.get("token_type") or ""),
-        # the request the verifier actually made — a proven set of values, which is what makes
-        # `call_template` a paste-ready line rather than a shape with placeholders in it
         "test_request": raw.get("test_request") or {},
-        # The provider's OWN success rule ("HTTP 200 always; `code` 0 means it worked"). It was a
-        # verification-only field (scripts/catalog_verify.py); settle.py now reads it so a
-        # per_success endpoint with no routing adapter can still tell a vendor-side failure from a
-        # hit. Without it treg bills the estimate for a body the VENDOR gave away free.
+        # The provider's OWN success rule ("HTTP 200 always; `code` 0 means it worked"); settle.py
+        # reads it so a per_success endpoint with no routing adapter can still tell a vendor-side
+        # failure from a hit.
         "expect": raw.get("expect") or None,
-        # How an async submission is followed to a terminal result. Provider-file defaults have
-        # already been merged above; consumers always see the complete effective descriptor.
         "async": raw.get("async") or None,
         # Opaque shared-account objects created/read by legacy async endpoint pairs. Resolution
         # enforces `requires`; the buffered successful response persists every `produces` path.
@@ -773,7 +751,6 @@ def _normalize(raw: dict, provider: str, directory: Path) -> dict:
         # Enforce this for core and generated extended rows without changing their public kind.
         "cache": "forbidden" if platform in {"image-gen", "video-gen", "voice-gen", "music-gen"} else raw.get("cache"),
         "verified": str(verified) if verified else None,
-        # the UTC day this tool reached main (catalog.md "`added`"); every provider row carries one
         "added": str(raw.get("added") or "") or None,
         # {status, means} — a status the provider uses for "asked and answered: no result" (PDL
         # 404s a person it has no record of). Only endpoints with evidenced miss semantics carry
@@ -786,10 +763,8 @@ def _normalize(raw: dict, provider: str, directory: Path) -> dict:
         # `by_id`, but remove it from discovery and return the migration story on direct lookup.
         "status": str(raw.get("status") or "").strip().lower(),
         "status_note": str(raw.get("status_note") or "").strip(),
-        # A route that WORKS upstream but that treg's own plan/subscription cannot serve (a
-        # provider tier the shared key lacks). Unlike `status` it stays in discovery — a team's
-        # own key may well serve it — but it is never a platform offer, and the reason rides on
-        # the row so an agent learns "bring your own key" BEFORE the 403, not from it.
+        # A route that WORKS upstream but that treg's own plan cannot serve. Unlike `status` it
+        # stays in discovery (a team's own key may serve it) but is never a platform offer.
         "platform_blocked": str(raw.get("platform_blocked") or "").strip(),
         "superseded_by": str(raw.get("superseded_by") or "").strip(),
         "docs_url": raw.get("docs_url") or "",
@@ -829,22 +804,18 @@ def example_path(endpoint_id: str) -> Path | None:
     return CATALOG_DIR / EXAMPLES_DIRNAME / ep["example_file"]
 
 
-# ---- shaping ---------------------------------------------------------------------------------
-
 def endpoint_view(ep: dict, provider_display: str, cat: Catalog | None = None) -> dict:
     """The public JSON shape of one endpoint (the dashboard + CLI render this)."""
     return {
         "id": ep["id"],
         "provider": ep["provider"],
         "provider_display": provider_display,
-        # short display title (may be ""); clients fall back to `summary` when absent
         "name": ep.get("name") or "",
         "summary": ep["summary"],
         "method": ep["method"],
         "path": ep["path"],
         "scope": ep["scope"],
         "tier": ep["tier"],
-        # data | action | account | utility — the front-end hides account/utility behind an expander
         "kind": ep.get("kind") or DEFAULT_KIND,
         **({
             "authorization_method": ep.get("authorization_method") or None,
@@ -854,49 +825,29 @@ def endpoint_view(ep: dict, provider_display: str, cat: Catalog | None = None) -
             "required_resource": ep.get("required_resource") or None,
             "token_type": ep.get("token_type") or None,
         } if ep.get("authorization_methods") or ep.get("authorization_method") else {}),
-        # the section of its platform page this row files under (see `_domain`)
         "domain": ep.get("domain") or DOMAIN_OTHER,
-        # the whole point of a row is the call it stands for, so the line that makes it is part of
-        # the row — not a second request away
         "call_template": call_template(ep),
         "cost": cat.cost_view(ep["cost"], ep["provider"]) if cat else ep["cost"],
         "async": ep.get("async"),
-        # whether treg may serve this route with its OWN key, billed to the caller's balance —
-        # a fact about the row that decides whether the caller needs a credential at all, so it
-        # rides on the row rather than being re-derived per client (see `Catalog.platform_eligible`)
         "platform_eligible": cat.platform_eligible(ep) if cat else None,
-        # A public upstream route can be served without treg's provider key. This is declarative
-        # endpoint metadata, not provider logic in the relay.
         **({"platform_auth": "anonymous"} if ep.get("platform_auth") == "anonymous" else {}),
-        # WHY the platform can't serve an otherwise-working route (plan/tier gap on treg's own
-        # subscription) — so "bring your own key" is said up front instead of discovered via a 403.
         "platform_blocked": ep.get("platform_blocked") or None,
-        # "no match" semantics, when the endpoint has them — an agent that reads `miss` stops
-        # treating an expected empty answer as a failed call (and stops retrying it).
         "miss": ({k: v for k, v in ep["miss"].items() if k != "when"} if isinstance(ep.get("miss"), dict) else ep.get("miss")),
-        # "the target does not exist" semantics, only on the tools that declare them
         **({"not_found": {k: v for k, v in ep["not_found"].items() if k != "when"}} if isinstance(ep.get("not_found"), dict) else {}),
         # Only direct-id lookups can return a marked row; discovery surfaces never include one.
         "status": ep.get("status") or None,
         "status_note": ep.get("status_note") or None,
         "superseded_by": ep.get("superseded_by") or None,
         "verified": ep["verified"],
-        # the UTC day the tool reached main; None on a generated routed row (see `added_keep`)
         "added": ep.get("added") or None,
         "docs_url": ep["docs_url"],
         "has_example": bool(ep["example_file"]),
-        # the request schema, split by location (pathParams/queryParams/body + notes) — without it
-        # the dashboard can show what comes BACK (example_response) but not what to SEND
         "input": ep.get("input") or None,
         **({"strict_query": True} if ep.get("strict_query") else {}),
         **({"strict_body": True} if ep.get("strict_body") else {}),
         **({"body_allowlist": True} if ep.get("body_allowlist") else {}),
-        # the exact request that live-verified this endpoint — the Try-it drawer prefills from it
-        # verbatim (it also carries the ground truth the input spec can't express: whether the
-        # body is a bare object or an ARRAY of tasks, which dataforseo requires)
+        # also carries what the input spec can't: a bare body vs an ARRAY of tasks (dataforseo)
         "test_request": ep.get("test_request") or None,
-        # A generated routed row (`treg.<capability>`) names the children it chooses among, so a
-        # discovery surface can draw the hierarchy without a second request.
         **({"routed_children": list(ep.get("routed_children") or [])} if ep.get("kind") == "routed" else {}),
     }
 
@@ -925,20 +876,16 @@ def group_routed(rows: list[dict], key=lambda r: r, max_children: int | None = N
     where the group sits; within it, "let treg choose" leads and the specific providers follow.
 
     `max_children` caps each group: a search page is a list of JOBS, and one capability's 24
-    providers must not eat the whole result budget (`find leads`, 2026-08-28: people.search's
-    children pushed people.email.find to one line and people.enrich off the page). The children
-    kept are the best-ranked ones; the parent row is stamped `children_hidden` = how many were cut,
-    and the full ranked list is one `catalog get <parent>` away.
+    providers must not eat the whole result budget. The children kept are the best-ranked ones;
+    the parent row is stamped `children_hidden` = how many were cut, and the full ranked list is
+    one `catalog get <parent>` away.
 
     `TREG_ROUTED_DISCOVERY=off` turns the STEERING off and returns the rows untouched: routed
     endpoints stay callable, priced and reachable by id — search simply stops leading with them, as
     it did before routing shipped. Whether the router answers well and whether every agent should
     be pointed at it by default are different questions; this is the switch for the second one."""
     if not routed_discovery_on():
-        # Not merely "do not group": before routing shipped these rows did not exist, and a routed
-        # row still MATCHES a keyword search on its own summary, so leaving it in would keep
-        # steering by the back door. Off means search never surfaces one; `catalog get <id>` and
-        # `POST /call/<id>` are untouched.
+        # A routed row still matches keyword search on its own summary, so off drops it too.
         return [r for r in rows if key(r).get("kind") != "routed"]
     routed_caps = {key(r)["capability"] for r in rows if key(r).get("kind") == "routed"}
     if not routed_caps:
@@ -962,7 +909,7 @@ def group_routed(rows: list[dict], key=lambda r: r, max_children: int | None = N
         v = key(r)
         cap = v["capability"]
         # An approved hub tool of this job stays in its group and is never cut: it is not one of
-        # the router's providers, and `catalog get <parent>` would not list it (hub-listing round 3).
+        # the router's providers, and `catalog get <parent>` would not list it.
         if cap in routed_caps and v.get("kind") not in ("routed", "hub"):
             if shown.get(cap, 0) >= max_children:
                 if cap in parents:
@@ -1011,9 +958,7 @@ def domain_rows(pairs: list[tuple[dict, dict]], capabilities: dict[str, str],
     def _ep_rank(v: dict):
         # Within one capability: cheapest first (free counts as cheapest; unpriced last — an
         # unknown price must not lead a comparison), then the curated core route before ingested
-        # ones, then live-verified before unproven, then stable alpha. Before this existed the
-        # order was an accident of filename sorting ("tikhub.extended.yaml" < "tikhub.yaml"), which
-        # put the canonical core route at the BOTTOM of its own row.
+        # ones, then live-verified before unproven, then stable alpha.
         usd = (v.get("cost") or {}).get("usd")
         return (usd is None, usd if usd is not None else 0.0,
                 v.get("tier") != "core", not v.get("verified"),
@@ -1049,7 +994,6 @@ def domain_rows(pairs: list[tuple[dict, dict]], capabilities: dict[str, str],
     return [{"domain": d, "rows": sections[d]} for d in order]
 
 
-# ---- near misses -----------------------------------------------------------------------------
 def _id_shape(endpoint_id: str) -> tuple[str, list[str]]:
     """`(provider, comparable tokens)` for an endpoint id.
 
@@ -1094,11 +1038,7 @@ def near_ids(endpoint_id: str, cat: Catalog, limit: int = 3) -> list[str]:
     # `hunter.people.email.find` — it is a different vendor, a different price and a different
     # credential. On a path that spends money, "did you mean <competitor>?" is provider routing
     # wearing a spellcheck's clothes, which is exactly what the charter says treg does not do:
-    # treg compares providers side by side and the CALLER chooses. (The first cut of this scored
-    # cross-provider matches and merely preferred the same provider — via `r[2] != provider`, which
-    # compared a full id against a bare provider token and was therefore true every time, so even
-    # that preference never applied. `fake.companies-signals` confidently answered
-    # `lusha.x.companies-signals`.)
+    # treg compares providers side by side and the CALLER chooses.
     if provider not in cat.provider_meta:
         return []
     exact, scored = [], []
@@ -1130,11 +1070,6 @@ def unknown_id_hint(endpoint_id: str, cat: Catalog) -> str:
     return f"search for it instead: treg catalog search {tail!r}"
 
 
-# ---- search ----------------------------------------------------------------------------------
-# Deliberately plain: token containment over a few weighted fields. The catalog is ~2k endpoints of
-# curated English, so an embedding index would add a dependency and a build step to beat "tiktok
-# comments" by nothing. Ranking has to be PREDICTABLE above all — an agent that can't guess why a row
-# won can't refine its query.
 _SPLIT = re.compile(r"[^a-z0-9\u3400-\u9fff]+")
 
 # what a token hit is worth, by where it landed
@@ -1185,8 +1120,7 @@ WHOLE_WORD_BELOW = 4
 
 def _needles(variants: list[str], whole: bool = False) -> list[str]:
     """Each variant as it must appear at the START of a word: " search" matches "search" and
-    "searches", never "research" (2026-10-10: a research-task status row tied with every search
-    tool on "web search" and its measured success put it first). With `whole` (the word is a short
+    "searches", never "research". With `whole` (the word is a short
     provider name) the first variant matches only whole, or with a plural "s". CJK has no spaces
     between words, so a CJK variant keeps matching anywhere."""
     out: list[str] = []
@@ -1214,9 +1148,9 @@ def _search_fields(cat: Catalog) -> list[tuple[dict, list[tuple[int, str]]]]:
 
 
 # A token matching more than this share of the catalog selects nothing — it may still add score
-# where it matches, but a row is never punished for missing it. Statistical stopwords: "data" (33%),
-# "api" (50%), "get" (40%) are corpus filler no hand list would keep up with, while "search" (22%)
-# and "tiktok" (19%) stay required. Measured 2026-08-20 over 2,791 endpoints.
+# where it matches, but a row is never punished for missing it. Statistical stopwords: "data",
+# "api", "get" are corpus filler no hand list would keep up with, while "search" and "tiktok" stay
+# required.
 SOFT_DF_SHARE = 0.25
 
 
@@ -1237,7 +1171,7 @@ def _match(query: str, cat: Catalog, stems: bool = False):
     weights, idf, and the admission gate (which tokens are required, and how many must hit).
     `stems` lets each word also match as its stem's prefix (a provider-named search only)."""
     raw = _tokens(query)
-    # single letters can never select ("K&L" tokenizes to k + l, df 2,039 and 2,512) — they only
+    # single letters can never select ("K&L" tokenizes to k + l) - they only
     # inflated the number of matches a row needed elsewhere
     tokens = [t for t in raw if t not in _STOPWORDS and len(t) > 1] or raw
     if not tokens:
@@ -1338,8 +1272,8 @@ def _scored(query: str, cat: Catalog, platform: str | None, keep: Callable[[dict
     return scored
 
 
-# ---- a provider named in the query ---------------------------------------------------------------
-_provider_label: Callable[[str], str] = lambda provider: provider
+def _provider_label(provider: str) -> str:
+    return provider
 
 
 def configure_provider_labels(label: Callable[[str], str]) -> None:
@@ -1436,7 +1370,7 @@ def with_routed_parents(scored: list[tuple[dict, float]], cat: Catalog) -> list[
     """A routed parent (`treg.<capability>`) rides in whenever one of its children is in `scored`, at
     the best child's score: `find leads` matches `leadsforge.people.email.find` on the PROVIDER's
     name, and the row an agent should see first for that job is the one where treg chooses among
-    every provider — which contains no word of that query (2026-08-28). Shared by `search` and the
+    every provider - which contains no word of that query. Shared by `search` and the
     judged page (`candidates` deliberately holds no routed rows), so both pages steer alike."""
     present = {ep["id"] for ep, _ in scored}
     best_child: dict[str, tuple[dict, float]] = {}
@@ -1537,15 +1471,10 @@ def near_misses(query: str, cat: Catalog, limit: int = 3) -> list[dict]:
 
 
 # The ceiling on how many equal-scoring rows the evidence sort may consider. Scoring is token
-# containment over three fields, so ties are the NORM, not the exception: "ad library" scores every
-# one of its 24 matches a 6, and the answer to "which 8 do I show?" was then file order.
-#
-# Sized against the real catalog rather than guessed. The tie group straddling a default limit of 8
-# is 17 rows for "ad library", 24 for "email", 88 for "company", 127 for "backlinks" — but 523 for
-# the bare word "tiktok". Taking the whole group unconditionally would put a 523-id `IN` clause
-# behind every search on an OPEN, unauthenticated route, so the group is taken whole up to this
-# ceiling and the caller is TOLD when it was not (see `rank_band`) — a bounded cut that announces
-# itself, rather than the silent one this fix set out to remove.
+# containment over three fields, so ties are the NORM, not the exception. A bare platform word ties
+# hundreds of rows, and taking the whole group would put a huge `IN` clause behind every search on
+# an OPEN, unauthenticated route, so the group is taken whole up to this ceiling and the caller is
+# TOLD when it was not (see `rank_band`).
 RERANK_BAND = 250
 
 
@@ -1562,12 +1491,8 @@ def rank_band(query: str, cat: Catalog, limit: int, platform: str | None = None,
     if not rows or len(rows) >= total:
         return rows, total, False
     # One row PAST the ceiling, so "was the group actually cut?" is observed rather than inferred.
-    # Inferring it from `len(kept) >= RERANK_BAND` cried truncation whenever the group happened to
-    # fill the ceiling exactly — telling the caller to narrow a query that had in fact been ranked
-    # in full.
     # The ceiling bounds the EXTRA rows the tie sweep pulls in; it must never return fewer than the
-    # caller asked for. (Shipped surfaces clamp to 100 and 25, so this was unreachable in
-    # production — but a helper that silently under-delivers is a trap for the next call site.)
+    # caller asked for.
     ceiling = max(limit, RERANK_BAND)
     wider, _ = search(query, cat, ceiling + 1, platform, keep)
     edge = rows[-1][1]
@@ -1576,7 +1501,6 @@ def rank_band(query: str, cat: Catalog, limit: int, platform: str | None = None,
     return kept, total, len(group) > len(kept)
 
 
-# ---- recently added tools -------------------------------------------------------------------
 # Two optional search options, the same on every surface (catalog.md "`added`"): a window of the
 # last N days and a newest-first sort. Without them search is exactly what it was.
 ADDED_DAYS_MAX = 365        # a longer window is capped here and the answer says so
@@ -1663,11 +1587,8 @@ def rerank(rows: list[tuple[dict, float]], stats: dict[str, dict],
         rate = (stats.get(ep["id"]) or {}).get("ok_rate")
         if rate is None:
             return 1        # no evidence either way (or too few samples to publish one)
-        # `ok_rate` is computed from DECIDED samples only — 2xx against 5xx, with 4xx excluded as
-        # the caller's fault — so a 0 here means the provider failed every call that was its to
-        # answer. Reading "never worked" off anything wider (an earlier revision used a
-        # sample-count-based `any_ok`) demotes a healthy endpoint the moment one agent sends bad
-        # parameters, which is the failure `endpoint_stats`' 4xx rule exists to prevent.
+        # `ok_rate` is computed from DECIDED samples only (4xx excluded as the caller's fault), so a
+        # 0 here means the provider failed every call that was its to answer.
         if rate == 0:
             return 3
         return 0 if rate >= 0.9 else 2
@@ -1687,13 +1608,11 @@ def rerank(rows: list[tuple[dict, float]], stats: dict[str, dict],
         not row[0]["verified"], row[0]["id"]))
 
 
-# ---- call template ---------------------------------------------------------------------------
 def _placeholder(spec: dict):
     example = spec.get("example")
     if example not in (None, ""):
-        # Keep structured examples structured until the wire encoder sees them. Stringifying a
-        # list here produced Python repr (`['US']`) before the JSON/comma metadata had any chance
-        # to choose its representation; booleans likewise became capitalized Python `True`.
+        # Keep structured examples structured until the wire encoder sees them: str() here would
+        # give Python repr (`['US']`, `True`) before the JSON/comma metadata could choose.
         return example
     return f"<{spec.get('type') or 'value'}>"
 

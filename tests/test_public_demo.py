@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from httpx import AsyncClient
 
-import treg.api as api_mod
 from treg.domain.governance import publicdemo as publicdemo_policy
 
 

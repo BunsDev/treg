@@ -55,7 +55,6 @@ def is_stale(blob: dict, skew: float = _SKEW) -> bool:
     return time.time() > exp - skew
 
 
-# ---- expiry, as an axis separate from health ---------------------------------------------
 # health_status answers "does this credential work". Expiry answers "how long will it keep
 # working" — and for a NON-refreshable token those are different questions with different
 # answers. A LinkedIn token at the non-partner tier reports perfectly healthy right up until it
@@ -154,7 +153,7 @@ async def ensure_fresh(secret: Secret, db: AsyncSession, port: OAuthRefreshPort)
         await db.commit()
         try:
             fresh = await port.exchange(blob)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # Record WHY renewal failed. Without this a revoked refresh_token just 401s on every
             # call forever with nothing on the connection explaining it.
             await db.execute(

@@ -233,7 +233,7 @@ async def stash_ad_click(email: str, raw_cookie: str) -> None:
                 where=AdClickStash.updated_at <= now,
             ))
             await db.commit()
-    except Exception:
+    except Exception:  # noqa: BLE001 - the ad click stash is optional; sign-in continues
         # Exception text can contain SQL parameters (email and click id), so omit it too.
         logging.getLogger("treg").warning("ad click stash failed; sign-in continues")
 

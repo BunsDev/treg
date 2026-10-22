@@ -80,9 +80,7 @@ from .routers.resources import _allowed_server_bins
 from .routers.web import LOCAL_USER_EMAIL, _WEB_DIR
 from .timeutil import utcnow_naive as _utcnow_naive
 
-# ---- compatibility re-exports --------------------------------------------------------------
-# _mount_static reads these directories off `api_module`. Everything else once re-exported here
-# now lives in, and is imported from, its real home.
+# _mount_static reads these directories off `api_module`.
 from .routers.web import _LOGO_DIR, _MEDIA_DIR, _TOUR_DIR, _VENDOR_DIR  # noqa: F401
 
 
@@ -121,7 +119,7 @@ async def _bootstrap_single_user() -> None:
             org = Org(name=LOCAL_ORG_NAME.title(), slug=await _unique_slug(LOCAL_ORG_NAME, db))
             db.add(org)
             await db.flush()
-            token = crypto.new_token()  # first boot
+            token = crypto.new_token()
             membership = Membership(user_id=user.id, org_id=org.id, role="owner",
                                     token_hash=crypto.hash_token(token))
             db.add(membership)
@@ -130,7 +128,7 @@ async def _bootstrap_single_user() -> None:
         else:
             org = await db.get(Org, membership.org_id)
             if not path.exists():
-                token = crypto.new_token()  # the token file was removed — mint a replacement
+                token = crypto.new_token()
                 await managed_keys.replace_membership_token(
                     db, membership, user, token, actor_email=user.email,
                     name="Local installation key",
@@ -140,7 +138,7 @@ async def _bootstrap_single_user() -> None:
     if token:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(token)
-        path.chmod(0o600)  # the installer reads it; nobody else should
+        path.chmod(0o600)
     shown = token or "(unchanged — see " + str(path) + ")"
     print(f"\n  treg is ready — no account needed."
           f"\n  Dashboard  {s.public_url}/app"
@@ -148,9 +146,6 @@ async def _bootstrap_single_user() -> None:
           f"\n  Token      {shown}\n", flush=True)
 
 
-# The few routes still defined below await their post-stage-4 destinations; everything else is
-# spliced in from routers/. `bootstrap.create_app` consumes this router after import and owns
-# every concrete assembly decision around it.
 router = APIRouter()
 app = router  # temporary decorator target; replaced by the compatibility FastAPI app at EOF
 
@@ -236,12 +231,9 @@ async def providers_catalog() -> dict:
     return {"version": prov.CATALOG_VERSION, "providers": prov.CATALOG}
 
 
-# Moved routers are spliced in at their pre-refactor positions: FastAPI resolves overlapping
-# paths by registration order, and the route snapshot holds this file to the original order.
 router.routes.extend(catalog_routes.public_router.routes)
 router.routes.extend(web_routes.catalog_pages_router.routes)
 
-# ---- "the catalog doesn't have X" — tool requests -------------------------------------------
 TOOLREQ_HIT_NS = "toolreq"
 TOOLREQ_RATE_MAX = 10          # filings per IP per window
 TOOLREQ_RATE_WINDOW_S = 3600   # 1 hour
@@ -362,11 +354,9 @@ router.routes.extend(api_key_routes.router.routes)
 router.routes.extend(provider_resource_routes.router.routes)
 
 
-# ---- projects: an optional sub-scope inside an org ------------------------------------------
 router.routes.extend(org_routes.projects_router.routes)
 
 
-# ---- capability pins: the team's provider choice, per capability ---------------------------
 class CapabilityPinIn(BaseModel):
     capability: str
     provider: str
@@ -408,7 +398,7 @@ async def set_capability_pin(
             f"these do: {', '.join(providers)}"))
     # Read the caller's email NOW, as a plain string. A rollback below expires every ORM instance
     # behind `caller`, and touching one afterwards lazy-loads outside the async context —
-    # MissingGreenlet, which is how this first failed under concurrency.
+    # MissingGreenlet.
     who = caller.email
     row = (await db.execute(select(CapabilityPin).where(
         CapabilityPin.org_id == org_id,
@@ -465,7 +455,6 @@ router.routes.extend(org_routes.policy_router.routes)
 router.routes.extend(resources_routes.crud_router.routes)
 
 
-# ---- local runs (`treg run`): grant + outcome report (docs/CLI-RUN-PLAN.md) -----------------
 # Redact obvious credentials a user might type INLINE (`treg run x -- --token sk_live_…`) before the
 # argv is persisted to the audit log — known key prefixes, any high-entropy token, JWTs, AND the value
 # that follows a credential-looking flag (so a SHORT password like `--password hunter2` is masked too).
@@ -545,10 +534,10 @@ async def grant_local_run(
     tool = (await db.execute(select(Tool).where(Tool.org_id == caller.org_id, Tool.name == name))).scalar_one_or_none()
     if tool is None:
         raise HTTPException(status_code=404, detail="tool not found")
-    _require_tool_use_http(caller, tool)  # per-member tool + project ACL (call + both run tiers)
-    _require_local_run(caller)               # local tier may be disabled for this member (server-only)
-    await _enforce_deny(caller, tool.base_url, "", db, tool.project_id)  # host-level policy (see run_tool_server)
-    await _enforce_daily_cap(caller, db)  # a local run counts toward the per-user daily cap
+    _require_tool_use_http(caller, tool)
+    _require_local_run(caller)
+    await _enforce_deny(caller, tool.base_url, "", db, tool.project_id)
+    await _enforce_daily_cap(caller, db)
     catalog_cli = (prov.match_skill(tool.name) or {}).get("cli")
     profile = localrun.effective_profile(tool, catalog_cli)
     if profile is None:
@@ -569,8 +558,8 @@ async def grant_local_run(
         raise HTTPException(status_code=403, detail=(
             f"denied by {source}: pattern {pattern!r}. The skill's creator controls this list "
             "(cli.deny in treg.json)."))
-    # Runner-proof gate (Bug 1). Handing a member a secret they do NOT own — a shared-key tool they may
-    # RUN but not SEE — is allowed only for the isolated treg-run runner, which proves itself with a
+    # Runner-proof gate. Handing a member a secret they do NOT own - a shared-key tool they may
+    # RUN but not SEE - is allowed only for the isolated treg-run runner, which proves itself with a
     # value the member can't read (`X-Treg-Run-Proof`). A direct member call has no proof, so the raw
     # value never reaches the member's eyes. Owned secrets (or an admin) skip this — you can read a key
     # you already hold.
@@ -594,11 +583,11 @@ async def grant_local_run(
     try:
         rendered = await localrun.render_grant(tool, profile, db, request.app.state.http)
     except LookupError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
-    except Exception as exc:  # noqa: BLE001 — a failed oauth refresh must read clearly, like /call
-        raise HTTPException(status_code=502, detail=f"oauth refresh failed: {exc}")
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:  # a failed oauth refresh must read clearly, like /call
+        raise HTTPException(status_code=502, detail=f"oauth refresh failed: {exc}") from exc
     audit_id = await _grant_audit(db, caller, tool.name, "GRANT", _redact_argv(body.argv), 200, _client_of(request))
     warnings = list(profile.get("warnings") or [])
     ttl = rendered["ttl_seconds"]
@@ -665,11 +654,9 @@ async def report_local_run(
     return {"ok": True, "marked_invalid": marked}
 
 
-# ---- skills: register a whole skill atomically; analyze / import an uploaded folder --------
 router.routes.extend(resources_routes.skill_router.routes)
 
 
-# ---- audit read ---------------------------------------------------------------------------
 @app.get("/calls")
 async def list_calls(
     limit: int = 50, days: int | None = None, before_id: int | None = None,
@@ -856,7 +843,6 @@ async def list_runs(
     return rows[:limit]
 
 
-# ---- OAuth connect flow (Phase C): mint the first token via browser consent --------------
 router.routes.extend(connection_routes.oauth_router.routes)
 router.routes.extend(connection_routes.resources_router.routes)
 router.routes.extend(connection_routes.token_router.routes)
@@ -864,17 +850,14 @@ router.routes.extend(connection_routes.management_router.routes)
 router.routes.extend(connection_routes.status_router.routes)
 
 
-# ---- credential health (Phase B): validate all creds + alert owners ----------------------
 router.routes.extend(connection_routes.health_router.routes)
 
 
-# ---- super-admin: cross-tenant read + control (env token OR is_superadmin user) -----------
 router.routes.extend(admin_routes.reads_router.routes)
 router.routes.extend(admin_routes.mutations_router.routes)
 router.routes.extend(admin_routes.reports_router.routes)
 
 
-# ---- the proxy: call a tool without holding its credential; tier-4 metering ----------------
 router.routes.extend(call_routes.router.routes)
 router.routes.extend(table_routes.router.routes)
 router.routes.extend(activity_routes.app.routes)
@@ -884,7 +867,6 @@ router.routes.extend(showcase_routes.router.routes)
 router.routes.extend(images_routes.router.routes)
 
 
-# ---- server-side CLI execution (Tier 0 `treg run`) ---------------------------------------
 class RunIn(BaseModel):
     tool: str             # the tool name in the caller's org (its `cli` profile drives execution)
     args: list[str] = []  # argv passed to the CLI (secrets are injected via env, never here)
@@ -913,15 +895,15 @@ async def run_tool_server(
     ).scalar_one_or_none()
     if tool is None:
         raise HTTPException(status_code=404, detail=f"no tool {body.tool!r} in this org")
-    _require_tool_use_http(caller, tool)  # per-member tool + project ACL
+    _require_tool_use_http(caller, tool)
     # A run executes a CLI, so there is no request path to match — evaluate the tool's own upstream
     # host, which is what a host-level rule ("nobody may reach api.stripe.com") is really saying.
     await _enforce_deny(caller, tool.base_url, "", db, tool.project_id)
-    await _enforce_daily_cap(caller, db)  # a server run counts toward the per-user daily cap
+    await _enforce_daily_cap(caller, db)
     try:
         exec_bin = runner.resolve_exec_bin(tool)  # the SAME resolution run_tool execs — never diverges
     except runner.RunError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if exec_bin not in _allowed_server_bins():
         raise HTTPException(status_code=422, detail=(
             f"{exec_bin!r} is not approved for server runs — only catalog-known CLIs may run on the "
@@ -931,12 +913,12 @@ async def run_tool_server(
         async with runner.run_slot(caller.email):  # cap concurrent server runs (global + per-user)
             result = await runner.run_tool(tool, list(body.args), db, timeout_s=timeout)
     except runner.RunBusy as exc:
-        raise HTTPException(status_code=429, detail=str(exc))
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
     except runner.RunError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     audit.record_run(
         org_id=caller.org_id, user_email=caller.email, bundle_name=tool.name,
-        argv=_redact_argv_list(list(body.args)),  # redact any credential typed inline before it's stored
+        argv=_redact_argv_list(list(body.args)),
         exit_code=result.exit_code, duration_ms=result.duration_ms, client=_client_of(request),
         tags=dict(caller.membership.pinned_tags or {}) or None,
         api_key_id=caller.api_key.id if caller.api_key else None,
@@ -953,9 +935,9 @@ async def run_tool_server(
     }
 
 
-# Deployment and imports keep using `treg.api:app`; the concrete assembly now lives in bootstrap.
+# Deployment and imports keep using `treg.api:app`; the concrete assembly lives in bootstrap.
 from .bootstrap import create_app  # noqa: E402
 
 app = create_app()
-# Moved handlers retain api.py's original final global binding for calls such as app.openapi().
+# web.py handlers read this module-level `app` (app.openapi(), for one).
 web_routes.app = app

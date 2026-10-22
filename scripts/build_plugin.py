@@ -65,7 +65,7 @@ PUBLIC_BASE = "https://treg.to"
 
 CODEX_TARGET = ROOT / "plugin" / "skills" / "treg" / "SKILL.md"
 CLAUDE_TARGET = ROOT / "skills" / "treg" / "SKILL.md"
-# Cursor's layout is prescribed by github.com/cursor/plugin-template: a marketplace manifest at the
+# Cursor's layout is prescribed by github.com/cursor/plugin-template: a listing manifest at the
 # repo root, and every plugin under `plugins/<name>/` with its OWN `.cursor-plugin/plugin.json`.
 # Unlike Claude Code, the plugin root is never the repo root — `source` must be `./plugins/treg`.
 CURSOR_TARGET = ROOT / "plugins" / "treg" / "skills" / "treg" / "SKILL.md"
@@ -318,7 +318,6 @@ def render(variant: str) -> str:
     #    every user of every agent installs, while the hub is open only to the teams in
     #    TREG_HUB_TEAMS: so the plugin never carries it. A member of such a team gets the section
     #    from the server itself (`treg skill bootstrap` signed in, or /skill.md with their key).
-    #    (Owner's decision, 2026-09-26; it replaces the 2026-09-16 one to always ship it.)
     out = re.sub(r"<!--hub-->.*?<!--/hub-->\n?", "", out, flags=re.S)
     # `{ENDPOINTS}` / `{PROVIDERS}`: the server fills these per request from the loaded catalog; a
     # static plugin copy gets the numbers as of generation, refreshed with every release.
@@ -327,7 +326,7 @@ def render(variant: str) -> str:
     return out.replace("{BASE}", PUBLIC_BASE)
 
 
-# Accepted and ignored: a plugin never ships the hub section now (see the comment in the renderer).
+# Accepted and ignored: a plugin never ships the hub section (see the comment in the renderer).
 WITH_HUB = "--with-hub" in sys.argv
 
 

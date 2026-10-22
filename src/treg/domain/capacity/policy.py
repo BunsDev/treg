@@ -15,9 +15,9 @@ from .collectors import NO_BALANCE_API, all_platform_providers
 AGGREGATORS = ("orthogonal", "monid")
 """The overflow aggregators — prepaid accounts of ours that run dry like any vendor's."""
 
-# What we KNOW about each account as of 2026-08-28 (docs/PROVIDER-CAPACITY-PLAN.md §0, §2.2).
-# capacity_type / funding_mode / source. Anything not listed imports as unknown/unknown and is
-# flagged by the sweep — a policy row must be classified by a person, never guessed by code.
+# What we KNOW about each account: capacity_type / funding_mode / source. Anything not listed
+# imports as unknown/unknown and is flagged by the sweep - a policy row must be classified by a
+# person, never guessed by code.
 _KNOWN: dict[str, tuple[str, str, str]] = {
     "enrichlayer": ("credits", "auto_recharge", "api"),
     "adyntel": ("credits", "manual", "manual"),
@@ -98,12 +98,12 @@ _KNOWN: dict[str, tuple[str, str, str]] = {
     # Treat replenishment as manual until that account setting is explicitly verified.
     "zerobounce": ("credits", "manual", "api"),
     "datagma": ("credits", "manual", "api"),
-    # Neither aggregator exposes a balance endpoint at its documented path (plan §7).
+    # Neither aggregator exposes a balance endpoint at its documented path.
     "overflow:orthogonal": ("cash", "manual", "manual"),
     "overflow:monid": ("cash", "manual", "manual"),
 }
 
-# Verified quota/rate facts (plan §0.1, §4.1). A provider can carry both.
+# Verified quota/rate facts. A provider can carry both.
 _QUOTAS: dict[str, dict] = {
     "blitzapi": {"limit": None, "period": "billing", "resets_at_rule": "account.next_reset_at"},
     "lusha": {"limit": None, "period": "day", "resets_at_rule": "local_midnight"},
@@ -243,7 +243,7 @@ def policy_population(configured_keys: set[str] | None = None) -> list[str]:
     return sorted(set(all_platform_providers()) | {f"overflow:{a}" for a in AGGREGATORS})
 
 
-# Decided 2026-08-26/28: tikhub is out of overflow scope (429s, auto top-up works, Monid re-shapes
+# tikhub is out of overflow scope (429s, auto top-up works, Monid re-shapes
 # its responses); scrapecreators is funded, not routed (every aggregator route is ~10× our price).
 _NO_OVERFLOW = frozenset({"tikhub", "scrapecreators"})
 

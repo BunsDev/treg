@@ -14,12 +14,15 @@ import { groupBest, jobGroups } from '../state/find.js'
 //
 // The examples are the jobs the landing and use-case pages sell (/people-search, /ugc, /use-cases/*),
 // one each, shortened from those pages' own prompts. Keep each one a strong fit on /catalog/find.
+// Visitors paste these straight into an agent, so each is a small first pass: a count instead of
+// "every", and one job an agent finishes in a few calls. Jobs about the visitor's own brand keep
+// "my" and "our"; the agent answers them from the visitor's context, and that is the pitch.
 const EXAMPLES = [
-  'Find heads of growth at US SaaS companies and their work emails',
-  'Show me every ad Notion is running on Meta right now',
-  'Keywords stripe.com ranks for on Google',
-  'Make a talking UGC video ad for my product',
-  'What is Reddit saying about our pricing?',
+  'Find 10 heads of growth at US SaaS companies with their work emails',
+  'The 10 latest ads Notion runs on Meta',
+  'Top 20 Google keywords for stripe.com',
+  'A 5-second UGC video for my product',
+  'Top 10 Reddit posts about our pricing',
   'Does ChatGPT mention my brand?',
 ]
 const LAND = 'transform .8s cubic-bezier(.3,1.2,.4,1)'
@@ -132,7 +135,6 @@ export default {
       this.findRun(q);
     },
     pick(ex){ this.text=ex; this.ask(); },
-    // Back to the empty page: the answer goes, its tiles fall back into the pile.
     exit(){
       this.text='';
       history.replaceState(history.state, '', '/search');

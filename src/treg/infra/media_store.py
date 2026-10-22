@@ -46,7 +46,7 @@ class S3MediaStore:
         try:
             await obstore.put_async(self._clients[bucket], key, body,
                                     attributes={"Content-Type": content_type, "Cache-Control": CACHE_FOREVER})
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - wrap every storage failure; from None keeps keys out
             raise MediaStoreError(f"put failed ({type(exc).__name__})") from None
 
     async def get(self, bucket: Bucket, key: str) -> bytes | None:
@@ -57,14 +57,14 @@ class S3MediaStore:
             return bytes(await result.bytes_async())
         except (NotFoundError, FileNotFoundError):   # obstore raises the builtin for a missing key
             return None
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - wrap every storage failure; from None keeps keys out
             raise MediaStoreError(f"get failed ({type(exc).__name__})") from None
 
     async def delete(self, bucket: Bucket, key: str) -> None:
         import obstore
         try:
             await obstore.delete_async(self._clients[bucket], key)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - wrap every storage failure; from None keeps keys out
             raise MediaStoreError(f"delete failed ({type(exc).__name__})") from None
 
     async def listing(self, bucket: Bucket, prefix: str) -> list[tuple[str, datetime]]:
@@ -74,7 +74,7 @@ class S3MediaStore:
         try:
             async for batch in obstore.list(self._clients[bucket], prefix=prefix, chunk_size=1000):
                 out.extend((item["path"], item["last_modified"]) for item in batch)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - wrap every storage failure; from None keeps keys out
             raise MediaStoreError(f"list failed ({type(exc).__name__})") from None
         return out
 

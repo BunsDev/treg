@@ -128,7 +128,6 @@ async def export_skill(db: AsyncSession, org: Org) -> dict:
     }
 
 
-# ---- hosted sample skills (the "Run in Claude Code" flow) ---------------------------------
 # Each sample matches a tool the sandbox already seeds, so the installed skill's proxied calls
 # resolve against the visitor's sandbox and return the synthetic response. A skill is just a
 # recipe (SKILL.md) + wiring (treg.json) - the credential stays in the vault; the caller sends
@@ -226,10 +225,9 @@ async def gc(db: AsyncSession) -> int:
         ca = ca.replace(tzinfo=None) if (ca is not None and ca.tzinfo) else ca
         if ca is not None and ca >= cutoff:
             continue
-        # One savepoint per visitor. Reaping used to be all-or-nothing: one sandbox that would not
-        # delete aborted the whole loop, and since gc runs only from mint_sandbox, nothing was ever
-        # reaped again until the row was fixed by hand. Now that sandbox is logged and skipped, and
-        # every other expired one still goes.
+        # One savepoint per visitor: a sandbox that will not delete is logged and skipped, and every
+        # other expired one still goes. gc runs only from mint_sandbox, so one bad row must not stop
+        # all reaping.
         nested = await db.begin_nested()
         try:
             mems = (await db.execute(select(Membership).where(Membership.user_id == u.id))).scalars().all()
@@ -237,12 +235,11 @@ async def gc(db: AsyncSession) -> int:
                 org = await db.get(Org, m.org_id)
                 if org is None:
                     continue
-                # The shared cascade, never a private table list: the reaper's own copy is what
-                # missed `IdempotentCall` and broke every sandbox mint on 2026-09-02.
+                # The shared cascade, never a private table list.
                 await cascade_delete_org(org, db)
             await db.delete(u)
             await db.flush()
-        except Exception:  # noqa: BLE001 - a reaper bug is logged per sandbox, never propagated
+        except Exception:
             await nested.rollback()
             logging.getLogger("treg").exception("could not reap sandbox user %s; skipping", u.id)
             continue

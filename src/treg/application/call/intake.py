@@ -22,7 +22,6 @@ from .idempotency import (
 from .types import IdempotencyFailed, IdempotentReplay, IntakeFailed
 
 
-# ---- caller tags (X-Treg-Meta) -----------------------------------------------------------------
 # A builder reselling treg through one token stamps their OWN ids on each call —
 # `X-Treg-Meta: customer=cust_8123, workspace=ws_9` — so they can attribute, budget and invoice their
 # users. Deliberately a HEADER and not a tool argument: a model asked to pass an id drops it somewhere
@@ -149,8 +148,7 @@ async def prepare_call_intake(
         await db.commit()
 
     # A retry the caller has labelled: answer it from what we already returned, before resolving
-    # anything or reaching a provider. Nothing happens without the header, so a caller who sends none
-    # sees exactly today's behaviour.
+    # anything or reaching a provider. Nothing happens without the header.
     # Scoped by the primary tag: two of a builder's users WILL both send `retry-1`, and without
     # this the second would be served the first's stored response.
     key = _scoped_idempotency_key(

@@ -68,7 +68,7 @@ async def await_terminal(
             response, raw = await poll(extracted.task_id, attempt)
         except asyncio.CancelledError:
             raise
-        except Exception as exc:  # the durable worker remains the settlement backstop
+        except Exception as exc:  # noqa: BLE001 - the durable worker remains the settlement backstop
             last_detail = str(exc)[:160]
             continue
         if not 200 <= response.status < 300:

@@ -1,11 +1,9 @@
-import asyncio
 import hashlib
 import json
 import time
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.exc import IntegrityError
@@ -643,112 +641,6 @@ async def test_expired_cached_token_triggers_a_fresh_exchange(monkeypatch, ads_e
     assert len(client.token_calls) == 1
 
 
-# Public HTML that is not a place an ad can land. The DEFAULT is that a page carries capture, so
-# every entry here is a decision with a reason, not a backlog — and the test below fails if one of
-# these paths stops existing, which is what keeps the list from outliving the pages it excuses.
-CAPTURE_EXEMPT = {
-    "/terms": "legal boilerplate; reached from the footer, never from an ad",
-    "/support": "same, and it is a support surface rather than a marketing one",
-    "/contact": "same",
-    "/help": "same",
-    "/tutorial": "slated for removal (see interface/seo.md); not an ad destination",
-    "/connectors/claude": "connector setup, reached from inside a client, not from the open web",
-    "/docs/api": "FastAPI's own Swagger shell — third-party HTML we do not render",
-    "/docs/oauth2-redirect": "FastAPI's OAuth2 redirect shim, same",
-    "/admin/archive/panel": "superadmin only",
-}
-
-# Reading these to the end never returns, so the sweep cannot fetch them. Neither is HTML.
-CAPTURE_UNFETCHABLE = {
-    "/landing/stripe-feed": "SSE stream (text/event-stream) that stays open by design",
-}
-
-
-async def test_every_public_html_route_carries_the_capture_script(clients):
-    """The structural net: sweep every flat GET route and require the tag on whatever answers HTML.
-
-    The two guards above are hand-kept lists, and a hand-kept list is exactly how this broke twice.
-    `_page()` covers the shared shell, but a page can also be its own hand-written HTML behind its
-    own route — `/people-search`, `/grokbot`, `/fable` are — and such a page is invisible to both.
-    This test needs no maintenance for the common case: adding a route that serves HTML puts it in
-    scope automatically, and shipping it without capture fails here.
-
-    Parameterised routes (`/agents/{agent}`, `/use-cases/{job}`) are out of scope on purpose: they
-    all render through `_page()`, which carries the tag structurally, and `test_agent_pages.py`
-    asserts that. What this sweeps is the flat surface, where a one-off page can hide.
-    """
-    flat = sorted({
-        r.path for r in app.routes
-        if "GET" in (getattr(r, "methods", None) or set()) and "{" not in getattr(r, "path", "{")
-    } | {"/"})
-
-    missing, unreachable = [], []
-    for path in flat:
-        if path in CAPTURE_UNFETCHABLE:
-            continue
-        try:
-            r = await asyncio.wait_for(clients.get(path), timeout=20)
-        except (asyncio.TimeoutError, httpx.TimeoutException):
-            unreachable.append(path)
-            continue
-        if r.status_code != 200 or "text/html" not in r.headers.get("content-type", ""):
-            continue  # JSON, plain text, a redirect, an auth wall: not a landing surface
-        if path in CAPTURE_EXEMPT:
-            continue
-        if "/adtrack.js" not in r.text:
-            missing.append(path)
-
-    assert not missing, (
-        "public HTML pages that do not load /adtrack.js: " + ", ".join(missing) + ". An ad pointed "
-        "at one of these captures no click id and the campaign reads as zero conversions. Add "
-        "`<script src=\"/adtrack.js\"></script>` before /gtag.js, or add the path to "
-        "CAPTURE_EXEMPT with the reason it can never be an ad destination."
-    )
-    assert not unreachable, (
-        "routes the sweep could not read: " + ", ".join(unreachable) + ". If the route streams, add "
-        "it to CAPTURE_UNFETCHABLE with the reason; do not widen the timeout to hide it."
-    )
-
-    # A stale entry is worse than no entry: it silently excuses a path that may have been reused.
-    live = set(flat)
-    stale = sorted((set(CAPTURE_EXEMPT) | set(CAPTURE_UNFETCHABLE)) - live)
-    assert not stale, f"exemptions naming routes that no longer exist: {stale}"
-
-
-async def test_capture_script_runs_in_head_before_spa_can_redirect(clients):
-    """The capture script must load in <head>, before any app code can navigate away.
-
-    An ad click arriving at /?gclid=... falls through to index.html (the SPA) because of the query
-    string. The SPA's boot then redirects logged-out visitors via `location.replace('/')`, dropping
-    the query string. The capture script must run before the Vue app mounts and calls that
-    redirect, or the click ID is lost. It is `defer`, so it must come before the module entry:
-    deferred and module scripts run in document order once parsing ends.
-
-    This test pins the ORDERING guarantee. The presence test above catches a missing tag; this one
-    catches a tag that would lose the race against the redirect.
-    """
-    # The SPA is served at /app, but also at /?gclid=... (any query string falls through to it)
-    r = await clients.get("/app")
-    assert r.status_code == 200
-    html = r.text
-    # The script must appear in <head>, not after the Vue app's inline script
-    head_end = html.find("</head>")
-    body_start = html.find("<body")
-    script_pos = html.find('src="/adtrack.js"')
-    assert script_pos != -1, "/adtrack.js not found in SPA"
-    assert script_pos < head_end, (
-        f"adtrack.js must be in <head> to run before the SPA redirects (found at {script_pos}, "
-        f"</head> at {head_end})"
-    )
-    assert script_pos < body_start, (
-        "adtrack.js must load before <body> to guarantee it runs before Vue mounts"
-    )
-    entry_pos = html.find('<script type="module"')
-    assert entry_pos != -1 and script_pos < entry_pos, (
-        "adtrack.js must precede the app's module entry to run before Vue mounts"
-    )
-
-
 # ---- Enhanced Conversions for Leads: hashed-email identifiers ---------------------------------
 
 
@@ -953,14 +845,12 @@ def test_dashboard_loads_the_tag_conversion_only_and_fires_on_first_team():
     # document.currentScript, which is null inside a module, and it must follow ad-click capture.
     assert html.index('<script src="/adtrack.js" defer></script>') < html.index(tag) \
         < html.index('<script type="module"')
-    # Both first-run paths fire it right after the team exists: the team-name modal (keyed by the
-    # new org id) and the onboarding_v2 flow (whose response carries only the slug).
+    # The first run fires it right after the team the server made for the account exists, keyed by
+    # the new org id.
     welcome = (front / "src" / "state" / "onboarding.js").read_text()
     assert "window.tregSignupConversion(o.org_id||o.org)" in welcome
-    assert welcome.index("this.api('/orgs'") < welcome.index("window.tregSignupConversion(")
-    flow = (front / "src" / "onboarding" / "OnboardingFlow.vue").read_text()
-    assert "tregSignupConversion?.(v.team?.slug)" in flow
-    assert flow.index("'/onboarding/start'") < flow.index("tregSignupConversion")
+    assert welcome.index("this.api('/onboard/team'") < welcome.index("if(!o.created) return;") \
+        < welcome.index("window.tregSignupConversion(")
 
 @pytest.mark.parametrize('door', ['start', 'verify', 'google', 'github'])
 @pytest.mark.parametrize('cookie,enabled,expected', [

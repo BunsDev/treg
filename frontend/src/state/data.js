@@ -16,7 +16,7 @@ export default function data(){
       theme: storageGet('treg-theme')||'light',
       mobileNav: false,  // mobile sidebar toggle
       // True when this load is a PUBLIC catalog URL (/catalog, /catalog/<slug>). The catalog API is
-      // unauthenticated, so the same marketplace views render for a signed-out visitor — that is
+      // unauthenticated, so the same catalog views render for a signed-out visitor - that is
       // what makes the catalog indexable without maintaining a second copy of the UI. Everything
       // that needs a session (org switcher, vault, activity, team, try-it) is hidden on `authed`.
       publicCatalog:false, oauthSignin:false,
@@ -53,7 +53,7 @@ export default function data(){
       bhist:{items:[],loading:false,ok:true},   // past top-ups + their invoice/receipt links; ok=false means Stripe was unreachable, amounts are still right
       // Referral program. Seeded with the same SHAPE the API returns (terms/totals/cap present and
       // zeroed) so the template can read ref.terms.hold_days on the very first paint. `loaded` keeps
-      // the subtitle invisible until the real terms arrive; it used to read "$0.00 … 0 days later".
+      // the subtitle invisible until the real terms arrive.
       refTab:'friend',  // 'friend' | 'partner' — the fork at the top of the Referrals view
       ref:{loading:false,loaded:false,eligible:false,code:'',link:'',credit_org:null,referrals:[],
            terms:{referrer_micro:0,referred_micro:0,min_topup_micro:0,hold_days:0},
@@ -74,7 +74,7 @@ export default function data(){
       // Catalog tab bar: 'all' + one key per catalog category.
       mkTab:'all',
       platLogoBad:{},  // platform slug (or `v:`+vendor) → no /logos/platforms/<slug>.svg (/logos/<vendor>.svg), so draw the initial tile
-      // Endpoint catalog (GET /catalog/*): the platform axis of the marketplace. Everything here is
+      // Endpoint catalog (GET /catalog/*): the platform axis of the catalog. Everything here is
       // optional — a server without the catalog routes just renders no platform shelf.
       platPrefetch:null,  // {slug, request}: see prefetchPlatform
       plats:{list:[], providers:{}, loaded:false, loading:false, settled:false},  // settled: answered, even if it failed
@@ -100,7 +100,7 @@ export default function data(){
       extraCred:{}, extraBusy:null,  // second credential a provider needs on top of OAuth (Google Ads' developer token)
       cfgMenu:false,  // detail-page ⚙ Configure tool-picker (skills with >1 tool)
       tryMenu:false,  // detail-page ▶ Try it tool-picker (skills with >1 tool)
-      // marketplace endpoint Try-it drawer
+      // catalog endpoint Try-it drawer
       callView:null, callViewFull:false, callCopied:'',  // Activity → one call's request/response drawer
       actOkOnly:true,  // Activity feed: successes only by default; the toggle shows failed/refused too
       epTry:null, epTryTab:'agent', epTryAccess:null, epTryAccessByMethod:{}, epTryAuthMethod:'', epTryParams:[], epTryBody:'', epTryResp:'', epTryStatus:null,
@@ -117,9 +117,9 @@ export default function data(){
       share:{on:false, email:'', role:'viewer', full:true, busy:false, err:'', sent:null, member:null},  // detail-page "Share…" (invite + land on this page)
       me:'', icHash:'', myOrgs:[], isAdmin:false,
       meAvatar:null, uploadsOn:false, avatarDialog:false,  // /auth/me: your avatar, whether this registry takes uploads; the Your avatar dialog
-      onboarded:true,  // first-run onboarding done (server flag; gates the welcome modal)
-      onboardingV2:false, onboardingV2Exp:false, onboardingV2On:false, onboardingPreviewOn:false,  // the server's first-run flow (/onboarding) replaces the welcome modal
-      welcome:{on:false, step:0, name:'', agent:'claude-code', moreOpen:false, busy:false, err:''},  // first-run: name your team → pick your agent → setup line
+      onboarded:true,  // first-run onboarding done (server flag; gates autoTeam)
+      welcome:{agent:'claude-code'},  // the agent Getting started shows setup steps for
+      firstTeam:{busy:false, name:'', err:''},  // first-run: the team the server made (named on Getting started) or why it could not
       emptyTab:'agent',
       tools:[], health:{}, calls:[], runs:[], callsLoaded:false, activityNext:null, activityOlderBusy:false, adminStats:null, adminOrgs:[], adminUsers:[],
       admHub:{on:false, state:'requested', rows:[], reason:{}, cap:{}, busy:null, updates:[]},  // hub listing review (superadmin)

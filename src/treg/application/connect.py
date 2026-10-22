@@ -513,9 +513,7 @@ async def complete_oauth_connection(
             return OAuthCallbackOutcome("done" if pending.status == "done" else "already_failed")
         try:
             # A consent either REPLACES one named connection or ADDS another. `replaces_secret_id` says
-            # which, decided back at /oauth/start where the user's intent was known. This used to
-            # blanket-replace by provider, which fixed the real bug — widening read→write silently made
-            # a second google-search-console row — at the cost of banning a second account entirely.
+            # which, decided back at /oauth/start where the user's intent was known.
             secret = None
             if pending.replaces_secret_id is not None:
                 secret = (await db.execute(select(Secret).where(
@@ -616,13 +614,12 @@ async def connect_with_pasted_secret(
         raise ConnectError("invalid_token", f"{provider.token_label or 'Token'} is required")
     # HTTP Basic providers (DataForSEO, Moz) take a pasted `login:password`; store the Base64 blob so
     # `Basic {secret}` renders the same at connect and on every proxy call. Both dashboards ALSO hand
-    # out a ready-made Base64 credential, and users paste that at least as often as the raw pair —
-    # encoding it again produced a double-encoded blob the provider 401'd. So: if the paste already IS
-    # Base64 of a printable `login:password`, keep it. A raw pair can never be mistaken for one (":"
-    # is not in the Base64 alphabet, so strict decoding refuses it), and a Base64 blob can never be
-    # a working raw pair (it has no ":"), so the branch is unambiguous either way.
-    # The injector applies the same rule at call time (`treg secret add` stores the raw pair), so
-    # both add paths share one detector.
+    # out a ready-made Base64 credential, and encoding that again would make a double-encoded blob the
+    # provider rejects. So: if the paste already IS Base64 of a printable `login:password`, keep it. A
+    # raw pair can never be mistaken for one (":" is not in the Base64 alphabet, so strict decoding
+    # refuses it), and a Base64 blob can never be a working raw pair (it has no ":"), so the branch is
+    # unambiguous either way. The injector applies the same rule at call time (`treg secret add`
+    # stores the raw pair), so both add paths share one detector.
     if provider.token_encode == "base64":
         token = ensure_base64(token)
 
@@ -642,9 +639,9 @@ async def connect_with_pasted_secret(
     headers.update(dict(provider.required_headers))
     probe_url = provider.probe_url or f"{provider.base_url.rstrip('/')}{provider.probe_path}"
     # httpx REPLACES a URL's own query string when `params=` is passed, so a probe_path like
-    # `/autocomplete?field=title&text=data` (PDL, Akta, JustOneAPI, SpyFu) silently lost its required
-    # params and the probe 400'd — rejecting a perfectly good key. Merge the path's query into params
-    # ourselves (params, i.e. the credential for a query provider, wins on a key collision).
+    # `/autocomplete?field=title&text=data` (PDL, Akta, JustOneAPI, SpyFu) would lose its required
+    # params. Merge the path's query into params ourselves (params, i.e. the credential for a query
+    # provider, wins on a key collision).
     split = urlsplit(probe_url)
     if split.query:
         params = {**dict(parse_qsl(split.query, keep_blank_values=True)), **params}
@@ -660,10 +657,9 @@ async def connect_with_pasted_secret(
             "provider_unreachable", f"could not reach {provider.display_name}: {exc}"
         ) from None
     # Try to parse the body as JSON regardless of the content-type header: ScrapeCreators returns a
-    # real JSON body labelled `text/plain`, and gating on `application/json` left its payload empty so
-    # `token_verify_field` (creditCount) read as false and a valid key was rejected. The parse is
-    # defensive — a genuinely non-JSON key check (Semrush's CSV/number balance) simply throws and
-    # leaves payload empty, falling through to the `text_error` branch exactly as before.
+    # real JSON body labelled `text/plain`, and its `token_verify_field` (creditCount) lives there. A
+    # genuinely non-JSON key check (Semrush's CSV/number balance) simply throws and leaves payload
+    # empty, falling through to the `text_error` branch.
     ctype = resp.headers.get("content-type", "")
     payload: dict = {}
     if resp.status_code < 500:
@@ -809,8 +805,7 @@ async def list_connections(*, org_id: int) -> list[dict]:
                 select(Secret).where(
                     Secret.org_id == org_id,
                     # A connection is "something a registry connect produced", NOT "an oauth blob".
-                    # Bring-your-own-token providers (Slack) store a plain string with kind "env", so a
-                    # kind=="oauth" filter created them successfully and then hid them from the list.
+                    # Bring-your-own-token providers (Slack) store a plain string with kind "env".
                     or_(Secret.kind == "oauth", Secret.provider != ""),
                 )
             )
@@ -1029,10 +1024,10 @@ async def select_connection_resource(
             await _upgrade_resource_call_bindings(provider, secret, db)
         secret.resource_ref = resource_ref
         secret.resource_name = resource_name
-        # Picking a property/site/account is the moment we finally KNOW the id every real call needs —
-        # so render it straight into the provisioned tool's examples as a ready-made call. Before this,
-        # agents went hunting for the id through the vendor's admin API mid-task (GA4: 13 calls/7 orgs
-        # dead-ended there). Re-picking replaces the stamped example rather than piling them up.
+        # Picking a property/site/account is the moment we finally KNOW the id every real call needs -
+        # so render it straight into the provisioned tool's examples as a ready-made call, instead of
+        # leaving agents to hunt for it through the vendor's admin API. Re-picking replaces the stamped
+        # example rather than piling them up.
         tmpl = getattr(provider, "resource_example", None) if provider else None
         if tmpl and resource_ref:
             rendered = {
@@ -1073,7 +1068,7 @@ async def _resolve_resource_call_token(
             resp = await client.get(
                 f"{provider.discovery_base.rstrip('/')}{path}", headers=headers)
             body = resp.json()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if not required:
                 return []
             raise ConnectError(
@@ -1188,7 +1183,7 @@ async def _run_resource_setup(
             provider.resource_setup_method,
             f"{provider.base_url.rstrip('/')}{path}", **kwargs,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ConnectError(
             "resource_setup_failed",
             f"could not set up the selected {provider.resource_label}",
@@ -1236,10 +1231,9 @@ async def supply_extra_credential(
         else:  # re-supplying replaces it — the usual reason is a rotated token
             extra.value = crypto.encrypt(value)
 
-        # The primary binding must match how THIS provider authenticates — OAuth bearer for Google Ads,
-        # but a pasted-key provider (Tomba's X-Tomba-Key + X-Tomba-Secret pair) injects a plain header.
-        # Hardcoding the OAuth shape here gave a key provider a binding that JSON-parses a bare key and
-        # fails on every call, so build the primary half with the same helper the connect flow uses.
+        # The primary binding must match how THIS provider authenticates - OAuth bearer for Google Ads,
+        # but a pasted-key provider (Tomba's X-Tomba-Key + X-Tomba-Secret pair) injects a plain header,
+        # so build the primary half with the same helper the connect flow uses.
         bindings = _provider_bindings(provider, secret) + [
             {"secret_id": extra.id, "injector": "env",
              "location": provider.extra_credential_location,
@@ -1386,10 +1380,9 @@ async def run_connection_health(
     *, all_orgs: bool, is_superadmin: bool, org_id: int, client_factory,
 ) -> dict:
     async with session_maker() as db:
-        # On-demand + Render-Cron trigger. Refreshes oauth tokens, probes tools, alerts owners.
-        # Scoped to the caller's org so a member only ever probes/sees their own org's credentials —
-        # EXCEPT a super-admin may pass ?all_orgs=1 to sweep EVERY org (so a single Render Cron token can
-        # validate the whole platform, not just its own org).
+        # On-demand or cron trigger. Refreshes oauth tokens, probes tools, alerts owners. Scoped to the
+        # caller's org so a member only ever probes/sees their own org's credentials - EXCEPT a
+        # super-admin may pass ?all_orgs=1 to sweep EVERY org.
         if all_orgs:
             if not is_superadmin:
                 raise ConnectError("all_orgs_forbidden", "all_orgs requires super-admin")
