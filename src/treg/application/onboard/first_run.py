@@ -5,6 +5,8 @@ the user's first team through the ordinary signup door (so the signup credit, at
 referral behave exactly as for a named team), then runs the lookup in the background; the dashboard
 polls `view`. The first call itself is the user's own `/call/` from the dashboard, on their own
 credit; nothing here spends it. This module is the only writer of `OnboardingProfile`.
+
+`first_team` is the same first team without the flow: the dashboard's default for a new account.
 """
 from __future__ import annotations
 
@@ -211,6 +213,28 @@ async def _create_team(user: User, **cookies: str) -> dict:
             if exc.kind not in ("reserved_name", "slug_conflict") or name == names[-1]:
                 raise
     raise AssertionError("unreachable")
+
+
+async def first_team(user: User, *, ad_cookie: str, utm_cookie: str, referral_cookie: str) -> dict:
+    """The dashboard's first team for a new account, named for it (`team_names`; renamed later in
+    Team). Claims the account's one first run by flipping `onboarded`, so a second tab makes no
+    second team; a failed create hands the claim back. `created` is false when there was nothing
+    to make: the account was already onboarded or already in a team it named."""
+    async with session_maker() as db:
+        claimed = await db.execute(update(User).where(
+            User.id == user.id, User.onboarded == False).values(onboarded=True))  # noqa: E712
+        if claimed.rowcount != 1 or await _named_team(db, user.email):
+            await db.commit()
+            return {"created": False}
+        await db.commit()
+    try:
+        team = await _create_team(user, ad_cookie=ad_cookie, utm_cookie=utm_cookie, referral_cookie=referral_cookie)
+    except BaseException:
+        async with session_maker() as db:
+            await db.execute(update(User).where(User.id == user.id).values(onboarded=False))
+            await db.commit()
+        raise
+    return {"created": True, **team}
 
 
 async def _run(profile_id: int, email: str, hints: Hints, http: httpx.AsyncClient) -> None:

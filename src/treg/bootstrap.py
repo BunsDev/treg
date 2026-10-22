@@ -266,6 +266,7 @@ _CONTROL_ROUTE_KEYS: frozenset[RouteKey] = frozenset({
     ('/onboard/demo', ('POST',), 'onboard_demo'),
     ('/onboard/skip', ('POST',), 'onboard_skip'),
     ('/onboard/reset', ('POST',), 'onboard_reset'),
+    ('/onboard/team', ('POST',), 'onboard_team'),
     ('/onboarding/start', ('POST',), 'onboarding_start'),
     ('/onboarding', ('GET',), 'onboarding_view'),
     ('/onboarding/answer', ('POST',), 'onboarding_answer'),

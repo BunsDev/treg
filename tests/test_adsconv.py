@@ -953,11 +953,12 @@ def test_dashboard_loads_the_tag_conversion_only_and_fires_on_first_team():
     # document.currentScript, which is null inside a module, and it must follow ad-click capture.
     assert html.index('<script src="/adtrack.js" defer></script>') < html.index(tag) \
         < html.index('<script type="module"')
-    # Both first-run paths fire it right after the team exists: the team-name modal (keyed by the
-    # new org id) and the onboarding_v2 flow (whose response carries only the slug).
+    # Both first-run paths fire it right after the team exists: the made-for-you team (keyed by
+    # the new org id) and the onboarding_v2 flow (whose response carries only the slug).
     welcome = (front / "src" / "state" / "onboarding.js").read_text()
     assert "window.tregSignupConversion(o.org_id||o.org)" in welcome
-    assert welcome.index("this.api('/orgs'") < welcome.index("window.tregSignupConversion(")
+    assert welcome.index("this.api('/onboard/team'") < welcome.index("if(!o.created) return;") \
+        < welcome.index("window.tregSignupConversion(")
     flow = (front / "src" / "onboarding" / "OnboardingFlow.vue").read_text()
     assert "tregSignupConversion?.(v.team?.slug)" in flow
     assert flow.index("'/onboarding/start'") < flow.index("tregSignupConversion")

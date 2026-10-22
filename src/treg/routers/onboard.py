@@ -141,6 +141,29 @@ async def onboarding_start(
     return result
 
 
+@app.post("/onboard/team")
+async def onboard_team(
+    request: Request, response: Response,
+    user: User = Depends(require_identity),
+) -> dict:
+    """A new account's first team, named for it, so the dashboard never asks for a name.
+    Idempotent per user: `created` is false when the account already has its first run."""
+    require_managed_cli(request, team_change=True)
+    try:
+        result = await first_run.first_team(
+            user,
+            ad_cookie=request.cookies.get("treg_ad") or "",
+            utm_cookie=request.cookies.get("treg_utm") or "",
+            referral_cookie=request.cookies.get(REFERRAL_COOKIE) or "",
+        )
+    except signup_use_cases.SignupError as exc:
+        raise _signup_http_error(exc) from exc
+    except OwnedTeamLimitReached as exc:
+        raise _owned_team_limit_error() from exc
+    response.headers["Cache-Control"] = "no-store"
+    return result
+
+
 @app.get("/onboarding")
 async def onboarding_view(
     response: Response,

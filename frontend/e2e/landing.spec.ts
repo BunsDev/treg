@@ -11,7 +11,7 @@ test('landing email sign-in reaches the dashboard', async ({ page }) => {
   await dialog.getByRole('button', { name: 'Email me a sign-in code' }).click()
   await expect(dialog.locator('#em-err')).toContainText('dev mode')
   await dialog.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await expect(page.getByPlaceholder('Team name, e.g. Superdesign')).toBeVisible()
+  await expect(page.getByText('We made your team Example.', { exact: false })).toBeVisible()
 })
 
 test('landing stays usable at phone width without WebGL or the library CDN', async ({ page }) => {

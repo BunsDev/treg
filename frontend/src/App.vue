@@ -163,10 +163,8 @@ export default { ...controller, components: { ...controller.components, ...dialo
          users already in other teams. Decline → create-your-own (first run) or just close. -->
     <AcceptInvitesDialog v-if="inviteChoice && pendingInvites.length" />
 
-    <!-- FIRST-RUN WELCOME: name your team → pick your agent → the setup line (the primary onboarding path) -->
-    <WelcomeDialog v-if="welcome.on" />
     <OnboardingFlow v-if="onboardingPreviewOn" key="preview" preview @done="onboardingPreviewOn=false" />
-    <OnboardingFlow v-else-if="onboardingV2On" key="first-run" @done="onboardingV2On=false" @fallback="onboardingV2On=false; openWelcome()" />
+    <OnboardingFlow v-else-if="onboardingV2On" key="first-run" @done="onboardingV2On=false" @fallback="onboardingV2On=false; autoTeam()" />
 
     <!-- CREATE TEAM -->
     <div class="scrim" role="dialog" aria-labelledby="new-team-title" aria-modal="true" v-if="newOrg" v-dialog="() => { newOrg=false }" @click.self="newOrg=false">

@@ -68,7 +68,7 @@ export default async function boot(){
     const qs = new URLSearchParams(location.search);
     const linkOrg = qs.get('invite_org'), inv = qs.get('invite'), ref = qs.get('ref'), oauthSignin = qs.get('signin')==='oauth';
     this.oauthSignin=oauthSignin;
-    if(ref) storageSet('treg-ref', ref);  // survives the sign-in reload so the welcome can preselect the agent the landing was about (see maybeOnboard)
+    if(ref) storageSet('treg-ref', ref);  // survives the sign-in reload so Getting started can preselect the agent the landing was about (see maybeOnboard)
     if(linkOrg || inv || qs.get('invite_expired') || ref || oauthSignin){ history.replaceState(null,'',location.pathname+location.hash); }  // strip one-shot params so reload/share doesn't replay them
     if(linkOrg){ this.inviteLinkOrg=parseInt(linkOrg,10)||null; }
     // A shared detail deep link (/app/skills/<x>, /app/tools/<x>) — from the URL itself, or stashed

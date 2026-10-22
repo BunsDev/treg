@@ -61,7 +61,7 @@ async function begin() {
     if (v.status === 'none') {
       v = await d.api('/onboarding/start', { method: 'POST' })
       track('onboarding_team_created', { team: v.team?.slug, flow: 'v2' })
-      // Google Ads `treg Signup (web)` (gtag.js), as welcomeCreate fires it. This response carries
+      // Google Ads `treg Signup (web)` (gtag.js), as autoTeam fires it. This response carries
       // the slug, not the org id; a team goes through one flow only, so either key is stable per team.
       try { (window as any).tregSignupConversion?.(v.team?.slug) } catch { /* never break onboarding */ }
     }

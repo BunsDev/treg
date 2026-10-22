@@ -8953,6 +8953,69 @@
         "summary": "Onboard Skip"
       }
     },
+    "/onboard/team": {
+      "post": {
+        "description": "A new account's first team, named for it, so the dashboard never asks for a name.\nIdempotent per user: `created` is false when the account already has its first run.",
+        "operationId": "onboard_team_onboard_team_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-treg-token",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Treg-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-treg-org",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Treg-Org",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "treg_session",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Treg Session",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Onboard Team Onboard Team Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Onboard Team"
+      }
+    },
     "/onboarding": {
       "get": {
         "description": "Behind `onboarding_v2`: the setup rows so far and, once the lookup is done, the ranked first\ntasks with their filled-in inputs. The dashboard polls it.",

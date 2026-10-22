@@ -79,6 +79,9 @@ body:has(.redesign)::before { display:none; }
 .rd-welcome-title > span { display:grid; place-items:center; flex:0 0 36px; height:36px; border-radius:50%; background:var(--surface); }
 .rd-welcome-title img { width:12px; height:12px; }
 .rd-welcome h1 { margin:0; }
+.rd-welcome-note { margin:-4px 0 20px 48px; color:var(--muted); font:13px var(--sans); }
+.rd-welcome-note b { color:var(--ink); font-weight:600; }
+.rd-welcome-note a { color:var(--ink); }
 .rd-search { display:flex; align-items:center; gap:10px; width:200px; min-height:40px; padding:10px 16px; border:0; border-radius:999px; background:var(--surface); color:var(--muted); font:12.5px var(--sans); text-align:left; }
 .rd-search img { width:13px; height:13px; }
 [data-theme="dark"] .rd-welcome-title img,[data-theme="dark"] .rd-search img { filter:invert(1); }
@@ -181,6 +184,7 @@ body:has(.redesign)::before { display:none; }
   .redesign main { padding:18px 12px 100px; }
   .rd-welcome { flex-wrap:wrap; margin-top:20px; gap:14px; }
   .rd-welcome-title { gap:8px; }
+  .rd-welcome-note { margin-left:0; }
   .rd-welcome h1 { font-size:21px; }
   .rd-search { width:100%; }
   .rd-start .rd-setup { border-radius:24px; }

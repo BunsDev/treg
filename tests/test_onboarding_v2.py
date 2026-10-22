@@ -419,6 +419,42 @@ async def test_start_survives_a_reserved_name_a_double_click_and_a_personal_team
         get_settings.cache_clear()
 
 
+async def test_the_dashboard_makes_a_new_accounts_first_team_once(c):
+    uid = await _new_user("ada@apollo.io")
+    c.cookies.set("treg_session", sess.make_session(uid))
+    # two tabs at once make one team between them, under the first name the registry accepts
+    a, b = await asyncio.gather(c.post("/onboard/team"), c.post("/onboard/team"))
+    assert (a.status_code, b.status_code) == (200, 200), (a.text, b.text)
+    made = [r.json() for r in (a, b) if r.json()["created"]]
+    assert len(made) == 1 and made[0]["name"] == "Ada's team"     # "Apollo" is reserved
+    assert (await c.get("/auth/me")).json()["onboarded"] is True
+    assert (await c.post("/onboard/team")).json() == {"created": False}
+    async with session_maker() as db:
+        assert len((await db.execute(select(Membership).where(Membership.user_id == uid))).scalars().all()) == 1
+        grants = (await db.execute(select(LedgerEntry).where(LedgerEntry.org_id == made[0]["org_id"],
+                                                             LedgerEntry.kind == "grant"))).scalars().all()
+        assert len(grants) == 1                                    # the signup credit, as for a named team
+
+    # an account already in a team it named gets no second one
+    uid = await _new_user("old@x.io")
+    c.cookies.set("treg_session", sess.make_session(uid))
+    assert (await c.post("/orgs", json={"name": "Old team"})).status_code == 200
+    assert (await c.post("/onboard/team")).json() == {"created": False}
+
+
+async def test_a_refused_first_team_hands_the_claim_back(c, monkeypatch):
+    uid = await _new_user("ada@acme.io")
+    c.cookies.set("treg_session", sess.make_session(uid))
+
+    async def refuse(**_):
+        raise first_run.signup.SignupError("blocked_domain")
+    monkeypatch.setattr(first_run.signup, "create_org", refuse)
+    assert (await c.post("/onboard/team")).status_code == 403
+    assert (await c.get("/auth/me")).json()["onboarded"] is False   # a retry may still make it
+    monkeypatch.undo()
+    assert (await c.post("/onboard/team")).json()["name"] == "Acme"
+
+
 async def test_an_account_with_a_team_is_not_onboarded_again(c, monkeypatch):
     monkeypatch.setenv("TREG_ONBOARDING_V2", "1")
     get_settings.cache_clear()
