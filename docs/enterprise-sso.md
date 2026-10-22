@@ -5,12 +5,16 @@ accounts, team roles, browser sessions, and API keys. The team owner purchases a
 subscription and opens WorkOS setup from **Team → SSO**. The link is generated when clicked and
 expires after five minutes. The owner can invite an IT admin by email through WorkOS, or open the
 short-lived setup link directly. The owner can copy the employee sign-in link from **Team → SSO**;
-employees can also select **Sign in with company SSO** and enter a work email to find their team.
+on any treg sign-in dialog, employees can enter their work email and choose **Continue with company SSO**.
+The lookup routes them to a verified company connection. It does not authenticate or join them.
 Their first successful sign-in joins the existing team as a member.
 The owner can change roles in **Members**.
 Team display names may repeat; the link name is the unique slug in the employee sign-in URL
 (for example, a second team named `Test` receives `test-2`). Employees can use the owner's exact
-link if email discovery returns no match or several teams. Email is a routing hint, not access proof.
+link if email discovery returns no match or several teams. When several teams match, the dialog
+lists their names and unique link names so the employee can choose. Email is a routing hint, not
+access proof. Existing verified treg users sign in normally once before linking their company
+identity; treg resumes that pending SSO attempt in the same browser.
 
 ## Configure the deployment
 

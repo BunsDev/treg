@@ -89,7 +89,7 @@ before sending that Price ID to Checkout. This avoids creating a new Stripe
 Product and Price for every team. A pricing change creates a new Price ID for future checkouts;
 existing subscriptions retain their original Price unless explicitly migrated.
 The existing signed billing webhook records subscription status and gates WorkOS setup/sign-in on
-`active` or `trialing`; a redirect from Checkout grants nothing. Subscription metadata binds the
+`active`, `trialing`, or `past_due` while Stripe retries; a redirect from Checkout grants nothing. Subscription metadata binds the
 event to a team and plan, and the Stripe customer must match that team. Older Stripe events cannot
 restore an entitlement after a later cancellation. Owners can schedule cancellation at period end;
 Checkout uses one pending reservation per team and an idempotent Stripe session request, so

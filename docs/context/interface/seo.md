@@ -444,6 +444,11 @@ sign-in opens in place), so every server-rendered page now gets that behaviour a
 produced the signup is recorded. Schema on the page: `SoftwareApplication`, `BreadcrumbList`, and
 a `FAQPage` whose questions are asserted to appear verbatim in the body.
 
+The public sign-in dialogs share `media/signin-sso.js`: one email field appears first, with company
+SSO and email-code actions before social providers. Company discovery chooses the verified team
+route and never grants access itself. The direct employee link remains available when discovery
+cannot disambiguate teams. The dashboard dialog follows the same order.
+
 **An agent page has to be its own page, not the template with a name swapped** (2026-10-06). The
 first four were 95-98% identical word for word, and Google indexed `/agents/chatgpt` and left
 `/agents/claude-code`, `/agents/cursor` and `/agents/claude` "Discovered - currently not indexed" or

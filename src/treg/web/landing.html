@@ -1311,15 +1311,6 @@ function openSignin(){
   document.getElementById('em-input').focus(); }
 function closeSignin(){ document.getElementById('signin-scrim').classList.remove('open'); }
 addEventListener('keydown',e=>{ if(e.key==='Escape') closeSignin(); });
-function ssoStart(){
-  const slug=document.getElementById('sso-team').value.trim().toLowerCase();
-  const err=document.getElementById('sso-err');
-  if(!/^[a-z0-9][a-z0-9-]*$/.test(slug)){
-    err.textContent='Enter your team link name.'; return;
-  }
-  err.textContent='';
-  location.href='/auth/sso/'+encodeURIComponent(slug)+'/start';
-}
 async function emailStart(){
   const em=document.getElementById('em-input').value.trim();
   const err=document.getElementById('em-err');
@@ -1372,14 +1363,6 @@ async function emailVerify(){
       <button class="candy" onclick="emailVerify()" id="em-btn2">Sign in</button>
     </div>
     <div class="err" id="em-err"></div>
-    <details style="margin-top:12px;text-align:left">
-      <summary style="cursor:pointer;text-align:center">Sign in with company SSO</summary>
-      <p>Use the sign-in link your company shared, or enter its unique team link name.</p>
-      <label for="sso-team">Team link name</label>
-      <input id="sso-team" placeholder="team-link-name" onkeyup="if(event.key==='Enter')ssoStart()"/>
-      <button class="ghostbtn" onclick="ssoStart()">Continue with SSO</button>
-      <div class="err" id="sso-err"></div>
-    </details>
   </div>
 </div>
 
@@ -1395,9 +1378,9 @@ async function emailVerify(){
   };
   if(!Object.prototype.hasOwnProperty.call(messages,reason)) return;
   const slug=params.get('team')||'';
-  if(/^[a-z0-9][a-z0-9-]*$/.test(slug)) document.getElementById('sso-team').value=slug;
-  document.querySelector('#signin-scrim details').open=true;
-  document.getElementById('sso-err').textContent=messages[reason];
+  if(reason==='link' && /^[a-z0-9][a-z0-9-]*$/.test(slug))
+    sessionStorage.setItem('treg-pending-sso', slug);
+  document.getElementById('em-err').textContent=messages[reason];
   document.getElementById('signin-scrim').classList.add('open');
 })();
 </script>
@@ -1424,5 +1407,6 @@ async function emailVerify(){
 })();
 </script>
 <script src="/sitetrack.js"></script>
+<script src="/media/signin-sso.js" defer></script>
 </body>
 </html>
