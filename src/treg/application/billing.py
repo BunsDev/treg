@@ -1838,7 +1838,7 @@ async def process_webhook(
 
 
 # Enterprise subscription billing lives alongside the existing Stripe use cases.
-PLANS = {"sso": 125, "sso_directory": 250}
+PLANS = {"sso", "sso_directory"}
 ACTIVE = {"active", "trialing"}
 ENTITLED = ACTIVE | {"past_due"}
 
@@ -1847,15 +1847,27 @@ class EnterpriseBillingError(Exception):
     pass
 
 
-def catalog() -> list[dict]:
+async def catalog() -> list[dict]:
     settings = get_settings()
-    names = ("sso",) if settings.enterprise_sso_bundle_only else ()
-    return [
-        {"id": plan, "usd_monthly": base + settings.enterprise_sso_markup_usd,
-         "directory_sync": plan == "sso_directory"}
-        for plan, base in PLANS.items()
-        if plan not in names and _enterprise_price_id(plan, settings)
-    ]
+    if not settings.stripe_secret_key:
+        return []
+    plans = []
+    for plan in ("sso", "sso_directory"):
+        if plan == "sso" and settings.enterprise_sso_bundle_only:
+            continue
+        price_id = _enterprise_price_id(plan, settings)
+        if not price_id:
+            continue
+        try:
+            price = await stripe_adapter.call(stripe_adapter.PRICE_RETRIEVE,
+                api_key=settings.stripe_secret_key, id=price_id)
+            amount_cents = _validate_enterprise_price(price, price_id=price_id)
+        except (stripe_adapter.StripeError, EnterpriseBillingError):
+            log.warning("SSO plan %s has no usable Stripe Price", plan, exc_info=True)
+            continue
+        plans.append({"id": plan, "price_id": price_id, "usd_monthly_cents": amount_cents,
+                      "directory_sync": plan == "sso_directory"})
+    return plans
 
 
 def _enterprise_price_id(plan: str, settings) -> str:
@@ -1863,21 +1875,27 @@ def _enterprise_price_id(plan: str, settings) -> str:
             else settings.enterprise_sso_only_price_id if plan == "sso" else "")
 
 
-def _validate_enterprise_price(price: dict, *, price_id: str, amount_usd: int) -> None:
+def _validate_enterprise_price(price: dict, *, price_id: str) -> int:
     recurring = price.get("recurring") or {}
+    amount_cents = price.get("unit_amount")
     if (price.get("id") != price_id or price.get("active") is not True
-            or price.get("currency") != "usd" or price.get("unit_amount") != amount_usd * 100
-            or recurring.get("interval") != "month" or recurring.get("interval_count", 1) != 1):
-        raise EnterpriseBillingError("SSO Stripe price does not match the configured monthly plan")
+            or price.get("currency") != "usd" or price.get("billing_scheme") != "per_unit"
+            or not isinstance(amount_cents, int) or isinstance(amount_cents, bool) or amount_cents <= 0
+            or recurring.get("interval") != "month" or recurring.get("interval_count", 1) != 1
+            or recurring.get("usage_type") != "licensed"):
+        raise EnterpriseBillingError("SSO Stripe price must be an active flat monthly USD price")
+    return amount_cents
 
 
 async def status(org_id: int) -> dict:
+    settings = get_settings()
+    plans = await catalog()  # Stripe I/O must finish before the database session opens.
     async with session_maker() as db:
         row = await db.get(EnterpriseSSO, org_id)
-        return {"configured": bool(get_settings().workos_api_key and get_settings().workos_client_id),
-                "billing_configured": bool(get_settings().stripe_secret_key and get_settings().stripe_webhook_secret
-                                           and catalog()),
-                "plans": catalog(), "plan": row.plan if row else None,
+        return {"configured": bool(settings.workos_api_key and settings.workos_client_id),
+                "billing_configured": bool(settings.stripe_secret_key and settings.stripe_webhook_secret
+                                           and plans),
+                "plans": plans, "plan": row.plan if row else None,
                 "subscription_status": row.subscription_status if row else None,
                 "sso_ready": bool(row and row.connection_id),
                 "directory_ready": bool(row and row.directory_id and row.directory_active),
@@ -1887,15 +1905,17 @@ async def status(org_id: int) -> dict:
                 "cancel_at_period_end": bool(row and row.cancel_at_period_end)}
 
 
-async def start_checkout(org_id: int, plan: str, *, base: str, email: str) -> dict:
+async def start_checkout(org_id: int, plan: str, *, price_id: str, base: str, email: str) -> dict:
     settings = get_settings()
     if not settings.stripe_secret_key or not settings.stripe_webhook_secret:
         raise EnterpriseBillingError("Stripe billing is not configured")
     if not settings.workos_api_key or not settings.workos_client_id:
         raise EnterpriseBillingError("WorkOS is not configured")
-    if plan not in {item["id"] for item in catalog()}:
+    if (plan not in PLANS or (plan == "sso" and settings.enterprise_sso_bundle_only)
+            or not _enterprise_price_id(plan, settings)):
         raise EnterpriseBillingError("plan is not available")
-    price_id = _enterprise_price_id(plan, settings)
+    if price_id != _enterprise_price_id(plan, settings):
+        raise EnterpriseBillingError("SSO price changed; refresh the page before checkout")
     now = int(time.time())
     checkout_token = uuid4().hex
     async with session_maker() as db:
@@ -1934,10 +1954,9 @@ async def start_checkout(org_id: int, plan: str, *, base: str, email: str) -> di
         try:
             price = await stripe_adapter.call(stripe_adapter.PRICE_RETRIEVE,
                 api_key=settings.stripe_secret_key, id=price_id)
-        except stripe_adapter.InvalidRequestError as exc:
+        except stripe_adapter.StripeError as exc:
             raise EnterpriseBillingError("SSO Stripe price is unavailable") from exc
-        _validate_enterprise_price(price, price_id=price_id,
-            amount_usd=PLANS[plan] + settings.enterprise_sso_markup_usd)
+        _validate_enterprise_price(price, price_id=price_id)
         if not customer_id:
             customer = await stripe_adapter.call(stripe_adapter.CUSTOMER_CREATE,
                 api_key=settings.stripe_secret_key, name=name or slug, email=email,

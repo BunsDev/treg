@@ -27,6 +27,7 @@ SETUP_INTENT_RETRIEVE = "SetupIntent.retrieve"
 
 CardError = stripe_sdk.CardError
 InvalidRequestError = stripe_sdk.InvalidRequestError
+StripeError = stripe_sdk.StripeError
 
 
 def _operation(name: str) -> Callable:

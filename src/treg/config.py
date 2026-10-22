@@ -520,7 +520,6 @@ class Settings(BaseSettings):
     workos_client_id: str = ""
     workos_webhook_secret: str = ""
     enterprise_sso_bundle_only: bool = True
-    enterprise_sso_markup_usd: int = Field(default=0, ge=0)
     # Reusable recurring Stripe Prices, created in the matching test/live account. An unset
     # Price keeps that plan out of Checkout; no per-checkout products are created.
     enterprise_sso_only_price_id: str = ""

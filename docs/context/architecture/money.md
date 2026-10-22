@@ -69,13 +69,15 @@ related:
 
 ## Enterprise SSO subscription
 
-The team dashboard offers SSO at $125/month and SSO with Directory Sync at $250/month, plus
-`TREG_ENTERPRISE_SSO_MARKUP_USD` (zero by default; 49 makes the bundle $299/month). `TREG_ENTERPRISE_SSO_BUNDLE_ONLY=false` exposes
-both plans; the default exposes only the bundle. Each offered plan needs a reusable Stripe Price ID
+The team dashboard displays the amount of each active flat monthly USD Stripe Price.
+`TREG_ENTERPRISE_SSO_BUNDLE_ONLY=false` exposes both plans; the default exposes only the bundle.
+Each offered plan needs a reusable Stripe Price ID
 (`TREG_ENTERPRISE_SSO_BUNDLE_PRICE_ID`, or `TREG_ENTERPRISE_SSO_ONLY_PRICE_ID` when enabled).
-`billing.catalog` hides plans without a Price ID; `billing.start_checkout` retrieves the Price
-outside a database session and verifies its active state, USD amount, and monthly interval against
-the displayed markup before sending that Price ID to Checkout. This avoids creating a new Stripe
+`billing.catalog` reads Prices outside a database session and hides unusable or unconfigured plans;
+the API returns integer cents and the Price ID for display. `billing.start_checkout` rejects a
+stale Price ID from an older page, then retrieves the configured Price again
+outside a database session and verifies its active state, flat fee, USD currency, and monthly interval
+before sending that Price ID to Checkout. This avoids creating a new Stripe
 Product and Price for every team. A pricing change creates a new Price ID for future checkouts;
 existing subscriptions retain their original Price unless explicitly migrated.
 The existing signed billing webhook records subscription status and gates WorkOS setup/sign-in on

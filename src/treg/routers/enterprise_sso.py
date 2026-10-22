@@ -40,6 +40,7 @@ def _signin_failure(reason: str, slug: str = "") -> RedirectResponse:
 
 class CheckoutIn(BaseModel):
     plan: str
+    price_id: str
 
 
 class EnforceIn(BaseModel):
@@ -92,7 +93,7 @@ async def sso_checkout(org_id: int, body: CheckoutIn, request: Request,
     if not _same_origin(request):
         raise HTTPException(403, "cross-origin request rejected")
     try:
-        return await enterprise_billing.start_checkout(org_id, body.plan,
+        return await enterprise_billing.start_checkout(org_id, body.plan, price_id=body.price_id,
             base=_return_base(request), email=caller.email)
     except enterprise_billing.EnterpriseBillingError as exc:
         raise HTTPException(422, str(exc)) from exc

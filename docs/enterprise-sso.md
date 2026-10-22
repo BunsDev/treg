@@ -32,9 +32,10 @@ link if email discovery returns no match or several teams. Email is a routing hi
    one reusable USD monthly Stripe Product/Price per offered plan in the same test or live
    account as the secret key. Set `TREG_ENTERPRISE_SSO_BUNDLE_PRICE_ID` for the bundle and,
    only if SSO-only is offered, `TREG_ENTERPRISE_SSO_ONLY_PRICE_ID`. An unset Price hides that
-   plan. Before opening Checkout, treg reads the Price and refuses an inactive Price or one
-   whose amount, currency, or monthly interval differs from the displayed plan. A new price
-   requires a new Price ID and matching markup setting; existing subscriptions keep their old
+   plan. treg reads the Price to display its amount and refuses an inactive, non-flat, non-USD,
+   or non-monthly Price before opening Checkout. If the configured Price changed since the owner
+   opened the page, Checkout asks them to refresh. A price change requires a new Price ID;
+   existing subscriptions keep their old
    Price until explicitly migrated. Send
    `checkout.session.completed`, `customer.subscription.created`,
    `customer.subscription.updated`, and `customer.subscription.deleted` to the existing
@@ -52,9 +53,8 @@ treg returns the employee to its sign-in dialog with an explanation.
 
 ## Owner and employee flow
 
-The team owner chooses **SSO** ($125/month) or **SSO + Directory Sync** ($250/month), plus the
-whole-dollar `TREG_ENTERPRISE_SSO_MARKUP_USD` (zero by default; 49 makes the bundle $299/month).
-The default
+The team owner chooses **SSO** or **SSO + Directory Sync** at the monthly amount configured in
+Stripe. The default
 `TREG_ENTERPRISE_SSO_BUNDLE_ONLY=true` displays only the bundle; set it to `false` to offer both.
 Each checkout uses the configured reusable Stripe Price rather than creating a new Product and
 Price for every team.

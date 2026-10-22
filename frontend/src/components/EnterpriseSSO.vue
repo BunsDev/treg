@@ -8,6 +8,9 @@ export default {
   watch: { orgId() { this.loadSSO() } },
   mounted() { this.loadSSO() },
   methods: {
+    formatUsdCents(cents) {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100)
+    },
     async copyEmployeeLink() {
       const url = new URL(`/auth/sso/${encodeURIComponent(this.slug)}/start`, location.origin).href
       this.message = await this.toClipboard(url) ? 'Employee sign-in link copied.' : 'Could not copy the link.'
@@ -61,8 +64,8 @@ export default {
         <button v-if="sso.enforced" class="btn sm" :disabled="!!busy" @click="action('enforce','enforce',{enabled:false})">Allow regular team sign-in</button>
         <p v-if="sso.cleanup_pending" class="sub">Your previous SSO setup is being removed. You can subscribe again when cleanup finishes.</p>
         <div v-for="plan in sso.plans" :key="plan.id" style="display:flex;align-items:center;gap:12px;margin-top:10px">
-          <span>{{plan.directory_sync ? 'SSO + Directory Sync' : 'SSO'}} — ${{plan.usd_monthly}}/month</span>
-          <button class="btn sm" :disabled="!!busy || sso.cleanup_pending" @click="action('checkout','checkout',{plan:plan.id})">Choose plan</button>
+          <span>{{plan.directory_sync ? 'SSO + Directory Sync' : 'SSO'}} — {{formatUsdCents(plan.usd_monthly_cents)}}/month</span>
+          <button class="btn sm" :disabled="!!busy || sso.cleanup_pending" @click="action('checkout','checkout',{plan:plan.id,price_id:plan.price_id})">Choose plan</button>
         </div>
         <p class="sub">Directory Sync removes team access and team keys when a directory user is deactivated or deleted. SSO alone does not provide automatic offboarding.</p>
       </template>
