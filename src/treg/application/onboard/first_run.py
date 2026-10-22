@@ -6,6 +6,8 @@ attribution and referral behave exactly as for a team the user named, under the 
 """
 from __future__ import annotations
 
+import re
+
 from sqlalchemy import update
 from sqlmodel import select
 
@@ -22,15 +24,38 @@ async def _named_team(db, email: str) -> bool:
         User, User.id == Membership.user_id).where(User.email == email, Org.name != email).limit(1))).first() is not None
 
 
+_SCHOOL = re.compile(r"\.(edu|edu\.[a-z]{2}|ac\.[a-z]{2})$")
+_ROLE_MAILBOXES = frozenset({"admin", "contact", "dev", "hello", "hi", "info", "me", "sales", "support", "team"})
+
+
+def _company(email: str) -> str:
+    """A work address's company: the domain's main label, so mail.acme.com and acme.co.uk are both
+    Acme and my-startup.ai is My Startup. None for mail anyone can get or a school's."""
+    domain = email_domain(email)
+    if not domain or _SCHOOL.search(domain):
+        return ""
+    labels = domain.split(".")
+    if len(labels) < 2:
+        return ""
+    # A short label under a country code is the registry's, not the company's: acme.co.uk.
+    label = labels[-3] if len(labels) >= 3 and len(labels[-1]) == 2 and len(labels[-2]) <= 3 else labels[-2]
+    return " ".join(w[:1].upper() + w[1:] for w in re.split(r"[-_]+", label) if w)
+
+
+def _first_name(email: str) -> str:
+    """The address's first name when it reads as one: john.doe@ is John; 1@, a8f3k2x@ and hi@ are
+    nobody's."""
+    word = re.split(r"[.+_-]", email.split("@")[0])[0]
+    if 2 <= len(word) <= 20 and word.isalpha() and word.lower() not in _ROLE_MAILBOXES:
+        return word[:1].upper() + word[1:]
+    return ""
+
+
 def team_names(email: str) -> list[str]:
-    """A first team's names before anyone has named it, best first: the work domain's company, then
+    """A first team's names before anyone has named it, best first: a work address's company, then
     the person's, then a plain one. The next is tried when the registry refuses one (a reserved name)."""
-    local = email.split("@")[0].replace("+", ".").split(".")[0]
-    names = [f"{local[:1].upper()}{local[1:]}'s team"] if local else []
-    if domain := email_domain(email):
-        label = domain.split(".")[0]
-        names.insert(0, label[:1].upper() + label[1:])
-    return names + ["My team"]
+    first = _first_name(email)
+    return [n for n in (_company(email), f"{first}'s team" if first else "") if n] + ["My team"]
 
 
 async def _create_team(user: User, **cookies: str) -> dict:

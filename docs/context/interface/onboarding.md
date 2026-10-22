@@ -152,13 +152,15 @@ non-onboarded session with **no team yet** and no pending invite, `maybeOnboard(
 which posts `POST /onboard/team`. The server (`first_run.first_team`) claims the account's one first
 run by flipping `User.onboarded` (a second tab gets `created: false` and makes nothing), then makes
 the team through `signup.create_org` under the first of `first_run.team_names` the registry accepts:
-the work domain's company, else "<Name>'s team", else "My team". Signup credit, utm stamping, ads
-attribution and referral therefore behave as for a team the user named; a refused create hands the
-claim back so a retry can make it. The dashboard then fires `onboarding_team_created` (`auto: true`)
-and the browser-side Google Ads conversion, and the user stays on the view they landed on: Getting
-started (`#start`, the default for a signed-in arrival with no deep link or hash) or the platform,
-provider or run page a deep link opened. Getting started says "We made your team <name>. Rename it
-any time." once, linking to Team. Declining an invite on first run goes through `autoTeam` too.
+a work address's company (the domain's main label: mail.acme.com and acme.co.uk are Acme), else the
+address's first name when it reads as one (john.doe@ is "John's team"), else "My team". Signup
+credit, utm stamping, ads attribution and referral therefore behave as for a team the user named; a
+refused create hands the claim back so a retry can make it. The dashboard then fires
+`onboarding_team_created` (`auto: true`) and the browser-side Google Ads conversion, and the user
+stays on the view they landed on: Getting started (`#start`, the default for a signed-in arrival
+with no deep link or hash) or the platform, provider or run page a deep link opened. Getting started
+says "We made your team <name>. Rename it any time." once, linking to Team. Declining an invite on
+first run goes through `autoTeam` too.
 
 Getting started carries what the old four-step welcome modal did: the agent picker, the per-agent
 setup line with the team's key, and the Try it out cards. A use-case landing's CTA (`/app?ref=grokbot`

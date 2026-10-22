@@ -15,6 +15,18 @@ from treg.infra.db import reset_db, session_maker
 from treg.models import LedgerEntry, Membership, Org, User
 
 
+def test_the_team_is_named_after_the_company_else_the_person():
+    names = {e: first_run.team_names(e)[0] for e in (
+        "ada@pixelforge.dev", "ada@mail.acme.com", "sam@acme.co.uk", "ada@my-cool-startup.ai",
+        "john.doe@gmail.com", "ada@cs.stanford.edu", "1@qq.com", "a8f3k2x@outlook.com", "hi@gmail.com")}
+    assert names == {
+        "ada@pixelforge.dev": "Pixelforge", "ada@mail.acme.com": "Acme", "sam@acme.co.uk": "Acme",
+        "ada@my-cool-startup.ai": "My Cool Startup",
+        "john.doe@gmail.com": "John's team", "ada@cs.stanford.edu": "Ada's team",   # no company
+        "1@qq.com": "My team", "a8f3k2x@outlook.com": "My team", "hi@gmail.com": "My team",  # no name
+    }
+
+
 @pytest.fixture
 async def c():
     await reset_db()
@@ -37,7 +49,7 @@ async def test_a_new_account_gets_one_team_with_the_signup_credit(c):
     a, b = await asyncio.gather(c.post("/onboard/team"), c.post("/onboard/team"))
     assert (a.status_code, b.status_code) == (200, 200), (a.text, b.text)
     made = [r.json() for r in (a, b) if r.json()["created"]]
-    assert len(made) == 1 and made[0]["name"] == "Ada's team"     # "Apollo" is a catalog vendor's
+    assert len(made) == 1 and made[0]["name"] == "Ada's team"    # "Apollo" is a catalog vendor's
     assert (await c.get("/auth/me")).json()["onboarded"] is True
     assert (await c.post("/onboard/team")).json() == {"created": False}
     async with session_maker() as db:
