@@ -172,7 +172,7 @@ export default {
 </template>
 
 <style scoped>
-.sso-page{max-width:940px;margin:8px auto 40px;display:grid;gap:18px}
+.sso-page{width:100%;margin:8px 0 40px;display:grid;gap:18px}
 .sso-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;padding:4px 2px 2px}
 .sso-heading h2{font-size:28px;letter-spacing:-.04em;line-height:1.1;margin:7px 0 8px}
 .sso-heading p,.sso-section-head p{max-width:650px;margin:0;color:var(--muted);line-height:1.5;font-size:13px}
