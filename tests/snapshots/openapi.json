@@ -5020,7 +5020,7 @@
     },
     "/billing/history": {
       "get": {
-        "description": "This team's completed top-ups, newest first, each with its invoice PDF or card receipt.\n\nRead-only in both directions: it moves no money, and the amounts come from our own credit blocks\nrather than from Stripe, so the history can never contradict the balance. Stripe is asked only for\nthe document links, and `stripe_ok: false` says they were unavailable — the payments listed are\nstill correct.",
+        "description": "This team's paged top-ups and SSO invoices, newest first, with document links.",
         "operationId": "billing_history_billing_history_get",
         "parameters": [
           {
@@ -5033,6 +5033,27 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 2048,
+              "title": "Cursor",
+              "type": "string"
             }
           },
           {
