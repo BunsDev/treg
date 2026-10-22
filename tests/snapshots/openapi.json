@@ -284,10 +284,15 @@
           "plan": {
             "title": "Plan",
             "type": "string"
+          },
+          "price_id": {
+            "title": "Price Id",
+            "type": "string"
           }
         },
         "required": [
-          "plan"
+          "plan",
+          "price_id"
         ],
         "title": "CheckoutIn",
         "type": "object"
