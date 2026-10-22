@@ -501,7 +501,7 @@ async def _enterprise_reconcile(args) -> int:
             try:
                 directories = await workos.directories_for_organization(
                     client, key=key, organization=workos_org_id)
-                active = [row for row in directories if row.get("state") == "active"
+                active = [row for row in directories if row.get("state") == "linked"
                           and row.get("organization_id") == workos_org_id]
                 if not active:
                     removed = await enterprise_sso.deactivate_directory_from_api(

@@ -104,8 +104,10 @@ active directory records until the owner restores access. Durable, minimal `Ente
 rows record SSO sign-ins and failures, setup actions, role changes, enforcement switches, directory
 removals, manual team removals, and owner restores. Access changes and their audit rows commit together; setup actions are recorded after
 WorkOS responds. A retention worker deletes expired rows under the deployment's chosen policy.
-Full-roster repair also discovers an active directory if its activation webhook was missed, and
-removes pre-sync SSO identities absent from the roster. Only `active` directory users count as
+Full-roster repair recognizes WorkOS directories in the `linked` state and can discover one if its
+activation webhook was missed. It ignores other directory states so a disconnected directory cannot
+authorize employees. The repair also removes pre-sync SSO identities absent from the roster. Only
+`active` directory users count as
 provisioned. SSO and Directory Sync stay active while Stripe retries a `past_due` subscription.
 When the subscription ends, enforcement is lifted so existing members can use normal sign-in.
 Cancellation removes only SSO-created memberships; pre-existing members remain.

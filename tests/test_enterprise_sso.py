@@ -6,6 +6,7 @@ import json
 import time
 import base64
 import asyncio
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
@@ -13,6 +14,7 @@ import pytest
 from sqlmodel import delete, select
 
 from treg import mcp
+from treg import worker
 from treg.application import auth as auth_use_cases, billing, enterprise_billing, enterprise_sso
 from treg.domain.identity import session as identity_session
 from treg.domain.identity import mcp_oauth
@@ -439,6 +441,28 @@ async def test_user_event_before_activation_and_lost_activation_repair(clients):
     repaired = await enterprise_sso.reconcile_directory(org_id, "directory_1", [user], 1000,
         verified_workos_org_id="org_workos_1")
     assert repaired["roster_size"] == 1
+    assert (await signin(org_id, profile())).org_id == org_id
+
+
+async def test_worker_recognizes_linked_workos_directory(clients, monkeypatch):
+    from treg.config import get_settings
+    org_id = await team(clients, plan="sso_directory")
+    monkeypatch.setattr(get_settings(), "workos_api_key", "sk_test")
+
+    async def list_dirs(client, *, key, organization):
+        return [{"id": "directory_1", "organization_id": organization, "state": "linked"}]
+
+    async def list_users(client, *, key, directory):
+        return [{"id": "directory_user_1", "directory_id": directory,
+                 "organization_id": "org_workos_1", "idp_id": profile()["idp_id"],
+                 "email": "employee@example.com", "state": "active"}]
+
+    monkeypatch.setattr(workos, "directories_for_organization", list_dirs)
+    monkeypatch.setattr(workos, "directory_users", list_users)
+    assert await worker._enterprise_reconcile(SimpleNamespace(org=org_id)) == 0
+    async with session_maker() as db:
+        config = await db.get(EnterpriseSSO, org_id)
+        assert config.directory_id == "directory_1" and config.directory_active
     assert (await signin(org_id, profile())).org_id == org_id
 
 
