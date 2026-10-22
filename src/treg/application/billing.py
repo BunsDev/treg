@@ -1849,7 +1849,7 @@ class EnterpriseBillingError(Exception):
 
 def catalog() -> list[dict]:
     settings = get_settings()
-    names = ("sso",) if settings.enterprise_sso_only_enabled else ()
+    names = ("sso",) if settings.enterprise_sso_bundle_only else ()
     return [
         {"id": plan, "usd_monthly": base + settings.enterprise_sso_markup_usd,
          "directory_sync": plan == "sso_directory"}

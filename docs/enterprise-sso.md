@@ -45,7 +45,7 @@ treg returns the employee to its sign-in dialog with an explanation.
 
 The team owner chooses **SSO** ($125/month) or **SSO + Directory Sync** ($250/month), plus any
 whole-dollar `TREG_ENTERPRISE_SSO_MARKUP_USD`. The default
-`TREG_ENTERPRISE_SSO_ONLY_ENABLED=true` displays only the bundle; set it to `false` to offer both.
+`TREG_ENTERPRISE_SSO_BUNDLE_ONLY=true` displays only the bundle; set it to `false` to offer both.
 After Stripe reports an active subscription, the owner opens **Set up or manage SSO**. On the
 bundle, they can also open **Set up Directory Sync**. The owner should complete a real test sign-in
 before clicking **Require SSO for team**. That control only becomes available after a successful

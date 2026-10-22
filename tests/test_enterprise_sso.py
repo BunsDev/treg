@@ -561,9 +561,9 @@ async def test_workos_code_exchange_uses_documented_profile_shape():
 def test_catalog_can_offer_bundle_only(monkeypatch):
     from treg.config import get_settings
     settings = get_settings()
-    monkeypatch.setattr(settings, "enterprise_sso_only_enabled", False)
+    monkeypatch.setattr(settings, "enterprise_sso_bundle_only", False)
     assert {item["id"] for item in enterprise_billing.catalog()} == {"sso", "sso_directory"}
-    monkeypatch.setattr(settings, "enterprise_sso_only_enabled", True)
+    monkeypatch.setattr(settings, "enterprise_sso_bundle_only", True)
     assert [item["id"] for item in enterprise_billing.catalog()] == ["sso_directory"]
 
 
@@ -810,7 +810,7 @@ async def test_checkout_uses_monthly_team_subscription_without_touching_balance(
     monkeypatch.setattr(settings, "workos_client_id", "client_test")
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_stripe_test")
     monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_test")
-    monkeypatch.setattr(settings, "enterprise_sso_only_enabled", True)
+    monkeypatch.setattr(settings, "enterprise_sso_bundle_only", True)
     monkeypatch.setattr(settings, "enterprise_sso_markup_usd", 0)
     org_id = (await clients.get("/orgs")).json()[0]["org_id"]
     calls = []

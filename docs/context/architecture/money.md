@@ -70,7 +70,7 @@ related:
 ## Enterprise SSO subscription
 
 The team dashboard offers SSO at $125/month and SSO with Directory Sync at $250/month, plus
-`TREG_ENTERPRISE_SSO_MARKUP_USD` (zero by default). `TREG_ENTERPRISE_SSO_ONLY_ENABLED=false` exposes
+`TREG_ENTERPRISE_SSO_MARKUP_USD` (zero by default). `TREG_ENTERPRISE_SSO_BUNDLE_ONLY=false` exposes
 both plans; the default exposes only the bundle. Stripe Checkout uses monthly recurring USD prices.
 The existing signed billing webhook records subscription status and gates WorkOS setup/sign-in on
 `active` or `trialing`; a redirect from Checkout grants nothing. Subscription metadata binds the

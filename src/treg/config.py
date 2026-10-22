@@ -519,7 +519,7 @@ class Settings(BaseSettings):
     workos_api_key: str = ""
     workos_client_id: str = ""
     workos_webhook_secret: str = ""
-    enterprise_sso_only_enabled: bool = True
+    enterprise_sso_bundle_only: bool = True
     enterprise_sso_markup_usd: int = Field(default=0, ge=0)
     # Top-up amounts, in whole USD (the ONLY place dollars appear — billing.py converts to micro-USD
     # for the ledger and to integer cents for Stripe at the boundaries, and nothing in between sees a
