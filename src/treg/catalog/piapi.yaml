@@ -13,6 +13,7 @@ async:
     path: data.status
     success: [Completed, completed]
     failure: [Failed, failed]
+    progress: [Pending, pending, Processing, processing, Staged, staged]
   result:
     path: data.output.video
   interval: 10
@@ -152,6 +153,7 @@ endpoints:
         path: data.status
         success: [Completed, completed]
         failure: [Failed, failed]
+        progress: [Pending, pending, Processing, processing, Staged, staged]
       result:
         path: data.output.image_urls
       interval: 5
@@ -209,6 +211,7 @@ endpoints:
         path: data.status
         success: [Completed, completed]
         failure: [Failed, failed]
+        progress: [Pending, pending, Processing, processing, Staged, staged]
       result:
         path: data.output.data
         ttl_note: "Images arrive inline as OpenAI-shaped {b64_json} items, not URLs."
@@ -263,6 +266,7 @@ endpoints:
         path: data.status
         success: [Completed, completed]
         failure: [Failed, failed]
+        progress: [Pending, pending, Processing, processing, Staged, staged]
       result:
         path: data.output.data
         ttl_note: "Images arrive inline as OpenAI-shaped {b64_json} items, not URLs."
