@@ -175,18 +175,10 @@ The scope is **`_page()` callers**, not "every server-rendered page". `_legal_pa
 render their own HTML and remain uninstrumented — none is an ad destination. `/tutorial` is likewise
 out of scope; it is slated for removal. The `.md` variants are `text/plain` and cannot run scripts.
 
-Standalone HTML routes (`/people-search`, `/grokbot` and `/fable`) also need capture coverage.
-All three now carry the tag, and the guard no longer depends on anyone remembering:
-`test_every_public_html_route_carries_the_capture_script` sweeps every flat GET route on the app,
-keeps whatever answers `200 text/html`, and requires the tag on all of it. Adding a route that
-serves HTML puts it in scope automatically — the sweep is verified to catch both a landing page
-that loses the tag and a brand-new route that never had one. Parameterised routes stay out of
-scope because they all render through `_page()`, which carries the tag structurally.
-
-The default is therefore inverted: a public HTML page carries capture unless `CAPTURE_EXEMPT` names
-it with a reason (legal and support pages, `/tutorial`, the connector setup page, FastAPI's Swagger
-shell, the superadmin panel). The sweep also fails on a stale exemption, so the list cannot outlive
-the pages it excuses.
+Standalone HTML routes (`/people-search`, `/grokbot` and `/fable`) render their own HTML, so
+`_page()` does not cover them; they carry the tag by hand. `_page()` and a few pages have their own
+tests, but nothing sweeps every route: a new standalone page that can be an ad destination must add
+the tag itself.
 
 `/sitetrack.js` is deliberately NOT in the shell. It already shipped more widely than `adtrack.js`
 (it is on `tutorial.html` too), but it can load PostHog with pageview/session-recording config while

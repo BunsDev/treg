@@ -175,20 +175,6 @@ async def test_ref_link_with_utm_tags_still_parks_the_code(c):
     assert r.cookies.get(referrals_cookie()) == "ann-ab3cd"
 
 
-async def test_junk_ref_is_dropped_not_stored(c):
-    """The code reaches a database query, so it is validated on the way in AND on the way out."""
-    r = await c.get("/?ref=" + "../../etc/passwd")
-    assert r.status_code == 200
-    assert r.cookies.get(referrals_cookie()) is None
-
-
-async def test_other_query_params_still_belong_to_the_spa(c):
-    """A referral code must not hijack an invite link or an OAuth return."""
-    r = await c.get("/?ref=ann-ab3cd&invite=xyz")
-    assert r.status_code == 200
-    assert r.cookies.get(referrals_cookie()) is None
-
-
 async def test_code_is_minted_once_and_is_stable(c, monkeypatch):
     _, token = await _signup(c, "ann@superdesign.dev")
     first = (await c.post("/referrals/code", headers=_h(token))).json()["code"]

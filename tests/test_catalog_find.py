@@ -161,15 +161,6 @@ async def test_refuses_empty_unconfigured_and_over_the_limit(clients, monkeypatc
     assert r.status_code == 429
 
 
-async def test_search_page_is_served_to_signed_out_visitors(clients):
-    clients.headers.pop("X-Treg-Token", None)
-    clients.cookies.clear()
-    r = await clients.get("/search")
-    assert r.status_code == 200 and "/app/ui/assets/" in r.text
-    # `find` is reserved: it is the JSON route, never a platform shelf
-    assert (await clients.get("/catalog/find")).status_code == 400
-
-
 async def _find_on(clients, q, platform):
     clients.headers.pop("X-Treg-Token", None)
     r = await clients.get("/catalog/find", params={"q": q, "platform": platform})

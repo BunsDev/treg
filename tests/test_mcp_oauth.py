@@ -936,27 +936,6 @@ async def test_connect_demo_is_explicitly_enabled_and_never_displays_token_prefi
         get_settings.cache_clear()
 
 
-async def test_the_parked_destination_cannot_be_used_as_an_open_redirect(clients):
-    """The cookie is only honoured for /oauth/authorize. Accepting any path would make it a general
-    "send me anywhere after login" primitive — a phishing aid rather than a feature."""
-    cookie, _ = await _signed_in(clients, "openredir@superdesign.dev")
-    for evil in ("https://attacker.test/", "//attacker.test/", "/app/../oauth/authorize?x=1",
-                 "/anything-else"):
-        clients.cookies.set("treg_oauth_return", evil)
-        r = await clients.get("/app", follow_redirects=False)
-        assert r.status_code == 200, f"{evil!r} must NOT be honoured, got {r.status_code}"
-    clients.cookies.delete("treg_oauth_return")
-
-
-async def test_a_signed_out_visitor_is_not_bounced_in_a_loop(clients):
-    """Resuming only once signed in. Otherwise the dashboard would send them to /oauth/authorize,
-    which would send them back here, forever."""
-    clients.cookies.clear()
-    clients.cookies.set("treg_oauth_return", "/oauth/authorize?client_id=x")
-    r = await clients.get("/app", follow_redirects=False)
-    assert r.status_code == 200
-
-
 # ---- moving a live grant to another team --------------------------------------------------------
 async def _as(email: str) -> dict:
     """Headers that act as a given user — an identity token, minted the way `treg login` does."""

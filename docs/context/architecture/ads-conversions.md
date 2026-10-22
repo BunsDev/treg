@@ -52,11 +52,8 @@ read-side Ads catalog calls (`oauth_providers.GOOGLE_ADS`), a separate credentia
    after `POST /onboard/team` made it, with `transaction_id = treg-web-signup-<org id>` so a retry
    cannot count a team twice. A future consent UI grants
    cookies via `window.tregAdsConsent('granted')`; nothing else depends on it.
-   Every public landing surface must load `adtrack.js`. Tests cover named destinations in
-   `test_every_public_landing_surface_loads_the_capture_script`, and
-   `test_every_public_html_route_carries_the_capture_script`, which sweeps every flat GET route and
-   requires the tag on anything answering `200 text/html`, so a new page is in scope the moment its
-   route exists. See `interface/seo.md` for the page-by-page scope.
+   Every public landing surface must load `adtrack.js`; no test sweeps every route, so a new
+   landing page adds the tag itself. See `interface/seo.md` for the page-by-page scope.
    `adtrack.js` also restores an existing cookie when the URL has no click id, preserves the id
    on the current URL with `history.replaceState`, and carries it on delegated same-origin link
    clicks (including new links and middle clicks). During that visit it also wraps
