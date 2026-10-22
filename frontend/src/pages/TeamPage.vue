@@ -20,6 +20,10 @@ export default {
     orgTab(tab) { if (tab === 'sso' && this.activeRole !== 'owner') this.loadMemberSso() },
   },
   methods: {
+    async copyMemberSsoLink() {
+      const url = new URL(`/auth/sso/${encodeURIComponent(this.activeOrg.slug)}/start`, location.origin).href
+      this.orgMsg = await this.toClipboard(url) ? 'Employee sign-in link copied.' : 'Could not copy the sign-in link.'
+    },
     async loadMemberSso() {
       this.memberSsoReady = false
       if (!this.activeOrgId || this.activeRole === 'owner') return
@@ -39,7 +43,8 @@ export default {
           <div class="tut-head">
             <Avatar v-if="activeOrg && activeOrg.avatar_url" :src="activeOrg.avatar_url" :name="activeName" :size="40" />
             <div><h1>Team: {{activeName}}<span v-if="isPersonal(activeOrg)" class="chip" style="margin-left:8px;vertical-align:middle">personal</span></h1>
-              <p class="sub" style="margin:0">You are <b>{{activeRole}}</b> here. <span class="muted">Switch, create or join a team from the picker at the top of the page.</span></p></div>
+              <p class="sub" style="margin:0">You are <b>{{activeRole}}</b> here. <span class="muted">Switch, create or join a team from the picker at the top of the page.</span></p>
+              <button v-if="activeRole!=='owner' && memberSsoReady" class="btn sm" style="margin-top:8px" @click="copyMemberSsoLink">Copy company sign-in link</button></div>
           </div>
           <!-- settings for the ACTIVE team (switching lives in the sidebar) -->
           <div v-if="activeOrg" style="margin-top:20px">
