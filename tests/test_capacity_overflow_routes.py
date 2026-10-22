@@ -5,6 +5,7 @@ mapping run. No call-path involvement."""
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -289,16 +290,28 @@ def test_hlrlookup_says_out_of_credit_with_a_200():
     assert S.classify("hlrlookup", 200, None, b'{"results":[{"error":"TOO_MANY_REQUESTS"}]}') is None
 
 
-def test_every_recorded_phrase_arms_the_tripwire():
-    """Recording one vendor's wording must arm the tripwire for every other: each literal body
-    phrase in `_TABLE` (the 429 rows carry period words, not capacity phrases) is in CAPACITY_PHRASES."""
-    import re as _re
+def test_each_tripwire_row_arms_the_tripwire_whole():
+    rows = [sig for sig in S._TABLE if sig.tripwire]
+    assert rows
+    for sig in rows:
+        assert re.fullmatch(r"[\w '-]+", sig.body_regex), f"{sig.provider}'s tripwire is not a plain phrase"
+        got = S.classify("someone-else", 400, None, sig.body_regex.upper().encode())
+        assert got is not None and got.kind == "unrecorded" and got.detail == sig.body_regex.lower()
+
+
+def test_every_recorded_capacity_phrase_arms_the_tripwire():
+    """Recording one vendor's wording must arm the tripwire for every other, through its own
+    `tripwire` flag or a generic noun; 429 rows carry period words and stay out."""
     for sig in S._TABLE:
-        provider, pattern = sig.provider, sig.body_regex
-        if sig.kind not in ("balance", "quota") or not pattern or sig.status == 429 or _re.escape(pattern) != pattern:
-            continue  # empty (the bare 402 row), a period word, or a regex we cannot use as a body
-        sig = S.classify("someone-else", 400, None, pattern.encode())
-        assert sig is not None and sig.kind == "unrecorded", f"{provider}'s phrase {pattern!r} does not arm the tripwire"
+        if sig.kind not in S.EXHAUSTING_KINDS or sig.status == 429 or not re.fullmatch(r"[\w '-]+", sig.body_regex):
+            continue
+        got = S.classify("someone-else", 400, None, sig.body_regex.encode())
+        assert got is not None and got.kind == "unrecorded", f"{sig.provider}'s {sig.body_regex!r} does not arm the tripwire"
+
+
+def test_a_caller_error_never_arms_the_tripwire():
+    for body in (b"insufficient parameters", b"unbalanced quotes", b"quotation mark missing"):
+        assert S.classify("someone-else", 400, None, body) is None
 
 
 def test_an_unrecorded_vendor_phrase_is_a_tripwire_never_a_mark():

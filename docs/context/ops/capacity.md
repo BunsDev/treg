@@ -483,7 +483,9 @@ pays the aggregator's real price, 0% markup, disclosed in-band when it ships (st
   Two guards against
   the next such vendor: `unrecorded`,
   a signal kind for a 4xx no row matched whose body still names credits/quota/balance (pattern =
-  the table's own phrases plus generic nouns) - never a mark, only an `unrecorded` event and
+  generic nouns plus each row's `tripwire` phrase, so recording a vendor's wording arms it for every
+  other; a row's regex never joins by itself, since alternations like `insufficient|balance` would
+  flag a caller's own error) - never a mark, only an `unrecorded` event and
   `capacity_signal=unrecorded` on `tool_called`; and the coverage guard in
   `tests/test_capacity_overflow_routes.py`, which fails when a `platform_key_*` provider has neither
   a table row nor an acknowledged gap. `edge_block` is the odd one out: the vendor's CDN refused the

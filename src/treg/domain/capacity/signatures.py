@@ -38,12 +38,14 @@ _RESETS = {
 class Signature:
     """`provider` "*" matches any provider; `body_regex` is searched case-insensitively. First
     match wins. `resets` names when a quota with no wait header serves again; None leaves it to
-    the sweep's account call."""
+    the sweep's account call. `tripwire` marks a plain capacity phrase that arms the `unrecorded`
+    tripwire for every other vendor."""
     provider: str
     status: int
     body_regex: str
     kind: str
     resets: str | None = None
+    tripwire: bool = False
 
     def __post_init__(self):
         if self.resets is not None and self.resets not in _RESETS:
@@ -51,18 +53,18 @@ class Signature:
 
 
 _TABLE: list[Signature] = [
-    Signature("findymail", 402, r"not enough credits", "balance"),
+    Signature("findymail", 402, r"not enough credits", "balance", tripwire=True),
     Signature("leadsforge", 402, r"insufficient_credits", "balance"),
     Signature("leadmagic", 402, r"insufficient_credits", "balance"),
-    Signature("thecompaniesapi", 403, r"noCreditsRemaining", "balance"),
-    Signature("companyenrich", 402, r"payment required", "balance"),
+    Signature("thecompaniesapi", 403, r"noCreditsRemaining", "balance", tripwire=True),
+    Signature("companyenrich", 402, r"payment required", "balance", tripwire=True),
     Signature("akta", 402, r"insufficient credits", "balance"),
-    Signature("lusha", 400, r"reached your credit limit", "balance"),
+    Signature("lusha", 400, r"reached your credit limit", "balance", tripwire=True),
     # Misses share the 400 status; only this error code means an empty account.
     Signature("prospeo", 400, r'"error_code"\s*:\s*"insufficient_credits"', "balance"),
-    Signature("predictleads", 402, r"exceeded the monthly request limit", "quota"),
+    Signature("predictleads", 402, r"exceeded the monthly request limit", "quota", tripwire=True),
     # PDL meters operations separately: person_identify can run out while enrich still works.
-    Signature("pdl", 402, r"hit your account maximum for", "quota"),
+    Signature("pdl", 402, r"hit your account maximum for", "quota", tripwire=True),
     Signature("lusha", 429, r"daily", "quota", resets="next_utc_midnight"),
     Signature("hunter", 429, r"per billing period", "quota"),
     Signature("apollo", 429, r"per (day|month)|daily|monthly", "quota"),
@@ -73,10 +75,10 @@ _TABLE: list[Signature] = [
     # current period.", "data": {"issue": "insufficient-quota"}} — 115 of one org's calls hit it
     # unrecognised on 2026-09-04 (nothing here matched a 403, and "quota" alone is not a tripwire
     # word). The period resets on Moz's billing day, which the answer does not name.
-    Signature("moz", 403, r"insufficient-quota", "quota"),
+    Signature("moz", 403, r"insufficient-quota", "quota", tripwire=True),
     # Documented 2026-09-08: discovery's allowance is distinct from the shared credit pool.
     # https://docs.influencers.club/guides/error-handling — ordinary burst 429s have Retry-After.
-    Signature("influencersclub", 429, r"Discovery API credit limit reached", "quota"),
+    Signature("influencersclub", 429, r"Discovery API credit limit reached", "quota", tripwire=True),
     # reAPI: an empty prepaid balance is a 402 {"error": {"code": 30001, "message": "Insufficient
     # credits. Required: 13856", ...}} (observed 2026-09-14 with a request larger than the balance).
     Signature("reapi", 402, r"insufficient credits", "balance"),
@@ -91,21 +93,21 @@ _TABLE: list[Signature] = [
     # ContactOut documents this 403 separately from "No access to endpoint".
     # Independent pools: lock only the failed endpoint, never the entire provider.
     # https://api.contactout.com/#errors (checked 2026-09-08).
-    Signature("contactout", 403, r"you're out of credits", "quota"),
+    Signature("contactout", 403, r"you're out of credits", "quota", tripwire=True),
     # cloro: a spent credit allowance is a 403 ForbiddenError with `error.code: "INSUFFICIENT_CREDITS"`
     # (OpenAPI 3.1 spec, 2026-09-07 — documented, not yet observed: the review account had 37,500
     # credits). Its 429s are CONCURRENT_LIMIT_EXCEEDED / RATE_LIMIT_EXCEEDED bursts with
     # X-RateLimit-* headers, never a period quota; the plan allowance resets monthly at
     # `cycleResetsAt` from GET /v1/credits.
     Signature("cloro", 403, r"insufficient_credits", "balance"),
-    Signature("crawl4ai", 402, r"no_credit", "balance"),
+    Signature("crawl4ai", 402, r"no_credit", "balance", tripwire=True),
     Signature("crawl4ai", 402, r"spend_cap|plan_cap", "quota"),
     Signature("crawl4ai", 429, r"", "burst"),
     # Tavily documents distinct custom statuses for the monthly plan allowance and the operator's
     # PAYGO ceiling. Both are quotas: the first resets with the plan period; the second serves again
     # when the operator raises its dashboard limit. Neither is a transient 429 burst.
-    Signature("tavily", 432, r"exceeds your plan's set usage limit", "quota"),
-    Signature("tavily", 433, r"exceeds the pay-as-you-go limit", "quota"),
+    Signature("tavily", 432, r"exceeds your plan's set usage limit", "quota", tripwire=True),
+    Signature("tavily", 433, r"exceeds the pay-as-you-go limit", "quota", tripwire=True),
     # Icypeas answers an empty credit pool with a 200: {"validationErrors": [{"message":
     # "insufficient_credits", "type": "InsufficientCredits", ...}], "success": false}, on every paid
     # route (read from archived answers, 2026-09-27). The only 2xx row: callers of `classify` that
@@ -117,21 +119,17 @@ _TABLE: list[Signature] = [
     Signature("*", 402, r"", "balance"),
 ]
 
-# The `unrecorded` tripwire's vocabulary, hand-kept: every capacity PHRASE the table records for
-# some vendor (recording one vendor's wording arms the tripwire for every other) plus the generic
-# nouns. Period words from the 429 rows ("daily", "monthly", "per day") are NOT capacity words and
-# stay out; a bare "insufficient", "quota" or "balance" would flag "insufficient parameters",
-# "quotation mark" and "unbalanced quotes" - a caller's error echoed back. The test
-# `test_every_recorded_phrase_arms_the_tripwire` keeps this list and the table in step.
-CAPACITY_PHRASES = (
-    r"not enough credits", r"insufficient[ _]credits?", r"nocreditsremaining", r"payment required",
-    r"reached your credit limit", r"exceeded the monthly request limit", r"hit your account maximum for",
-    r"insufficient (?:credits?|balance|funds)", r"out of credits?", r"credits? (?:exhausted|remaining|left)",
+# The `unrecorded` tripwire's vocabulary: generic capacity nouns plus every row's `tripwire`
+# phrase, so recording one vendor's wording arms the tripwire for every other. A row's regex
+# never joins by itself: anyapi's `insufficient|balance` would flag "insufficient parameters", a
+# caller's error echoed back, and the 429 rows carry period words like "daily".
+_GENERIC_PHRASES = (
+    r"insufficient[ _]credits?", r"insufficient (?:credits?|balance|funds)", r"out of credits?",
+    r"credits? (?:exhausted|remaining|left)",
     r"(?:account |api |credit )?(?:balance|quota)(?: (?:has been|is|was))? (?:exceeded|reached|exhausted|limit)",
-    r"upgrade your plan", r"insufficient-quota", r"not have enough quota",
-    r"discovery api credit limit reached", r"exceeds your plan's set usage limit",
-    r"exceeds the pay-as-you-go limit", r"no_credit",
+    r"upgrade your plan", r"not have enough quota",
 )
+CAPACITY_PHRASES = _GENERIC_PHRASES + tuple(sig.body_regex for sig in _TABLE if sig.tripwire)
 _UNRECORDED = re.compile(r"\b(?:" + "|".join(f"(?:{p})" for p in CAPACITY_PHRASES) + r")\b", re.IGNORECASE)
 
 
