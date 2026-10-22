@@ -157,7 +157,7 @@
     data:()=>({tasks:[{id:'search',label:'Web Search',enabled:true},{id:'news',label:'News Search',enabled:true},{id:'papers',label:'Paper Search',enabled:true},{id:'youtube',label:'YouTube Search',enabled:true},{id:'maps',label:'Maps Search',enabled:true},{id:'fetch',label:'Web Fetch',enabled:true},{id:'sitemap',label:'Sitemap',enabled:true},{id:'brand',label:'Brand',enabled:false}],task:'search',value:'',query:'',mode:'battle',jev:true,
       user:null,teams:[],team:'',balance:null,quote:null,availableProviders:[],selected:[],run:null,resultView:readResultView(),history:[],live:null,insightsTimer:null,meta:{},
       leaderboardView:'price',leaderboardOrientation:'horizontal',chartFocus:null,
-      busy:false,pricing:false,running:false,error:'',authError:'',authBusy:false,email:'',code:'',authStep:'email',devCode:'',poller:null,
+      busy:false,pricing:false,running:false,error:'',authError:'',authBusy:false,email:'',code:'',authStep:'email',authMode:'email',ssoTeams:[],devCode:'',poller:null,
       setupStep:1,setupTeamName:'',setupExampleCopied:'',setupAgentId:'claude-code',setupToken:null,setupShowToken:false,setupCopied:false,setupError:'',setupLoading:false,setupSequence:0,
       quoteTimer:null,quoteSequence:0,quotedKey:'',selectionTouched:false,tabObserver:null,expandedResults:{},expandedRows:{},
       clock:0,clockTimer:null,seenRunning:{},liveRun:false,runStartedAt:0,runEndedAt:0,finale:false,stageShown:false,rosterOpen:false,rosterSettled:false,taskLeft:false,taskRight:false,topicOpen:false,allLeaving:false,allTimer:null,historyHidden:readHistoryHidden(),narrow:false,narrowQuery:null,urlShown:false,urlTimer:null}),
@@ -559,9 +559,11 @@
         try{await navigator.clipboard.writeText(value);if(sequence!==this.setupSequence)return;this.setupCopied=!exampleKey;this.setupExampleCopied=exampleKey;setTimeout(()=>{if(sequence===this.setupSequence){this.setupCopied=false;this.setupExampleCopied='';}},1400);}
         catch{if(sequence===this.setupSequence)this.setupError='Could not copy. Select the setup text and copy it manually.';}
       },
-      async openLogin(){this.remember();this.authError='';this.authStep='email';this.code='';this.devCode='';await this.$nextTick();this.$refs.login.showModal();},
+      async openLogin(){this.remember();this.authError='';this.authStep='email';this.authMode='email';this.ssoTeams=[];this.code='';this.devCode='';await this.$nextTick();this.$refs.login.showModal();},
       closeLogin(){clearSignup();this.$refs.login.close();},
       socialLogin(provider){this.remember();try{sessionStorage.setItem(signupSetupKey,JSON.stringify({at:Date.now()}));}catch{}const target=(location.pathname||'/web-arena')+(location.search||'');location.assign('/auth/'+provider+'?return_to='+encodeURIComponent(target));},
+      startSSO(slug){this.remember();try{sessionStorage.setItem(signupSetupKey,JSON.stringify({at:Date.now()}));}catch{}const target=(location.pathname||'/web-arena')+(location.search||'');location.assign('/auth/sso/'+encodeURIComponent(slug)+'/start?return_to='+encodeURIComponent(target));},
+      async continueSSO(){this.authBusy=true;this.authError='';this.ssoTeams=[];try{const result=await this.api('/auth/sso/discover',{method:'POST',body:JSON.stringify({email:this.email.trim()})},'');const teams=result.teams||[];if(teams.length===1)this.startSSO(teams[0].slug);else if(teams.length)this.ssoTeams=teams;else this.authError='This email has no company SSO connection. Use another sign-in method or ask your IT admin for your company link.';}catch(e){this.authError=e.message;}finally{this.authBusy=false;}},
       async finishSignup(){clearSignup();await this.openSetup();},
       async resumeSignupSetup(){const pending=readSignup();if(!pending)return false;if(!Number.isFinite(pending.at)||Date.now()-pending.at>600000||pending.at>Date.now()){clearSignup();return false;}if(!this.user)return false;await this.finishSignup();return true;},
       async sendCode(){this.authBusy=true;this.authError='';try{const captcha_token=window.tregCaptcha?await window.tregCaptcha.token('email_start'):'';const r=await this.api('/auth/email/start',{method:'POST',body:JSON.stringify({email:this.email,captcha_token})},'');this.authStep='code';this.devCode=r.dev_code||'';}catch(e){this.authError=e.message;}finally{this.authBusy=false;}},

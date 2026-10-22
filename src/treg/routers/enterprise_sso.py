@@ -21,6 +21,7 @@ from ..infra import workos
 from ..infra.db import session_maker
 from ..models import EnterpriseSSO, Org
 from .auth_helpers import _is_https, _same_origin
+from .auth import _arena_return_target
 from .billing import _return_base
 
 
@@ -174,7 +175,7 @@ async def sso_idp_start(request: Request, connection_id: str = ""):
 
 
 @router.get("/auth/sso/{org_slug}/start")
-async def sso_start(org_slug: str, request: Request):
+async def sso_start(org_slug: str, request: Request, return_to: str = ""):
     settings = get_settings()
     if not settings.workos_api_key or not settings.workos_client_id:
         raise HTTPException(503, "SSO is not configured")
@@ -191,6 +192,7 @@ async def sso_start(org_slug: str, request: Request):
         raise HTTPException(409, "SSO setup is incomplete")
     nonce = secrets.token_urlsafe(32)
     cookie = crypto.encrypt(json.dumps({"org_id": org_id, "slug": org_slug, "nonce": nonce,
+                                        "return_to": _arena_return_target(return_to),
                                         "expires": int(time.time()) + 600}))
     callback = settings.public_url.rstrip("/") + "/auth/sso/callback"
     url = workos.authorization_url(client_id=settings.workos_client_id,
@@ -281,7 +283,7 @@ async def sso_callback(request: Request, code: str = "", state: str = "", error:
     except workos.WorkOSError:
         await enterprise_sso.record_action(org_id, "sso.signin_failed")
         return _signin_failure("failed", saved.get("slug", ""))
-    response = RedirectResponse("/app?sso=success", status_code=303)
+    response = RedirectResponse(_arena_return_target(saved.get("return_to", "")) or "/app?sso=success", status_code=303)
     response.delete_cookie(STATE_COOKIE)
     response.set_cookie(identity_session.COOKIE,
         identity_session.make_session(result.user_id, token_version=result.token_version,

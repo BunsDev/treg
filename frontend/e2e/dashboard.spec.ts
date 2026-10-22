@@ -56,28 +56,83 @@ test('public catalog and shared deep links remain available without a session', 
   expect(errors).toEqual([])
 })
 
-test('company sign-in finds a team from email without blocking other methods', async ({ page }) => {
+test('company sign-in is an alternative to the primary email code', async ({ page }) => {
   await page.route('**/auth/sso/discover', route => route.fulfill(json({ teams: [] })))
   await page.goto('/aeo')
   await page.getByRole('link', { name: 'Set up treg' }).first().click()
   const dialog = page.getByRole('dialog', { name: 'Sign in' })
+  await expect(dialog.getByRole('button', { name: 'Email me a sign-in code' })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Company SSO' })).toBeVisible()
   await dialog.getByRole('textbox', { name: 'Email' }).fill('person@example.com')
-  await dialog.getByRole('button', { name: 'Continue with company SSO' }).click()
+  await dialog.getByRole('button', { name: 'Company SSO' }).click()
+  await expect(dialog.getByRole('button', { name: 'Email me a sign-in code' })).toBeHidden()
+  await dialog.getByRole('textbox', { name: 'Email' }).press('Enter')
   await expect(dialog.getByText('This email has no company SSO connection.')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Email sign-in code' }).click()
   await expect(dialog.getByRole('button', { name: 'Email me a sign-in code' })).toBeEnabled()
-  await expect(dialog.getByRole('link', { name: 'Continue with GitHub' })).toBeVisible()
-  await expect(dialog.getByRole('link', { name: 'Continue with Google' })).toBeVisible()
+  await expect(dialog.getByRole('link', { name: 'GitHub' })).toBeVisible()
+  await expect(dialog.getByRole('link', { name: 'Google' })).toBeVisible()
 })
 
-test('Astra sign-in offers the same email-first company route', async ({ page }) => {
+test('Astra sign-in uses the same SSO mode switch', async ({ page }) => {
   await page.route('**/auth/me', route => route.fulfill({ status: 401, body: '{}' }))
+  await page.route('**/auth/sso/discover', route => route.fulfill(json({ teams: [] })))
   await page.goto('/astra')
   await page.locator('[data-setup]').first().click()
   const dialog = page.getByRole('dialog', { name: 'Sign in to treg' })
   await expect(dialog).toBeVisible()
   await expect(dialog.getByRole('textbox', { name: 'Email' })).toBeVisible()
-  await expect(dialog.getByRole('button', { name: 'Continue with company SSO' })).toBeVisible()
   await expect(dialog.getByRole('button', { name: 'Email me a sign-in code' })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Company SSO' }).click()
+  await expect(dialog.getByRole('button', { name: 'Email me a sign-in code' })).toBeHidden()
+  await expect(dialog.getByRole('button', { name: 'Continue with SSO' })).toBeVisible()
+  await dialog.getByRole('textbox', { name: 'Email' }).fill('person@example.com')
+  await dialog.getByRole('textbox', { name: 'Email' }).press('Enter')
+  await expect(dialog.getByText('This email has no company SSO connection.')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Email sign-in code' }).click()
+  await expect(dialog.getByRole('button', { name: 'Email me a sign-in code' })).toBeVisible()
+})
+
+test('Arena sign-in dialogs keep email code primary and submit SSO with Enter', async ({ page }) => {
+  await page.route('**/auth/sso/discover', route => route.fulfill(json({ teams: [] })))
+  let checked = 0
+  for (const path of ['/enrich-arena', '/web-arena']) {
+    const response = await page.goto(path)
+    if (response?.status() === 404) continue // Web Arena is gated in some local environments.
+    checked++
+    await page.getByRole('button', { name: /Sign up/ }).first().click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByRole('button', { name: 'Email me a code' })).toBeVisible()
+    await dialog.getByRole('button', { name: 'Company SSO' }).click()
+    await dialog.getByRole('textbox', { name: 'Email' }).fill('person@example.com')
+    await dialog.getByRole('textbox', { name: 'Email' }).press('Enter')
+    await expect(dialog.getByText('This email has no company SSO connection.')).toBeVisible()
+    await dialog.getByRole('button', { name: 'Email sign-in code' }).click()
+    await expect(dialog.getByRole('button', { name: 'Email me a code' })).toBeVisible()
+  }
+  expect(checked).toBeGreaterThan(0)
+})
+
+test('all public sign-in dialogs keep email code primary and switch to SSO', async ({ page }) => {
+  test.setTimeout(90000)
+  let checked = 0
+  for (const path of ['/', '/start', '/aeo', '/ugc', '/grokbot', '/fable', '/showcase',
+    '/people-search', '/leads-signals', '/recruit', '/web-access', '/jev']) {
+    const response = await page.goto(path, { waitUntil: 'domcontentloaded' })
+    if (response?.status() === 404) continue // Hosted-only pages can be disabled in self-hosted test mode.
+    checked++
+    const dialog = page.locator('#signin-scrim .smodal')
+    await page.locator('#signin-scrim').evaluate(node => node.classList.add('open'))
+    await expect(dialog.getByRole('button', { name: 'Company SSO' })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Email me a sign-in code' })).toBeVisible()
+    await expect(dialog.locator('#em-btn1')).toHaveClass(/treg-signin-method/)
+    await dialog.getByRole('button', { name: 'Company SSO' }).click()
+    await expect(dialog.getByRole('button', { name: 'Continue with SSO' })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Email me a sign-in code' })).toBeHidden()
+    await dialog.getByRole('button', { name: 'Email sign-in code' }).click()
+    await expect(dialog.getByRole('button', { name: 'Email me a sign-in code' })).toBeVisible()
+  }
+  expect(checked).toBeGreaterThanOrEqual(10)
 })
 
 test('the dashboard and catalog ask for nothing that is not there', async ({ page }) => {

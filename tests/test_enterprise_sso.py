@@ -684,11 +684,12 @@ async def test_browser_callback_requires_company_proof_for_enforced_team(clients
         return organization(org_id)
     monkeypatch.setattr(workos, "exchange_code", exchange)
     monkeypatch.setattr(workos, "get_organization", get_org)
-    start = await clients.get(f"/auth/sso/{slug}/start")
+    start = await clients.get(f"/auth/sso/{slug}/start", params={"return_to": "/enrich-arena?run=saved-run"})
     assert start.status_code == 303
     state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
     callback = await clients.get("/auth/sso/callback", params={"state": state, "code": "code_test"})
     assert callback.status_code == 303
+    assert callback.headers["location"] == "/enrich-arena?run=saved-run"
     await enterprise_sso.set_enforced(org_id, True)
     clients.headers.pop("X-Treg-Token")
     sso_access = await clients.get(f"/orgs/{org_id}/balance", headers={"X-Treg-Org": slug})
