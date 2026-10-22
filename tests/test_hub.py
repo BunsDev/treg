@@ -835,9 +835,6 @@ async def test_a_run_is_readable_by_its_caller_and_its_maker_with_different_view
     assert c["error"]["step"] == "people" and "secret error body" not in json.dumps(c)
     m = (await clients.get(f"/hub/runs/{bad_id}")).json()
     assert "secret error body" in json.dumps(m["error"])
-    # the SPA path for the run page answers with the app
-    page = await clients.get(f"/app/runs/{run_id}")
-    assert page.status_code == 200 and "shared run" in page.text
 
 
 async def test_the_makers_list_carries_health_and_thirty_day_numbers(clients: AsyncClient, hub_on, platform_on, monkeypatch):

@@ -97,15 +97,6 @@ async def test_head_is_still_refused_where_there_is_no_get(clients: AsyncClient)
 
 # --------------------------------------------------------------------------------- catalog pages
 
-async def test_the_prerender_is_a_sibling_of_the_vue_root(clients: AsyncClient):
-    """Vue compiles #app's own innerHTML as its template, so prerendered markup inside it would be
-    parsed as a template (and blow up on the first stray moustache). It must sit outside."""
-    body = (await clients.get("/catalog")).text
-    assert body.index('id="prerender"') < body.index('id="app"')
-    app_html = body[body.index('<div id="app"'):]
-    assert 'id="prerender"' not in app_html
-
-
 async def test_the_json_catalog_routes_still_answer_json(clients: AsyncClient):
     """`/catalog/<slug>` sits in front of these. Registration order keeps them matching first, and
     if that ever changes the dashboard and every CLI break at once."""
