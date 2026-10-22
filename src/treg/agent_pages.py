@@ -18,9 +18,6 @@ from __future__ import annotations
 
 # The rotating word in the hero: "ChatGPT for <role>". The first is what crawlers and no-JS
 # readers see, so it is the broadest.
-# One line per category for the overview cards on the agent page. "{agent}" is the client's name.
-# The rotating word in the hero: "ChatGPT for <role>". The first is what crawlers and no-JS
-# readers see, so it is the broadest.
 ROLES: tuple[str, ...] = (
     "SEO experts",
     "social media managers",
@@ -34,11 +31,8 @@ ROLES: tuple[str, ...] = (
 )
 
 # One axis, and only one: what the job is ABOUT. Never how you authenticate for it, never which
-# platform serves it. The earlier cut had nine categories on the domain axis and one ("Connect your
-# own accounts") on the access axis, and the mixed axis leaked: reviews appeared in two categories
-# split by whose account they were, Search Console was filed away from SEO, and one job existed
-# twice under two names with identical capabilities. Running on the team's own key is a PROPERTY,
-# rendered as the FREE badge, and gathered into a cross-cutting list on the agent pages.
+# platform serves it. Running on the team's own key is a PROPERTY, rendered as the FREE badge, and
+# gathered into a cross-cutting list on the agent pages.
 #
 # Enrichment is the killer use case and keeps ONE category with sub-headings (CATEGORY_GROUPS)
 # rather than five. Find / contacts / enrich are stages of one motion: as five cards they read as
@@ -338,8 +332,7 @@ WHY_TREG_OWN_KEY: tuple[tuple[str, str], ...] = (
     ("Nothing to integrate", "No SDK, no OAuth dance per vendor, no seats."),
 )
 
-# 301 redirects from old possessive slugs to clean slugs. These pages shipped before GSC indexing,
-# so redirect now while they are still largely unindexed. The old slugs are not in the sitemap
+# 301 redirects from old possessive slugs to clean slugs. The old slugs are not in the sitemap
 # (they are not keys of USE_CASE_PAGES) and the canonical is on the new slug.
 USE_CASE_REDIRECTS: dict[str, str] = {
     "get-a-video-s-transcript": "youtube-transcript-api",
@@ -391,7 +384,7 @@ AGENTS: dict[str, dict] = {
             "calls the endpoint. You never hold a provider key.",
         ],
         # No install screenshot: the setup-line flow has none yet, and a page ships without the
-        # slot rather than with a broken image (the old Plugins-directory PNG shows a dead UI).
+        # slot rather than with a broken image.
         "faq": [
             ("Is treg.to free to use in ChatGPT?",
              "Installing is free and your first team starts with $1.00 of calls. After that, each call "
@@ -454,8 +447,8 @@ USE_CASE_PAGES: dict[str, dict] = {
             ("Say what to do on a miss",
              "“If the first returns nothing, try the next cheapest.” That is a waterfall in one line."),
         ],
-        # Real questions from Reddit and X, quoted verbatim with a link. Gathered 2026-08-21 via
-        # agent-reach over ~180 posts; vendor-written posts were excluded.
+        # Real questions from Reddit and X, quoted verbatim with a link; vendor-written posts are
+        # excluded.
         "voices_intro": (
             "The hard part is not finding an address, it is finding one that will not bounce. From "
             "180 posts on Reddit and X in August 2026, these five come up more than anything else."),
@@ -677,9 +670,8 @@ AGENTS["claude"] = {
 
 # The Claude Code page leads with lead enrichment (people search, finding and verifying work emails,
 # enriching a company) and shows the menu's other categories as a short index instead of reprinting
-# all of it. The first cut was the ChatGPT page with the name swapped, 95-98% identical to its siblings, and
-# Google left it "Discovered - currently not indexed". `focus` and `guide` are what make it its own
-# page; the route renders both, and an agent without them keeps the full menu.
+# all of it. `focus` and `guide` are what make it its own page rather than a sibling with the name
+# swapped; the route renders both, and an agent without them keeps the full menu.
 AGENTS["claude-code"] = {
     "name": "Claude Code",
     "h1_noun": "MCP server",
@@ -4654,8 +4646,7 @@ WORKFLOWS["find-and-verify-a-lead-list"] = {
     # two of the seven steps, so it lives in the lede, the steps and the FAQ rather than the title.
     "sentence": "AI lead generation in Claude: a verified B2B lead list from one prompt",
     "title": "AI lead generation in Claude: a verified B2B lead list | treg.to",
-    # Hand-written: the generated one ("<sentence>. 7 steps through one treg.to key, ...") ran past
-    # the snippet length and was cut mid-word.
+    # Hand-written: the generated one runs past the snippet length.
     "description": (
         "A verified B2B lead list in Claude from one prompt, with Jev dropping poor fits first. "
         "Recorded run: 50 companies, 20 verified contacts, $0.12 each."),
@@ -4684,8 +4675,7 @@ WORKFLOWS["find-and-verify-a-lead-list"] = {
     ],
     # Steps whose endpoint is called ONCE per run rather than once per row. The list step is one
     # page for all 50 companies (Apollo bills per page); everything after it runs per row. The
-    # "at the rates above" total and the hub's per-row price both read this — without it the page
-    # charged 50 × the list price and blamed misses for a gap that was mostly its own arithmetic.
+    # "at the rates above" total and the hub's per-row price both read this.
     "once": ("apollo.companies.search",),
     # Each step: (name, capability id, the line the agent effectively asks, the endpoint the worked run used, one-line why)
     "steps": [

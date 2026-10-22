@@ -211,8 +211,6 @@ class _BodyDecodeMiddleware:
         return await self.app(new_scope, receive_decoded, send)
 
 
-# The qualified names are a frozen composition-snapshot and import compatibility surface. Retire
-# when the Stage 4 close-out deliberately refreshes the composition snapshot to the truthful module paths.
 for _middleware in (
     _LegacyHostRedirectMiddleware,
     _SecurityHeadersMiddleware,

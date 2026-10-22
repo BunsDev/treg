@@ -108,7 +108,6 @@ async addFunds(amount){ this.billingBusy=true; this.topupAmount=amount; this.err
         // on the return redirect (which a payer could simply type). Same tab, so the return lands here.
         window.location.href=out.url; }
       catch(e){ this.err='Could not start the payment: '+(e.detail||e.status); this.billingBusy=false; } },
-// ---- top-up modal ----
     openTopup(){ this.topupPick=this.billing.topup.default_usd; this.topupOther=null; this.topupErr='';
       // Default ON only for a team with no mandate; a team that already decided is not re-asked.
       this.topupAuto=!(this.billing.autotopup.enabled||this.billing.autotopup.consented_at);

@@ -58,10 +58,10 @@ async def kv_put(db: AsyncSession, ns: str, k: str, v: dict, ttl_s: float | None
     the code's lifetime)."""
     row = await db.get(Ephemeral, (ns, k))
     if row is None:
-        # An INSERT that another process may be racing: two uvicorn workers striking the same
-        # provider write the same `capacity:lock` key within the same millisecond, and the loser
-        # of a plain INSERT died on `ephemeral_pkey` (prod, 2026-09-06). ON CONFLICT makes the
-        # last writer win, which is what a key/value put means.
+        # An INSERT that another process may be racing: two processes striking the same provider
+        # write the same `capacity:lock` key within the same millisecond, and the loser of a plain
+        # INSERT dies on `ephemeral_pkey`. ON CONFLICT makes the last writer win, which is what a
+        # key/value put means.
         exp = _utcnow_naive() + timedelta(seconds=ttl_s or 0)
         await db.execute(_upsert(db.get_bind().dialect.name, ns=ns, k=k, v=v, expires_at=exp))
         return

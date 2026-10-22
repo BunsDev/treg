@@ -80,7 +80,6 @@ def hold_cutoff() -> datetime:
     return _now() - timedelta(days=int(get_settings().referral_hold_days))
 
 
-# ---- the code ----------------------------------------------------------------------------------
 async def ensure_code(db: AsyncSession, user: User) -> str:
     """This user's referral code, minting one on first ask. Commits when it mints.
 
@@ -117,7 +116,6 @@ async def user_by_code(db: AsyncSession, code: str) -> User | None:
     return (await db.execute(select(User).where(User.referral_code == code))).scalars().first()
 
 
-# ---- attribution (at signup) -------------------------------------------------------------------
 async def attribute(db: AsyncSession, *, user: User, org: Org, code: str) -> Referral | None:
     """Record that `org` arrived through `code`. Owes nothing yet. Commits.
 
@@ -146,7 +144,6 @@ async def attribute(db: AsyncSession, *, user: User, org: Org, code: str) -> Ref
     return row
 
 
-# ---- qualification (at the friend's first paid top-up) -----------------------------------------
 async def qualify(
     db: AsyncSession, *, org_id: int, payment_intent: str, amount_micro: int,
     fingerprint: str | None = None,
@@ -207,15 +204,7 @@ async def qualify(
     if referrer is None or referrer.suspended:
         return await _refuse("referrer_unavailable")
 
-    # There is deliberately NO "the referrer must have topped up first" gate. It was built and then
-    # removed, because the attack it appears to stop is unaffected by it: a top-up is not a cost to a
-    # self-dealer, it converts into credit they keep. Requiring one of the REFERRER too just adds a
-    # step that returns its own money — roughly one extra card per twenty referrals, a ~5% tax on a
-    # farm. Against that it hid the link from every free-tier user, who on a product whose pitch is
-    # "$1.00 free, no card" are most users and the likeliest people to tell a friend.
-    #
-    # The gate below is the one with teeth. Keep that asymmetry in mind before adding another
-    # eligibility rule here: the constraint on a farm is CARDS, not accounts.
+    # Deliberately no "referrer must have topped up" gate: the constraint on a farm is CARDS.
 
     # The same card may fund exactly one referral, ever. An email address is free and a card is not,
     # so this is the signal that actually survives a determined farm.
@@ -261,19 +250,7 @@ async def qualify(
         await db.rollback()
         return (await db.execute(select(Referral).where(Referral.id == row.id))).scalars().first()
 
-    # THE REFEREE IS PAID NOW; only the referrer waits out the hold.
-    #
-    # The two sides are not in the same position. The referrer has a Referrals page showing every
-    # invitation and what it is worth, so a pending reward there is legible. The referee has no such
-    # page — for them the only feedback that exists is the balance, and a bonus that is "coming"
-    # is indistinguishable from one that never happened. Reported exactly that way: topped up
-    # expecting the bonus, saw the plain total, assumed it had failed.
-    #
-    # The hold is a chargeback window, and giving up half of it is the price. It is a fair one: the
-    # exposure is one bounty per card (the fingerprint gate still binds), the referee has just handed
-    # us the qualifying payment, and a chargeback already costs us that payment plus the dispute fee,
-    # against which the bonus is marginal. The referrer's half stays held because nothing about their
-    # experience needs it sooner.
+    # THE REFEREE IS PAID NOW; only the referrer waits out the chargeback hold.
     await _grant_referee(db, row)
     return row
 
@@ -308,7 +285,6 @@ async def _grant_referee(db: AsyncSession, row: Referral) -> None:
         log.warning("referral %s: instant referee grant failed, sweep will retry: %s", row_id, exc)
 
 
-# ---- clawback ----------------------------------------------------------------------------------
 async def reject_for_payment(db: AsyncSession, payment_intent: str, reason: str) -> int:
     """The funding payment was disputed or refunded — cancel anything it earned that has not landed.
     Returns how many rows were cancelled. Commits.
@@ -349,7 +325,6 @@ async def reject_for_payment(db: AsyncSession, payment_intent: str, reason: str)
     return cancelled
 
 
-# ---- payout ------------------------------------------------------------------------------------
 async def credit_org_for(db: AsyncSession, user_id: int) -> Org | None:
     """Where this person's reward lands: the OLDEST org they own.
 
@@ -472,7 +447,6 @@ async def _pay(db: AsyncSession, row: Referral) -> bool:
     return True
 
 
-# ---- the read model ----------------------------------------------------------------------------
 async def summary(db: AsyncSession, user: User) -> dict:
     """Everything the Referrals page renders, for ONE user.
 
@@ -541,7 +515,6 @@ async def summary(db: AsyncSession, user: User) -> dict:
     }
 
 
-# ---- the referee's side ------------------------------------------------------------------------
 async def offer_for_org(db: AsyncSession, org_id: int | None) -> dict | None:
     """"You were invited — here is what a top-up earns you." None when there is nothing to say.
 

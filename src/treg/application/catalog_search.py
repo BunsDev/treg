@@ -150,10 +150,6 @@ async def added_page(query: str, cat: catalog_store.Catalog, limit: int, opts: c
     return Page(rows, total + len(hub_rows), False, {**stats, **hub_stats}, {}, False)
 
 
-# --------------------------------------------------------------------------------------------
-# v2: the job-first answer, laid out for an agent
-# --------------------------------------------------------------------------------------------
-
 def _leads(row: dict, high: float) -> bool:
     """A member the judge rated on its own at or over high: the vendor whose own words matched
     the query's qualifier, which the evidence order would bury past the page cut."""

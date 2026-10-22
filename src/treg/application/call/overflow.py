@@ -285,15 +285,13 @@ async def _maybe_overflow_attempt(
     budget.actual_micro = int(res.cost_micro) if res.cost_micro is not None else None
     delta = (budget.actual_micro - budget.direct_micro
              if budget.actual_micro is not None else None)
-    # --- decide ---
     if res.failure in AGGREGATOR_SIDE or res.failure in (VENDOR_DRY, VENDOR_REFUSAL):
         why_agg = res.failure
         # The aggregator's key or account being out is out for everyone. Everything else is scoped
         # to THIS vendor: its account for the vendor being dry, a vendor-specific refusal, and a
-        # `malformed` answer too - a 5xx or transport timeout on one vendor's relay
-        # ("timeout of 30000ms exceeded" on apollo, 2026-09-17) took influencers.club and every
-        # other provider's fallback offline for 15 minutes. A dead aggregator host still ends up
-        # marked, one provider at a time.
+        # `malformed` answer too - a 5xx or transport timeout on one vendor's relay must not take
+        # every other provider's fallback offline. A dead aggregator host still ends up marked, one
+        # provider at a time.
         mark_key = (f"overflow:{aggregator}" if res.failure in ("aggregator_auth", "aggregator_balance")
                     else f"overflow:{aggregator}:{mk.provider}")
         await capacity_marks.strike(

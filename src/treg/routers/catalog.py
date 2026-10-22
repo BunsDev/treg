@@ -20,12 +20,10 @@ from ..domain.catalog import store as catalog_store
 from ..domain.catalog import stats as endpoint_stats
 
 
-# The app alias preserves the moved handlers' original @app.get decorator text byte-for-byte.
 app = APIRouter()
 public_router = app
 
-# ---- endpoint catalog (what you can DO once connected) ------------------------------------
-# The credential registry above answers "how do I connect Moz?"; these answer "and then what can I
+# What you can DO once connected. /providers.json answers "how do I connect Moz?"; these answer "and then what can I
 # call?" — platform-grouped operations with cost, verification date and captured example responses.
 # Open like /providers.json: the data is curated public documentation, no org's anything is in it.
 # See docs/context/architecture/catalog.md.
@@ -686,7 +684,7 @@ async def catalog_endpoint(
                        for c in rank([c for c in cands if _quote_skip(c.endpoint, cat)])],
             # The same job from providers whose adapter is not (yet) verified: not chosen by the
             # router, still callable by id — the search page groups them under this row, so the
-            # page it points at must name them too (found 2026-08-28: "+18 more" led to a list of 6).
+            # page it points at must name them too.
             "also": [{"endpoint_id": s["id"], "usd": ((s.get("cost") or {}).get("usd"))}
                      for s in siblings if s["id"] not in set(ep.get("routed_children") or [])],
             "headers": {"X-Treg-Route-Waterfall": "on by default: a miss tries the next provider; 0 = stop at the first miss",
@@ -760,7 +758,7 @@ async def _hub_endpoint_view(endpoint_id: str, db: AsyncSession,
     example = {k: v for k, v in example.items() if v not in ("", None, 0)}
     rng = (await hub_app.price_ranges(db, {row.tool_id: m})).get(row.tool_id)
     # An approved job puts the tool beside that job's providers, and them beside it: the same
-    # comparison catalog_get gives a provider row (round 3). Its own numbers carry the seed.
+    # comparison catalog_get gives a provider row. Its own numbers carry the seed.
     capability = await hub_app.approved_capability(db, row.tool_id)
     cat = catalog_store.load()
     siblings = [catalog_store.endpoint_view(o, _provider_display(o["provider"]), cat)

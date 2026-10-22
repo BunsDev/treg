@@ -309,8 +309,7 @@ async def _poll(row: AsyncTaskRecord, client: httpx.AsyncClient) -> tuple[int, b
     method, url, query = _poll_target(row)
     # The query travels as `query_items`: the relay composes the upstream URL from those (it
     # forwards a URL's own query string nowhere), so a query-parameter poll (MiniMax v1
-    # `?task_id=`) appended to the URL reached the provider empty - "invalid params" until the
-    # 24-hour deadline. Path-parameter polls never showed it. Live 2026-09-02.
+    # `?task_id=`) appended to the URL would reach the provider empty.
     # The task exists only on the account that accepted it (`keyslots`); a retired account
     # raises here and the row fails like any other unreachable poll.
     account = keyslots.pinned(row.provider, owners=(row.key_slot,))
@@ -610,10 +609,9 @@ async def settle_due(*, limit: int = DEFAULT_LIMIT, client: httpx.AsyncClient | 
     if not candidates:
         return TickResult()
     # Load the catalog before any poll starts, in a thread: `_poll_target` reads it, and the first
-    # read in a fresh worker process parses every provider file. Inside a poll that parse froze the
-    # event loop past POLL_TIMEOUT_S, so polls already in flight timed out without the provider
-    # being slow. After this the polls read the cached catalog and their timeout measures the
-    # provider alone.
+    # read in a fresh worker process parses every provider file. Inside a poll that parse would
+    # block the event loop past POLL_TIMEOUT_S; after this the polls read the cached catalog and
+    # their timeout measures the provider alone.
     await asyncio.to_thread(catalog_store.load)
     global_sem = asyncio.Semaphore(GLOBAL_CONCURRENCY)
     provider_sems: dict[str, asyncio.Semaphore] = {}

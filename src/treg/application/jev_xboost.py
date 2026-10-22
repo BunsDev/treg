@@ -27,7 +27,6 @@ JEV_URL = "https://ai-gateway.vercel.sh/v4/ai/evaluation-model"
 DEFAULT_TOPICS = ["introducing", "launching today", "now available", "we just shipped", "open source",
                   "AI agent", "AI agents", "Claude Code", "Codex", "Cursor", "MCP server", "developer tool", "API"]
 
-# ---------------------------------------------------------------------------------- the rubric
 QUESTIONS = {
     "relevance": {
         "type": "choice",
@@ -133,9 +132,9 @@ QUESTIONS = {
 }
 
 # A reply is "generic" when nothing is left once mentions, stock praise, the usual emoji and
-# punctuation are taken out. Done by removal, not by one anchored pattern: the old
-# `^(@\w+\s*)*((great|…|\s)+)$` nested a repeat over overlapping alternatives and backtracked
-# exponentially on a long run that ALMOST matched, and this text is a stranger's reply on X.
+# punctuation are taken out. Done by removal, not by one anchored pattern: a nested repeat over
+# overlapping alternatives backtracks exponentially on a long near-match, and this text is a
+# stranger's reply on X.
 _GENERIC_WORDS = re.compile(
     r"@\w+|\b(?:great|nice|amazing|awesome|love|wow|congrats|congratulations|this|so true|facts|fire)\b", re.I)
 _GENERIC_NOISE = str.maketrans("", "", "🔥👏💯🙌❤\ufe0f!. \t\r\n")
@@ -156,7 +155,6 @@ def configured() -> bool:
     return bool(s.jev_treg_token and s.ai_gateway_api_key)
 
 
-# --------------------------------------------------------------------------------- pure helpers
 def forensics(p: dict, profile: dict | None, replies: list[dict]) -> dict:
     """Per-view engagement rates, views per follower and the shape of the first replies."""
     v = max(p.get("viewCount") or 0, 1)
@@ -230,7 +228,6 @@ def _trim(p: dict, profile: dict, replies: list[dict], f: dict, answers: dict, u
     }
 
 
-# ---------------------------------------------------------------------------------- the clients
 class _Treg:
     """treg's public /call/ API as a visitor's agent sees it: routed endpoint, JSON body, real bill."""
 
@@ -325,7 +322,6 @@ async def _judge(http: httpx.AsyncClient, treg: _Treg, p: dict, topic: str | Non
     return _trim(p, profile, replies, f, answers, usage, topic)
 
 
-# ---------------------------------------------------------------------------------- entry points
 async def run_daily(http: httpx.AsyncClient, *, topics: list[str] | None = None, max_posts: int = 60,
                     min_likes: int = 150) -> dict:
     """The scheduled run: search each phrase for posts under 24h old, keep the top by views, judge each."""

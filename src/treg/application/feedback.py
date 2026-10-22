@@ -89,7 +89,7 @@ async def submit_review(
             raise ReviewCallNotFound
         if not record.endpoint_id:
             raise ReviewOwnTool
-        # A maker's review of its own hub tool is not a buyer's word (hub simulation run 3).
+        # A maker's review of its own hub tool is not a buyer's word.
         from ..models import HubTool
         if (await db.execute(select(HubTool.id).where(
                 HubTool.tool_id == record.endpoint_id, HubTool.org_id == org_id).limit(1))).first() is not None:

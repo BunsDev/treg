@@ -59,11 +59,10 @@ CONFIG_PATH = Path(os.environ["TREG_CONFIG"]).expanduser() if os.environ.get("TR
 _ORG_OVERRIDE: str | None = None
 # Global `--json` (stripped in main): human-table commands emit the raw JSON instead — one stable
 # contract for agents/scripts. `call` prints one envelope, `{"result": <body>, "_treg": {...}}`,
-# and nothing on stderr: the charge line a script merged into stdout used to break its parse.
+# and nothing on stderr, so a script that merges stderr into stdout can still parse it.
 _JSON_OVERRIDE: bool = False
 
 
-# ---- config (identity-first: one bearer token + an active org slug) -----------------------
 PRODUCTION_BASE_URL = "https://treg.to"
 
 def _load_config() -> dict:
@@ -235,7 +234,7 @@ def _detect_runtime() -> str:
         ("CLAUDECODE", "claude-code"),
         # Only markers a runtime sets WHILE EXECUTING a command. Config-location vars are traps:
         # CODEX_HOME sits in the shell profile of anyone who installed Codex, so it would tag every
-        # plain terminal on that machine as codex (found the hard way).
+        # plain terminal on that machine as codex.
         ("CODEX_SANDBOX", "codex"), ("CODEX_SANDBOX_NETWORK_DISABLED", "codex"),
         ("CURSOR_AGENT", "cursor"), ("CURSOR_TRACE_ID", "cursor"),
         ("GEMINI_CLI", "gemini-cli"),
@@ -317,9 +316,9 @@ def _active_org(cfg: dict, c: httpx.Client, *, strict: bool = True) -> dict | No
         body = _json_dict(me)
         if me.status_code == 200 and body.get("org_id"):
             return {"org_id": int(body["org_id"]), "slug": body.get("org"), "role": body.get("role")}
-        # An invalid or expired token used to fall through to the caller's bare "no active org",
-        # which sends the reader to fix org config when the real problem is authentication. 21
-        # commands printed that message, so the honest answer belongs here, once.
+        # An invalid or expired token is answered here, once, rather than by a caller's bare "no
+        # active org", which sends the reader to fix org config when the real problem is
+        # authentication.
         # `strict=False` for callers that only ENRICH output (the pin marker on `catalog get`):
         # the catalog is public, so a signed-out reader must still get the page. sys.exit raises
         # SystemExit, which `except Exception` does not catch — a try/except around the call site
@@ -445,8 +444,7 @@ def _show_failure_diagnostics(resp: httpx.Response) -> None:
     marks treg's own refusals; its absence on a 4xx/5xx means the provider answered and treg relayed
     it unchanged. stderr only — stdout stays the exact body for whatever parses it."""
     headers = getattr(resp, "headers", {}) or {}
-    # Only a call is relayed: any other path (/orgs, /hub, ...) is treg's own answer (found in hub
-    # simulation run 2: a refused team name printed "the provider answered").
+    # Only a call is relayed: any other path (/orgs, /hub, ...) is treg's own answer.
     try:
         path = resp.request.url.path
     except (AttributeError, RuntimeError):
@@ -487,7 +485,6 @@ def _detail_url(cfg: dict, kind: str, name: str) -> str:
     return f"{base}/app/{'skills' if kind == 'skill' else 'tools'}/{quote(str(name), safe='')}"
 
 
-# ---- auth --------------------------------------------------------------------------------
 def cmd_config(args, cfg) -> None:
     if args.base_url:
         cfg["base_url"] = args.base_url
@@ -510,8 +507,8 @@ def cmd_login(args, cfg) -> None:
             token=args.token, active_org=None,
             identity=_token_scope_claim(args.token) in ("team", "bootstrap"),
         )  # drop any stale active_org
-        # VERIFY before claiming success — a rejected token used to print "Token saved" and only fail on
-        # the first real call ("misleading"). /auth/me needs no org, so it validates either token kind.
+        # VERIFY before claiming success: a rejected token must not print "Token saved" and fail only
+        # on the first real call. /auth/me needs no org, so it validates either token kind.
         try:
             with _client(cfg) as c:
                 who = c.get("/auth/me")
@@ -634,7 +631,6 @@ def cmd_logout(args, cfg) -> None:
     print("Logged out.")
 
 
-# ---- onboarding: a guided first-run — pick a style, in colour --------------------------------
 def _c(code: str) -> str:  # emit ANSI only to a real terminal that hasn't opted out
     return code if (sys.stdout.isatty() and not os.environ.get("NO_COLOR")) else ""
 _A = _c("\033[38;2;224;112;63m")   # clay accent   _G green   _M muted   _TEAL token   _AM amber tip
@@ -1034,7 +1030,6 @@ def _show_calls(cfg: dict) -> None:
     _arrow("full log:  treg audit")
 
 
-# ---- onboarding path 1: the catalog ---------------------------------------------------------
 _ONBOARD_SUGGESTIONS = [
     ("a TikTok profile", "tiktok profile"),
     ("backlinks for a domain", "backlinks for a domain"),
@@ -1238,22 +1233,19 @@ def _run_setup(cfg: dict, args) -> None:
                 source = "local"
             else:
                 source = picked
-        else:  # non-interactive / --yes: keep the old local-first behavior
+        else:  # non-interactive / --yes: local first
             source = "local" if (local_here or not global_dirs) else "global"
     want_local = source in ("local", "both")
     want_global = source in ("global", "both")
 
-    # 1) THIS project's .env → API keys (one interactive pick). Global folders carry no project .env.
     if want_local and os.path.isfile(cwd / ".env"):
         imp = build_parser().parse_args(["upload", "env"]); imp.dir = str(cwd); imp.no_oauth = True
         print(f"\n  {_M}▸ API keys in this project's .env{_R}")
         cmd_import(imp, cfg); scanned = True
 
-    # 2) ALL skill folders in ONE deduped pass — the cwd's top-level skills + every known agent's project
-    #    dir (.claude/skills, .agents/skills, .roo/skills, …), plus the chosen global dirs. `skill
-    #    install` mirrors a skill into several of these, so scanning them separately would prompt for the
-    #    same skill repeatedly; we collect the distinct dirs and hand them to `_import_skills`, which
-    #    dedupes by skill NAME → one pick.
+    # ALL skill folders in ONE deduped pass: `skill install` mirrors a skill into several agent
+    # dirs (.claude/skills, .agents/skills, .roo/skills, …), so scanning them separately would prompt
+    # for the same skill repeatedly; `_import_skills` dedupes by skill NAME → one pick.
     skill_dirs: list[str] = []
     seen_dirs: set[str] = set()
     candidates: list[Path] = []
@@ -1478,9 +1470,7 @@ def _run_demo(cfg: dict, args) -> None:
     yes = getattr(args, "yes", False)
     _brand("demo — the whole loop (a walkthrough; nothing is changed)")
 
-    # Was: a read-only scan of the user's folder. Jason found it confusing, and rightly — a demo that
-    # opens by reading your disk shows you your OWN files before it has shown you anything treg does.
-    # The catalog is the shorter answer to "what is this?": it needs nothing of yours at all.
+    # The demo opens with the catalog, not a scan of the user's folder: it needs nothing of yours.
     _section("① Call a tool you don't have a key for")
     _demo_catalog_peek(cfg)
     _pause(yes)
@@ -1543,7 +1533,6 @@ def cmd_accept(args, cfg) -> None:
         _show(r)
 
 
-# ---- secrets ------------------------------------------------------------------------------
 def cmd_secret_add(args, cfg) -> None:
     src_file = None
     if getattr(args, "env_var", None):
@@ -1620,7 +1609,6 @@ def cmd_secret_update(args, cfg) -> None:
         _show(c.patch(f"/secrets/{args.id}", json=body))
 
 
-# ---- import: scan an env file, auto-register detected providers as tools ------------------
 def _import_select(supported: list, args) -> list:
     """Pick which detected providers to register: --select <names>, --all / non-TTY = all, else an
     interactive checkbox (questionary). Returns the chosen Action list."""
@@ -1869,7 +1857,7 @@ def _import_clis(args, cfg, env_path: str) -> None:
     (or `--dry-run`) reports without registering. See docs/CLI-AUTOIMPORT-PLAN.md."""
     import shutil
     from . import providers as prov
-    if getattr(args, "add", None):  # phase 3: register an UNKNOWN (non-catalog) installed CLI
+    if getattr(args, "add", None):  # register an UNKNOWN (non-catalog) installed CLI
         return _import_add_cli(args, cfg)
     catalog = prov.CATALOG if args.dry_run else _load_catalog(cfg)
     env_vals = prov.env_values(env_path, prov.var_names(env_path)) if os.path.isfile(env_path) else {}
@@ -2179,7 +2167,6 @@ def _import_show_skipped(skipped: list) -> None:
         print(f"  · {vs}  —  {a.reason}")
 
 
-# ---- import: skill directories (tools + recipe-only bundles) -------------------------------
 def _skill_tag(kind: str) -> str:
     return {"contract": "tool (contract)", "generated": "tool (generated)", "recipe_only": "recipe-only"}.get(kind, kind)
 
@@ -2328,7 +2315,6 @@ def _import_skills(args, cfg, skills_dir, env_path: str) -> None:
           "the page previews it and carries the agent install prompt.")
 
 
-# ---- tools --------------------------------------------------------------------------------
 def _parse_bind(spec: str) -> dict:
     b = {"injector": "env", "location": "header", "name": "Authorization",
          "format": "Bearer {secret}", "secret_field": "access_token"}
@@ -2438,7 +2424,6 @@ def cmd_tool_update(args, cfg) -> None:
         _show(c.patch(f"/tools/{args.id}", json=body))
 
 
-# ---- call + audit -------------------------------------------------------------------------
 # The descriptor semantics (dotted paths, terminal classification, artifact extraction) are the
 # server's own `treg.domain.asynctasks`, a stdlib-only leaf - one implementation, pinned light by
 # `test_import_lightness` and an import-linter contract, so the CLI and the settlement worker can
@@ -2933,7 +2918,6 @@ def _run_server(args, cfg) -> None:
     sys.exit(code if 0 <= code < 256 else 1)  # a signal/negative code maps to a generic failure
 
 
-# ---- local runs: `treg run --local <tool> -- <cli args…>` (docs/CLI-RUN-PLAN.md) ----------------
 # The credential must not be readable by another program of the same user. On Linux we run the CLI as a
 # dedicated `treg-run` user (installed once via `treg setup-local-run`): a different uid cannot read the
 # process's env/memory. The member's `treg run` hands off to that user via sudo; the RUNNER (as treg-run)
@@ -3300,12 +3284,11 @@ def cmd_setup_local_run(args, cfg) -> None:
         sys.exit(f"treg: {member!r} is not a valid unix username")
     treg_bin = shutil.which("treg") or os.path.realpath(sys.argv[0])
 
-    # 1) the dedicated system user (no home, no login shell)
     _create_run_user()
 
-    # 2) the isolated-runner PROOF — a value only treg-run can read. The server releases a SHARED key
-    #    (one the member doesn't own) only when the runner presents it, so a direct member `/grant` call
-    #    can't read someone else's key. Root-owned dir + file, mode 0400 owner treg-run.
+    # The isolated-runner PROOF - a value only treg-run can read. The server releases a SHARED key
+    # (one the member doesn't own) only when the runner presents it, so a direct member `/grant` call
+    # can't read someone else's key. Root-owned dir + file, mode 0400 owner treg-run.
     proof = args.run_proof or os.environ.get("TREG_RUN_PROOF") or ""
     if proof:
         os.makedirs(os.path.dirname(_RUN_PROOF_PATH), exist_ok=True)
@@ -3316,9 +3299,9 @@ def cmd_setup_local_run(args, cfg) -> None:
     else:
         print("no --run-proof given → only OWNED-key tools can run locally (shared-key runs stay blocked)")
 
-    # 3) the runner — a fixed, root-owned wrapper that can ONLY run the hidden helper (so a member can
-    #    never get an arbitrary command as treg-run). HOME=/tmp keeps any tool cache writable; it exports
-    #    the proof (if installed) so the helper can present it — the member's shell never sees that value.
+    # The runner - a fixed, root-owned wrapper that can ONLY run the hidden helper (so a member can
+    # never get an arbitrary command as treg-run). HOME=/tmp keeps any tool cache writable; it exports
+    # the proof (if installed) so the helper can present it - the member's shell never sees that value.
     Path(_RUNNER_PATH).write_text(
         '#!/bin/sh\nexport HOME=/tmp\n'
         f'[ -r {_RUN_PROOF_PATH} ] && export TREG_RUN_PROOF="$(cat {_RUN_PROOF_PATH})"\n'
@@ -3326,8 +3309,8 @@ def cmd_setup_local_run(args, cfg) -> None:
     os.chmod(_RUNNER_PATH, 0o755)  # we are root -> root-owned; the member cannot modify it
     print(f"installed runner at {_RUNNER_PATH}")
 
-    # 3) a narrow sudoers rule: the member may run ONLY that runner, ONLY as treg-run, no password;
-    #    preserve just the three context vars the runner needs (the member's own token + base + org).
+    # A narrow sudoers rule: the member may run ONLY that runner, ONLY as treg-run, no password;
+    # preserve just the context vars the runner needs (the member's own token + base + org).
     rule = (f'Defaults!{_RUNNER_PATH} env_keep += "TREG_RUN_TOKEN TREG_RUN_BASE TREG_RUN_ORG TREG_RUN_FSJAIL"\n'
             f'{member} ALL=({_RUN_USER}) NOPASSWD: {_RUNNER_PATH}\n')
     os.makedirs("/etc/sudoers.d", exist_ok=True)  # present on Linux; on macOS it's the @includedir target
@@ -3351,13 +3334,12 @@ def cmd_setup_local_run(args, cfg) -> None:
               file=sys.stderr)
 
     # The network half of the sandbox: restrict treg-run's egress to the registry + catalog API hosts,
-    # so a rogue CLI feature can't send the injected key to an arbitrary host (docs/CLI-SHELL-MODE-PLAN.md).
+    # so a rogue CLI feature can't send the injected key to an arbitrary host.
     if not getattr(args, "no_egress", False):
         _install_egress(getattr(args, "registry", None) or _member_registry_url(member))
     print(f"\ndone — {member} can now run:  treg cli run <tool> -- <args>   (the CLI runs as {_RUN_USER})")
 
 
-# ---- shell mode: transparent CLI interception (`treg shell`) -------------------------------
 _PROXY_PKG = "cryptography>=43"
 
 
@@ -3768,7 +3750,6 @@ def cmd_shell_stop(args, cfg) -> None:
     sh.stop_session()
 
 
-# ---- skills -------------------------------------------------------------------------------
 def cmd_skill_scaffold(args, cfg) -> None:
     from .convert import scaffold_skill
     try:
@@ -3942,10 +3923,9 @@ def cmd_mcp_grants(args, cfg) -> None:
         print("no MCP connections authorised by this account")
         _dim("connections made while signed in as somebody else are listed under THAT account")
         return
-    # The grant id prints WHOLE. It is 22 characters and every other column here is clipped, so it
-    # was clipped too — and `use-team` matches exactly, which made the one command this table exists
-    # to feed answer 404 for anything copied off the screen. An identifier is not prose: clip the
-    # human-readable columns, never the thing the next command takes as an argument.
+    # The grant id prints WHOLE: `use-team` matches exactly, so a clipped id copied off the screen
+    # answers 404. An identifier is not prose: clip the human-readable columns, never the thing the
+    # next command takes as an argument.
     print(f"  {'GRANT':<22} {'CLIENT':<22} {'TEAM':<18} {'GRANTED':<20}")
     for g in rows:
         print(f"  {g['grant']:<22} {_clip(g.get('client') or '', 22):<22} "
@@ -4209,7 +4189,7 @@ def cmd_balance(args, cfg) -> None:
     blocks = b.get("blocks") or []
     if blocks:
         print(f"\n  {_M}credit{_R}")
-        # Earned credit arrives as one small block per sale; one line says the total (run 2).
+        # Earned credit arrives as one small block per sale; one line says the total.
         earned = [blk for blk in blocks if blk["kind"] == "earned"]
         for blk in blocks:
             if blk["kind"] == "earned" and len(earned) > 1:
@@ -4531,7 +4511,6 @@ def cmd_update(args, cfg) -> None:
     sys.exit(rc)
 
 
-# ---- orgs (teams) ------------------------------------------------------------------------
 def cmd_org_create(args, cfg) -> None:
     with _client(cfg) as c:
         r = c.post("/orgs", json={"name": args.name})
@@ -4540,7 +4519,6 @@ def cmd_org_create(args, cfg) -> None:
         cfg.update(token=d["token"], active_org=d["org"], identity=True)
         _save_config(cfg)
         if not _JSON_OVERRIDE:
-            # Found in hub simulation run 2: the switch was silent, and a publish went to the wrong team.
             print(f"  {_M}active team is now{_R} {d['org']}   {_M}(switch back: treg org use <slug>){_R}", file=sys.stderr)
     _show(r)
 
@@ -4558,7 +4536,7 @@ def cmd_org_ls(args, cfg) -> None:
 
 
 def cmd_org_use(args, cfg) -> None:
-    # Validate BEFORE persisting: a typo'd slug used to save silently and then fail every later
+    # Validate BEFORE persisting: a typo'd slug would otherwise save silently and then fail every later
     # command with the server's bare "choose an org (send X-Treg-Org)". The Default-key exchange
     # below is also required before the local team and token can change.
     try:
@@ -5084,7 +5062,6 @@ def cmd_org_rename(args, cfg) -> None:
     _show(r)
 
 
-# ---- super-admin --------------------------------------------------------------------------
 def cmd_admin_login(args, cfg) -> None:
     cfg["admin_token"] = args.token
     _save_config(cfg)
@@ -5191,7 +5168,6 @@ def _native_amount(value, currency: str, meter: str = "") -> str:
         noun = (meter or "unit").replace("_", " ")
         return f"{value:g} {noun}{'' if value == 1 else 's'}"
     return f"${value:g}" if currency in ("USD", "") else f"{currency} {value:g}"
-
 
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -5361,7 +5337,7 @@ def _print_catalog_endpoint(e: dict, connected: set = frozenset(), idw: int = 46
     # Verified dates and core/extended tier are maintenance metadata (`treg catalog get <id>`),
     # not decision data — a user picking an endpoint needs the ID to call, works-now?, price.
     # The ID leads: it is the thing `treg call` takes, and a row without it named a provider an
-    # agent could not actually choose (2026-08-28).
+    # agent could not actually choose.
     mark = "●" if e["provider"] in connected else " "
     if e.get("kind") == "routed":
         print(f"  ▸ {_clip(e['id'], idw):<{idw}} {'ROUTED':<7} {_cost_usd(e.get('cost')):<16} {mark}  "
@@ -5631,8 +5607,6 @@ def cmd_feedback(args, cfg) -> None:
         body["endpoint_id"] = args.endpoint_id
     _feedback_request(cfg, "POST", "/feedback", json=body)
 
-
-# ---- the tool hub: tools made of tools (docs/HUB-DECISIONS.md) --------------------------------
 
 HUB_FILES = ("recipe.json", "run.js", "check.json", "README.md", "data.csv")
 
@@ -5987,8 +5961,7 @@ def cmd_hub_ls(args, cfg) -> None:
                 search += " · update waits"
         status = t["status"] + (" ◀" if is_serving else "")
         print(f"  {t['tool_id']:<40}{t['version']:>3}  {colour}{status:<11}{_R}{t['kind']:<7}{price[:21]:<22}{search:<20}{', '.join(t['uses'])[:30]}")
-        # The reasons go under the version callers get, or under the newest row when none is live
-        # (hub simulation run 3: every version retired, a rejected update showed no reason).
+        # The reasons go under the version callers get, or under the newest row when none is live.
         first_row = t is next(x for x in rows if x["tool_id"] == t["tool_id"])
         if is_serving or (first_row and t["tool_id"] not in serves):
             lst = t.get("listing") or {}
@@ -6072,9 +6045,8 @@ def _catalog_get(endpoint_id: str, cfg) -> None:
                 print(f"  did you mean: {_B}{eid}{_R}")
             _dim(f"  treg catalog get {near[0]}")
         else:
-            # The whole id minus its provider, as words. `…split(".")[-1]` gave "find" for
-            # `apollo.people.email.find` — a search term that matches half the catalog, on the
-            # path a caller now lands on whenever the near miss belongs to another provider.
+            # The whole id minus its provider, as words: the last segment alone ("find" for
+            # `apollo.people.email.find`) is a search term that matches half the catalog.
             terms = " ".join(endpoint_id.split(".")[1:] or [endpoint_id]).replace("-", " ").replace("_", " ")
             _dim(f"find one with: treg catalog search {terms.strip()}")
         sys.exit(1)
@@ -6122,10 +6094,10 @@ def _catalog_get(endpoint_id: str, cfg) -> None:
               + (f" — {e['capability_description']}" if e.get("capability_description") else ""))
     routing = body.get("routing")
     if routing and routing.get("plan"):
-        # The QUOTE: what `treg call` on this routed id will try, in order, at treg's prices. Own
-        # keys jump to the front at call time (this route is open, so it cannot know yours).
-        # The QUOTE, kept short: order, what each child accepts, and its price — the number a
-        # max-cost decision needs. Hit rates and expected cost per hit are in --json.
+        # The QUOTE: what `treg call` on this routed id will try, in order, at treg's prices - what
+        # each child accepts and its price, the number a max-cost decision needs. Own keys jump to
+        # the front at call time (this route is open, so it cannot know yours). Hit rates and
+        # expected cost per hit are in --json.
         print(f"\n{_A}ROUTES AMONG{_R}  {_M}in this order; a key of yours for a provider goes first, free{_R}")
         for i, c in enumerate(routing["plan"], 1):
             accepts = " | ".join("+".join(v) for v in (c.get("accepts") or []))
@@ -6499,7 +6471,6 @@ def cmd_oauth_connect(args, cfg) -> None:
         sys.exit("Timed out waiting for authorization.")
 
 
-# ---- parser ------------------------------------------------------------------------------
 _RAWFMT = argparse.RawDescriptionHelpFormatter
 
 # The front page of `treg --help`: five groups in this order, each row a command + one line.
@@ -6643,7 +6614,6 @@ def build_parser() -> argparse.ArgumentParser:
         `help=`, so argparse leaves it out of every listing (and out of HELP_GROUPS by construction)."""
         return parent.add_parser(name, description=description, formatter_class=_RAWFMT, **kw)
 
-    # ---- setup / auth ----
     c = mk(sub, "config", "Show or set the registry this CLI talks to (base URL).",
            "treg config                                    # show current base URL",
            "treg config --base-url https://treg.to")
@@ -6687,7 +6657,6 @@ def build_parser() -> argparse.ArgumentParser:
     acp.add_argument("org", help="org slug (or invite id) to accept")
     acp.set_defaults(fn=cmd_accept)
 
-    # ---- teams ----
     og = mk(sub, "org", "Manage teams (orgs): create, switch, invite, members, join, leave, delete.",
             "treg org ls", 'treg org create "Superdesign"', "treg org use superdesign",
             ).add_subparsers(dest="sub", required=True, metavar="<subcommand>")
@@ -6757,7 +6726,6 @@ def build_parser() -> argparse.ArgumentParser:
     mk(og, "agents", "List this team's agent identities and their limits (admin+). "
                      "(Different from `treg agents`, which lists coding agents for skill install.)",
        "treg org agents").set_defaults(fn=cmd_org_agents)
-    # ---- per-tag budgets: what a team reselling treg sets on ITS OWN customers -------------------
     obs = mk(og, "budgets", "Per-tag spend limits you've set on your own customers (admin+).",
              "treg org budgets", "treg org budgets --dim workspace")
     obs.add_argument("--dim", help="only show budgets on this tag key (e.g. customer)")
@@ -6830,7 +6798,6 @@ def build_parser() -> argparse.ArgumentParser:
     orn.add_argument("--name", help="new display name"); orn.add_argument("--slug", help="new slug (lowercase letters, digits, hyphens)")
     orn.set_defaults(fn=cmd_org_rename)
 
-    # ---- secrets ----
     s = mk(sub, "secret", "Manage stored credentials (encrypted server-side, never returned).",
            "treg secret add STRIPE_KEY --value sk_live_…", "treg secret ls",
            ).add_subparsers(dest="sub", required=True, metavar="<subcommand>")
@@ -6851,7 +6818,6 @@ def build_parser() -> argparse.ArgumentParser:
     suu = mk(s, "update", "Rename a secret, change its value, or its kind.", "treg secret update 4 --value sk_live_new")
     suu.add_argument("id", type=int, help="the secret id"); suu.add_argument("--name", help="new name"); suu.add_argument("--value", help="new value"); suu.add_argument("--kind", choices=["env", "oauth", "secret_file", "cli_auth"], help="new kind"); suu.set_defaults(fn=cmd_secret_update)
 
-    # ---- tools ----
     # `add` still works (old scripts, cached agent instructions) but is absent from --help: `tool add`
     # is the one canonical spelling we teach.
     ad2 = alias(sub, "add", "(alias) friendly shortcut for `tool add`. --secret takes a name or id.",
@@ -6893,7 +6859,6 @@ def build_parser() -> argparse.ArgumentParser:
     tu.add_argument("--local-run", choices=["on", "off"], help="allow/forbid `treg run` (local tier) for this tool (owner opt-in)")
     tu.set_defaults(fn=cmd_tool_update)
 
-    # ---- calling ----
     cl = mk(sub, "call", "Call a tool through the proxy: `call <tool> <path>` or `call <full-url>`. Key injected server-side.",
             "treg call stripe v1/charges", "treg call https://api.stripe.com/v1/charges",
             "treg call posthog api/events --query limit=5", "treg call slack chat.postMessage --method POST --data '{\"channel\":\"C1\"}'",
@@ -6921,7 +6886,6 @@ def build_parser() -> argparse.ArgumentParser:
                     help="maximum seconds to wait with --await (default: 900)")
     cl.set_defaults(fn=cmd_call)
 
-    # ---- audit (one log over both halves; `calls`/`runs` live on as hidden aliases) ----
     def _limit_arg(parser, what):
         parser.add_argument("--limit", type=int, default=50, help=f"how many recent {what} (default: 50)")
 
@@ -6937,7 +6901,6 @@ def build_parser() -> argparse.ArgumentParser:
     ca = alias(sub, "calls", "(alias) the proxy-call half of `treg audit`.")
     _limit_arg(ca, "calls"); ca.set_defaults(fn=cmd_calls)
 
-    # ---- cli: run a vendor CLI with the org's credential injected ----
     def _run_args(parser):
         parser.add_argument("tool", help="the registered tool whose CLI to run (same name for --local and --server)")
         parser.add_argument("args", nargs=argparse.REMAINDER, metavar="-- <cli args>", help="everything after the tool name goes to the CLI verbatim")
@@ -7048,7 +7011,6 @@ def build_parser() -> argparse.ArgumentParser:
     rh.add_argument("args", nargs=argparse.REMAINDER)
     rh.set_defaults(fn=cmd_run_helper)
 
-    # ---- skills ----
     sk = mk(sub, "skill", "Register / manage skills (a recipe + its secrets + tool(s), as one bundle).",
             "treg skill init --dir ./my-skill", "treg skill add --dir ./my-skill", "treg skill install seo-blog-writer",
             ).add_subparsers(dest="sub", required=True, metavar="<subcommand>")
@@ -7083,7 +7045,6 @@ def build_parser() -> argparse.ArgumentParser:
     skb.add_argument("--project", action="store_true", help="write into project dirs instead of the per-user global dirs")
     skb.set_defaults(fn=cmd_skill_bootstrap)
 
-    # ---- mcp (register the treg MCP server into detected agents, header-authed) ----
     mc = mk(sub, "mcp", "Register the treg MCP server into the coding agents on this machine.",
             "treg mcp install").add_subparsers(dest="sub", required=True, metavar="<subcommand>")
     mci = mk(mc, "install", "Add treg as a header-authed MCP server in every supported detected agent.",
@@ -7098,13 +7059,11 @@ def build_parser() -> argparse.ArgumentParser:
     mcu.add_argument("team", help="the team slug to spend from")
     mcu.set_defaults(fn=cmd_mcp_use_team)
 
-    # ---- agents (which coding agents treg installs skills for) ----
     ag = mk(sub, "agents", "List the coding agents treg can install skills for (and which are detected here).",
             "treg agents ls").add_subparsers(dest="sub", required=True, metavar="<subcommand>")
     mk(ag, "ls", "Show every known agent + its skills dirs + detection status.",
        "treg agents ls").set_defaults(fn=cmd_agents_ls)
 
-    # ---- scan + upload (the bulk on-ramp; `import` kept as a deprecated alias of upload) ----
     #   `clis` (our auto-import mode) scans the MACHINE for installed catalog CLIs; env/skills scan a dir.
     _clis_flags = lambda p: (  # noqa: E731 — the clis-only registration flags, shared by scan + upload
         p.add_argument("--status", action="store_true", help="clis: scan + report only, register nothing"),
@@ -7263,7 +7222,6 @@ def build_parser() -> argparse.ArgumentParser:
     get.add_argument("feedback_id", type=int, help="the feedback ID from the submission receipt")
     get.set_defaults(fn=cmd_feedback_get)
 
-    # ---- balance ----
     who = mk(sub, "whoami", "Who this CLI acts as: your account, the active team and your role, the server.",
              "treg whoami", "treg whoami --json")
     who.set_defaults(fn=cmd_whoami)
@@ -7304,7 +7262,6 @@ def build_parser() -> argparse.ArgumentParser:
                     help="with --auto on: how many automatic refills may run in one hour (1-60, default 5)")
     tu.set_defaults(fn=cmd_topup)
 
-    # ---- health + oauth ----
     he = mk(sub, "health", "Show tool/secret health, or run the checks now with --run.",
             "treg health", "treg health --run")
     he.add_argument("--run", action="store_true", help="run every tool's health check now"); he.set_defaults(fn=cmd_health)
@@ -7332,7 +7289,6 @@ def build_parser() -> argparse.ArgumentParser:
                     help="include management endpoints (account/utility CRUD) hidden from the browse by default")
     ct.set_defaults(fn=cmd_catalog)
 
-    # ---- durable provider resources ---------------------------------------------------------
     rp = mk(sub, "resources", "Resources created on treg-provided accounts, scoped to your team.",
             "treg resources list --provider fishaudio --kind voice")
     rps = rp.add_subparsers(dest="sub", required=True, metavar="<subcommand>")
@@ -7343,7 +7299,6 @@ def build_parser() -> argparse.ArgumentParser:
     rpl.add_argument("--include-deleted", action="store_true", help="include deleted tombstones")
     rpl.set_defaults(fn=cmd_resources_list)
 
-    # ---- connections (connecting a provider lives here now; `oauth` is the hidden old spelling) ----
     def _connect_args(parser, prefix):
         parser.add_argument("name", nargs="?", help="a name for the resulting oauth secret (default: the provider service)")
         parser.add_argument("--provider", help=f"a registry service id — see `{prefix} providers`")
@@ -7388,7 +7343,6 @@ def build_parser() -> argparse.ArgumentParser:
     _connect_args(mk(oa, "connect", "(alias) Connect a provider: browser consent, or a pasted key for key-based providers.",
                      "treg oauth connect --provider google-search-console"), "treg oauth")
 
-    # ---- super-admin ----
     ad = mk(sub, "admin", "Super-admin (cross-tenant): platform-wide view + control.",
             "treg admin login --token <admin-token>", "treg admin stats", "treg admin orgs",
             ).add_subparsers(dest="sub", required=True, metavar="<subcommand>")
@@ -7491,9 +7445,9 @@ def _main(argv: list[str]) -> None:
     cfg = _load_config()
     if (override and cfg.get("identity") and cfg.get("token") and not os.environ.get("TREG_TOKEN")
             and override != cfg.get("active_org") and getattr(args, "fn", None) is not cmd_org_use):
-        # A Default key belongs to one team, so `--org <other>` with it was refused (403 "this key
-        # belongs to another team", hub simulation run 2). For this one command, use the other
-        # team's Default key, the same exchange `treg org use` makes, without saving it.
+        # A Default key belongs to one team, so `--org <other>` with it is refused (403 "this key
+        # belongs to another team"). For this one command, use the other team's Default key, the
+        # same exchange `treg org use` makes, without saving it.
         token, detail = _default_token_for_org(cfg, override)
         if token:
             cfg = {**cfg, "_org_once": {"token": cfg["token"], "active_org": cfg.get("active_org")},

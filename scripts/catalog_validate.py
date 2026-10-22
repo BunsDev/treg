@@ -75,12 +75,12 @@ COST_UNITS, CONFIDENCES, COST_SOURCES = set(_UNITS), set(_CONFIDENCES), set(_SOU
 # price is still the best number we have, and failing the build over the calendar would only teach
 # people to bump the date without re-checking.
 STALE_DAYS = 90
-# The one spelling of free. It was written three incompatible ways across 661 endpoints (`value: 0`,
-# `value: 0.0`, and no value at all), which made "is this free?" a per-entry judgement call and left
-# `cost.usd` null on a third of them — indistinguishable, downstream, from "price unknown".
+# The one spelling of free. Any other (`value: 0.0`, or no value at all) makes "is this free?" a
+# per-entry judgement call and leaves `cost.usd` null - indistinguishable, downstream, from
+# "price unknown".
 CANONICAL_FREE = {"value": 0, "currency": "USD", "unit": "call"}
 TIERS = {"core", "extended"}
-# what an endpoint IS (marketplace browse surface vs. plumbing). Optional — absent reads as "data" —
+# what an endpoint IS (catalog browse surface vs. plumbing). Optional - absent reads as "data" -
 # but a stated one must be from this set. See docs/context/architecture/catalog.md.
 KINDS = {"data", "action", "account", "utility"}
 ENDPOINT_STATUSES = {"retired", "broken"}
@@ -110,8 +110,7 @@ REQUIRED = {
 # The four outcomes an extended endpoint can have once a verification run has touched it. They are
 # mutually exclusive by construction, and an entry that has been through the pipeline must claim
 # exactly one — "no state" reads as "never attempted", which is a different fact and a lie once a
-# run has been over it. This caught a real regression: re-running an endpoint overwrote its result
-# record, dropped the reason string, and stamped an EMPTY state that nothing else noticed.
+# run has been over it.
 STATES = ("verified", "unverified", "untestable", "skipped")
 # a long token-looking literal anywhere in a catalog file is a leak until proven otherwise
 LEAK = re.compile(r"(Bearer\s+[A-Za-z0-9+/_=-]{16,}|[A-Za-z0-9+/]{40,}={0,2})")
@@ -1245,8 +1244,7 @@ def main(argv: list[str]) -> int:
     # (service, method, path) -> {tier: [ids]} — to catch the same operation shipping in BOTH tiers.
     # Some providers multiplex one URL across many jobs (SerpApi's `engine`, BrightData's
     # `dataset_id`, GAQL's query body), so a core/extended path collision is legitimate THERE and
-    # only there. Everywhere else it is the ingest-dedup failure that shipped 27 duplicate rows
-    # (dataforseo via the /v3 prefix mismatch, scrapecreators via core being curated after ingest).
+    # only there. Everywhere else it is an ingest-dedup failure.
     # Some APIs deliberately expose several catalog jobs on one method/path and select the job by
     # required parameters. Instagram Graph's profile read and business_discovery both call
     # GET /{ig_user_id}; the latter is selected by its required business_discovery `fields` value.

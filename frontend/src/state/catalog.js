@@ -17,8 +17,7 @@ const REVIEW_LABELS = ['Overwhelmingly negative', 'Very negative', 'Negative', '
   'Mostly positive', 'Positive', 'Very positive', 'Overwhelmingly positive']
 
 export default {
-// ---- endpoint catalog (/catalog/*) ----
-    // The catalog is additive: every failure here leaves the marketplace exactly as it was, so a
+    // The catalog is additive: every failure here leaves the catalog exactly as it was, so a
     // server that predates these routes shows no platform shelf rather than an error.
     async loadPlatforms(){
       if(this.plats.loaded || this.plats.loading) return;
@@ -45,7 +44,7 @@ platUrl(slug, cap){ const tail=cap ? '/'+encodeURIComponent(cap) : '';
       return this.publicCatalog ? '/catalog/'+encodeURIComponent(slug)+tail : '/app#platform/'+encodeURIComponent(slug)+tail; },
 // The PUBLIC catalog lives at real paths (/catalog, /catalog/<slug>), not hash routes, because
     // a hash is never a distinct URL to a crawler and the whole catalog was therefore unindexable.
-    // Same Vue views as the signed-in marketplace — this is one UI, not a second implementation.
+    // Same Vue views as the signed-in catalog - this is one UI, not a second implementation.
     catalogFromPath(p){
       if(p==='/catalog' || p==='/catalog/') return {view:'catalog', slug:null};
       if(p==='/search' || p==='/search/') return {view:'find', slug:null};
@@ -155,15 +154,14 @@ async loadPlatform(){ if(!this.platSlug) return;
         ? 'No catalog for this platform on this server yet.'
         : 'Could not load the endpoint catalog'+(e.detail?': '+e.detail:'.'); }
       finally{ if(live()) this.platLoading=false; } },
-// Tile furniture. Catalog labels carry a parenthetical or an em-dash gloss ("Google Search
-    // (SERPs, keyword data)") that reads as noise under a logo — the tile shows the name, the
-    // title attribute keeps the whole thing.
-    // The name filter behind the Catalog search box, shared by the shelves and the tab counts.
     platNameHit(p, q){
       const providers=(p.providers||[]).flatMap(s=>[s, this.plats.providers[s]||'']);
       const names=[p.label||'', p.slug||'', ...providers].map(s=>s.toLowerCase());
       const compact=q.replace(/[^a-z0-9]/g,'');
       return names.some(name=>name.includes(q) || (compact && name.replace(/[^a-z0-9]/g,'').includes(compact))); },
+// Tile furniture. Catalog labels carry a parenthetical or an em-dash gloss ("Google Search
+    // (SERPs, keyword data)") that reads as noise under a logo - the tile shows the name, the
+    // title attribute keeps the whole thing.
 platShort(label){ return String(label||'').split(' — ')[0].split(' (')[0].trim(); },
 platInitial(pl){ return (this.platShort(pl.label)||pl.slug||'?').slice(0,1).toUpperCase(); },
 // Deterministic hue from the slug: an undrawn platform keeps the same colour across reloads
@@ -171,7 +169,7 @@ platInitial(pl){ return (this.platShort(pl.label)||pl.slug||'?').slice(0,1).toUp
     platTileBg(slug){ let h=0; const s=String(slug||'');
       for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))%360;
       return 'hsl('+h+' 44% 42%)'; },
-// The catalog bills in several currencies, so every price the marketplace SHOWS is the server's
+// The catalog bills in several currencies, so every price the catalog SHOWS is the server's
     // computed `usd` — one unit, so two numbers on the same screen can actually be compared. The
     // native amount rides along as a muted suffix wherever the provider bills in something else, so
     // nobody has to wonder whether we invented the figure.
@@ -268,15 +266,12 @@ endpointConnectLabel(e){
     },
 // Whether a REGISTRY connection to this provider is still metered. Connecting usually ends the
     // billing question — the account you connect is the licence — but a `metered` provider bills
-    // treg's own app per use (X since Feb 2026), so those calls are debited from the team balance
+    // treg's own app per use, so those calls are debited from the team balance
     // no matter whose account made them. `/providers` carries the flag, and the deployment's
     // TREG_OAUTH_BILLED_PROVIDERS decides whether it is set, so the price a browser shows follows
     // the kill switch instead of hard-coding today's answer.
     catMetered(service){
       const p=this.providers.find(x=>x.service===service); return !!(p && p.metered); },
-// A platform is callable today if ANY provider serving it is connected — the card is browsing,
-    // not routing, so which one it is stays a question for the platform page.
-    // The platform's providers the team holds its own credential for.
     // A provider this deployment paused (/meta `paused_providers`): its name and message, or null.
     providerPaused(service){ return ((this.meta&&this.meta.paused_providers)||{})[service]||null; },
 // A platform every provider of which is paused: its tile and shelf say so instead of selling it.
@@ -348,7 +343,6 @@ capCheapest(eps){
       const n={domain:'domain', website:'website', name:'name', email:'email', linkedin_url:'LinkedIn URL',
                linkedin_handle:'LinkedIn handle', query:'query'};
       return acc.map(a=>a.map(x=>n[x]||x.replace(/_/g,' ')).join(' + ')); },
-// Calls an endpoint served in the last 30 days (`observed.samples` on the platform response).
     callsOf(e){ return (e && e.observed && e.observed.samples) || 0; },
 // 141059 → "141k": a count beside a percentage is its denominator, not a figure to read digit by digit.
     // Volumes are shown by band, never exact: how much traffic one provider gets through treg, or how

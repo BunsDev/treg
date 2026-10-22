@@ -155,7 +155,7 @@ async def reset(db: AsyncSession, owner: User) -> dict:
     return {"removed": removed}
 
 
-# ---- dashboard narrative: user builds the team by hand; we seed the tool + auto-join one teammate ----
+# Dashboard narrative: the user builds the team by hand; we seed the tool + auto-join one teammate.
 GUIDED_TEAMMATE = {"name": "Alex Rivera", "email": f"alex@{DEMO_DOMAIN}", "role": "member"}
 
 

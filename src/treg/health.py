@@ -136,8 +136,6 @@ async def run_all(db: AsyncSession, client: httpx.AsyncClient, org_id: int | Non
     def apply(s: Secret, sid: int, status: str, detail: str) -> None:
         if s.kind == "param":  # a param (project id, org id…) is config, not a credential — no verdicts
             return
-        # Worst-status-wins WITHIN a run: a secret shared by several tools must never be downgraded
-        # by a later tool (e.g. a no-probe tool marking a probe-failed oauth secret back to "ok").
         if sid in evaluated and _RANK[status] <= _RANK.get(s.health_status, 1):
             return
         _mark(s, status, detail, now)
