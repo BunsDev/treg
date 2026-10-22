@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
-from sqlmodel import select
+from sqlmodel import delete, select
 
 from treg import mcp
 from treg.application import auth as auth_use_cases, billing, enterprise_billing, enterprise_sso
@@ -18,7 +18,7 @@ from treg.domain.identity import session as identity_session
 from treg.domain.identity import mcp_oauth
 from treg.infra import workos
 from treg.infra.db import session_maker
-from treg.models import EnterpriseSSO, EnterpriseSSOAudit, EnterpriseSSOIdentity, Membership, Org, User
+from treg.models import EnterpriseSSO, EnterpriseSSOAudit, EnterpriseSSOBlock, EnterpriseSSOIdentity, Membership, Org, User
 from treg.timeutil import utcnow_naive
 
 
@@ -732,6 +732,7 @@ async def test_canceled_workos_setup_is_removed_and_retried(clients, monkeypatch
     monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_test")
     org_id = await team(clients, plan="sso_directory")
     signed_in = await signin(org_id, profile())
+    assert (await clients.delete(f"/orgs/{org_id}/members/{signed_in.user_id}")).status_code == 200
     async with session_maker() as db:
         row = await db.get(EnterpriseSSO, org_id)
         row.subscription_status = "canceled"
@@ -778,6 +779,9 @@ async def test_canceled_workos_setup_is_removed_and_retried(clients, monkeypatch
         assert row.connection_id is None and row.directory_id is None
         assert (await db.execute(select(EnterpriseSSOIdentity).where(
             EnterpriseSSOIdentity.org_id == org_id))).scalar_one_or_none() is None
+        assert (await db.execute(select(EnterpriseSSOBlock).where(
+            EnterpriseSSOBlock.org_id == org_id,
+            EnterpriseSSOBlock.user_id == signed_in.user_id))).scalar_one_or_none() is not None
         assert (await db.execute(select(Membership).where(
             Membership.org_id == org_id, Membership.user_id == signed_in.user_id))).scalar_one_or_none() is None
     assert (await billing.cleanup_canceled_workos(org_id))["skipped"] == "already cleaned"
@@ -788,6 +792,47 @@ async def test_canceled_workos_setup_is_removed_and_retried(clients, monkeypatch
     monkeypatch.setattr(billing.stripe_adapter, "call", fake_stripe)
     assert (await billing.start_checkout(org_id, "sso_directory",
         base="https://treg.example", email="owner@example.com"))["url"].endswith("renewal")
+
+
+async def test_manual_block_survives_a_new_workos_connection_and_can_be_erased(clients):
+    org_id = await team(clients)
+    signed_in = await signin(org_id, profile())
+    assert (await clients.delete(f"/orgs/{org_id}/members/{signed_in.user_id}")).status_code == 200
+    async with session_maker() as db:
+        await db.execute(delete(EnterpriseSSOIdentity).where(
+            EnterpriseSSOIdentity.org_id == org_id))
+        config = await db.get(EnterpriseSSO, org_id)
+        config.connection_id = None
+        db.add(config)
+        await db.commit()
+    replacement = {**profile(), "id": "prof_replacement", "connection_id": "conn_replacement"}
+    with pytest.raises(enterprise_sso.EnterpriseSSOError, match="deactivated"):
+        await signin(org_id, replacement, proven_user_id=signed_in.user_id)
+    assert (await clients.get(f"/orgs/{org_id}/sso/blocked")).json() == {
+        "members": [{"user_id": signed_in.user_id, "email": "employee@example.com"}]}
+    async with session_maker() as db:
+        await enterprise_sso.erase_user_links(db, signed_in.user_id)
+        await db.commit()
+        assert (await db.execute(select(EnterpriseSSOBlock).where(
+            EnterpriseSSOBlock.org_id == org_id))).first() is None
+
+
+async def test_global_user_deletion_erases_sso_identity_and_block(clients, monkeypatch):
+    from treg.config import get_settings
+
+    org_id = await team(clients)
+    signed_in = await signin(org_id, profile())
+    assert (await clients.delete(f"/orgs/{org_id}/members/{signed_in.user_id}")).status_code == 200
+    monkeypatch.setattr(get_settings(), "admin_token", "test-admin-token")
+    erased = await clients.delete(f"/admin/users/{signed_in.user_id}",
+        headers={"X-Treg-Token": "test-admin-token"})
+    assert erased.status_code == 200, erased.text
+    async with session_maker() as db:
+        assert await db.get(User, signed_in.user_id) is None
+        assert (await db.execute(select(EnterpriseSSOBlock).where(
+            EnterpriseSSOBlock.user_id == signed_in.user_id))).first() is None
+        assert (await db.execute(select(EnterpriseSSOIdentity).where(
+            EnterpriseSSOIdentity.user_id == signed_in.user_id))).first() is None
 
 
 async def test_canceled_team_cannot_be_deleted_before_workos_cleanup(clients):

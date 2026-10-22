@@ -14,7 +14,7 @@ link if email discovery returns no match or several teams. Email is a routing hi
 
 ## Configure the deployment
 
-1. Apply Alembic migrations through `0084` before running the new code.
+1. Apply Alembic migrations through `0085` before running the new code.
 2. In the WorkOS environment, create an API key and find the client ID. Set
    `TREG_WORKOS_API_KEY` and `TREG_WORKOS_CLIENT_ID` on the server. Set a stable
    `TREG_SECRET_KEY` and `TREG_SESSION_SECRET` for the state and browser cookies.
@@ -82,6 +82,7 @@ Use an ordinary sign-in to access other teams.
 If an admin removes an SSO member in treg, that person stays blocked even if the directory still
 lists them as active. The owner can allow SSO again from the SSO tab. Directory deactivation and
 later reactivation remain automatic unless a team admin explicitly removed the person.
+The manual block survives a canceled subscription and a later WorkOS connection replacement.
 
 The owner can schedule subscription cancellation at the end of the current billing period from
 the SSO tab. While Stripe retries a `past_due` payment, SSO and Directory Sync remain active.
@@ -107,6 +108,12 @@ retention period (default 400 days); choose the final period with the SOC 2 audi
 counsel. Preserve separate evidence for setup approvals, IT verification, periodic access reviews,
 sync failure monitoring, and incident response. These operational controls and WorkOS/Stripe
 processing terms are necessary for SOC 2 and GDPR; code and tests alone do not establish compliance.
+After cancellation, old WorkOS identity and directory rows are deleted. A manually removed
+employee leaves only a team ID, treg user ID, and block time so a new connection cannot readmit
+them. The owner can remove the block; team deletion and global user erasure remove it. It is
+personal data, so privacy requests must review it alongside the account, directory roster,
+WorkOS data, and audit records. An active company directory can sync a deleted roster entry
+back; coordinate individual erasure with the customer's identity administrator.
 
 ## Verification before production
 

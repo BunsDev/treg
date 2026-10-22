@@ -63,6 +63,7 @@ sources:
   - src/treg/alembic/versions/0082_oauth_sso_provenance.py
   - src/treg/alembic/versions/0083_enterprise_sso_safety.py
   - src/treg/alembic/versions/0084_enterprise_workos_cleanup.py
+  - src/treg/alembic/versions/0085_enterprise_sso_blocks.py
   - src/treg/timeutil.py
   - src/treg/infra/db.py
   - src/treg/infra/money_timing.py
@@ -111,6 +112,9 @@ its team, reserves one pending enterprise Checkout per team, and marks keys issu
 enforcement. Existing keys have no SSO issuance proof and cannot enter an enforced team.
 Migration `0084` records when WorkOS cleanup completes. That marker keeps cancellation retries
 idempotent and prevents a new checkout while billable WorkOS resources may remain.
+Migration `0085` stores manual removal decisions separately from identity rows in minimal
+`EnterpriseSSOBlock` rows. Those rows survive connection cleanup, but leave with the team or
+the erased user; they contain no email or WorkOS identifiers.
 
 Migration `0043` adds `ProviderResource`, the durable organization-owned counterpart to the existing
 async ownership rows. It stores provider, resource kind, upstream id, display name, creator, source

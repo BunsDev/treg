@@ -36,6 +36,7 @@ from ...models import (
     EnterpriseDirectoryUser,
     EnterpriseSSOAudit,
     EnterpriseSSO,
+    EnterpriseSSOBlock,
     EnterpriseSSOIdentity,
     Feedback,
     CallReview,
@@ -277,7 +278,7 @@ ORG_SCOPED_MODELS = (
     CallReview,
     Media,        # hosted reference files expire on their own; a deleted team's go now
     AdConversion,  # pending Google Ads conversions belong to the team they'd be attributed to
-    EnterpriseSSOIdentity, EnterpriseDirectoryUser, EnterpriseSSOAudit, EnterpriseSSO,
+    EnterpriseSSOIdentity, EnterpriseSSOBlock, EnterpriseDirectoryUser, EnterpriseSSOAudit, EnterpriseSSO,
     Membership,   # last: it is what makes the caller a member of the org being deleted
 )
 

@@ -31,6 +31,7 @@ sources:
   - src/treg/alembic/versions/0082_oauth_sso_provenance.py
   - src/treg/alembic/versions/0083_enterprise_sso_safety.py
   - src/treg/alembic/versions/0084_enterprise_workos_cleanup.py
+  - src/treg/alembic/versions/0085_enterprise_sso_blocks.py
   - src/treg/worker.py
   - src/treg/routers/enterprise_sso.py
   - src/treg/infra/workos.py
@@ -106,6 +107,9 @@ When the subscription ends, enforcement is lifted so existing members can use no
 Cancellation removes only SSO-created memberships; pre-existing members remain.
 The cleanup worker then deletes the canceled team's WorkOS directory and connection, clears
 obsolete SSO identity links, and records completion before a new checkout can start.
+`EnterpriseSSOBlock` retains only team and treg user IDs plus a timestamp for an explicit admin
+removal. `finish_signin` checks it across replacement WorkOS connections; restoration, team
+deletion, and global user erasure remove it.
 
 The registry is **tenant-isolated**: an **Org** owns resources, a **User** is a global identity, and a
 **Membership** links them with a role and IS where the caller's token lives. A token = a `(user, org)`

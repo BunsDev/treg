@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import select
+from sqlmodel import delete, select
 
 from ..domain.governance import teams
 from ..domain.identity.access import _is_machine_email, _norm_email
 from ..infra.db import session_maker
-from ..models import (EnterpriseDirectoryUser, EnterpriseSSO, EnterpriseSSOAudit, EnterpriseSSOEvent,
+from ..models import (EnterpriseDirectoryUser, EnterpriseSSO, EnterpriseSSOAudit, EnterpriseSSOBlock, EnterpriseSSOEvent,
                       EnterpriseSSOIdentity, Membership, Org, User)
 from . import signup
 
@@ -108,6 +108,14 @@ async def finish_signin(org_id: int, profile: dict, *, organization: dict,
         email = _norm_email(email)
         if _is_machine_email(email):
             raise EnterpriseSSOError("machine identity cannot sign in")
+        # A manual removal belongs to the team and treg account, not to one WorkOS
+        # connection. Check before a replacement connection can create a new identity.
+        blocked_user = (await db.execute(select(User.id).join(
+            EnterpriseSSOBlock, EnterpriseSSOBlock.user_id == User.id).where(
+            EnterpriseSSOBlock.org_id == org_id, User.email == email,
+        ))).scalar_one_or_none()
+        if blocked_user is not None:
+            raise EnterpriseSSOError("this team has deactivated the identity")
         domains = organization.get("domains") or []
         email_domain = email.rsplit("@", 1)[-1]
         if not any(isinstance(item, dict) and item.get("state") == "verified"
@@ -223,31 +231,45 @@ async def block_removed_member(db, org_id: int, user_id: int, actor_user_id: int
         identity.manually_blocked = True
         identity.active = False
         db.add(identity)
+        if (await db.execute(select(EnterpriseSSOBlock.id).where(
+                EnterpriseSSOBlock.org_id == org_id,
+                EnterpriseSSOBlock.user_id == user_id,
+        ))).first() is None:
+            db.add(EnterpriseSSOBlock(org_id=org_id, user_id=user_id))
         _audit(db, org_id, "sso.manual_access_removed", actor=actor_user_id, subject=user_id)
 
 
 async def blocked_members(org_id: int) -> list[dict]:
     async with session_maker() as db:
-        rows = (await db.execute(select(EnterpriseSSOIdentity, User).join(
-            User, User.id == EnterpriseSSOIdentity.user_id).where(
-            EnterpriseSSOIdentity.org_id == org_id,
-            EnterpriseSSOIdentity.manually_blocked.is_(True),
+        rows = (await db.execute(select(EnterpriseSSOBlock, User).join(
+            User, User.id == EnterpriseSSOBlock.user_id).where(
+            EnterpriseSSOBlock.org_id == org_id,
         ))).all()
         return [{"user_id": user.id, "email": user.email} for _, user in rows]
 
 
+async def erase_user_links(db, user_id: int) -> None:
+    """Erase SSO account links and access decisions with the global user."""
+    await db.execute(delete(EnterpriseSSOBlock).where(EnterpriseSSOBlock.user_id == user_id))
+    await db.execute(delete(EnterpriseSSOIdentity).where(EnterpriseSSOIdentity.user_id == user_id))
+
+
 async def unblock_member(org_id: int, user_id: int, actor_user_id: int) -> None:
     async with session_maker() as db:
+        block = (await db.execute(select(EnterpriseSSOBlock).where(
+            EnterpriseSSOBlock.org_id == org_id,
+            EnterpriseSSOBlock.user_id == user_id,
+        ))).scalar_one_or_none()
+        if block is None:
+            raise EnterpriseSSOError("blocked SSO member not found")
         identity = (await db.execute(select(EnterpriseSSOIdentity).where(
             EnterpriseSSOIdentity.org_id == org_id,
             EnterpriseSSOIdentity.user_id == user_id,
-            EnterpriseSSOIdentity.manually_blocked.is_(True),
         ))).scalar_one_or_none()
-        if identity is None:
-            raise EnterpriseSSOError("blocked SSO member not found")
         config = await db.get(EnterpriseSSO, org_id)
-        identity.manually_blocked = False
-        if config and config.plan == "sso_directory" and config.directory_id:
+        if identity is not None:
+            identity.manually_blocked = False
+        if identity is not None and config and config.plan == "sso_directory" and config.directory_id:
             matches = (await db.execute(select(EnterpriseDirectoryUser).where(
                 EnterpriseDirectoryUser.org_id == org_id,
                 EnterpriseDirectoryUser.directory_id == config.directory_id,
@@ -257,9 +279,11 @@ async def unblock_member(org_id: int, user_id: int, actor_user_id: int) -> None:
             user = await db.get(User, user_id)
             identity.active = bool(config.directory_active and record and record.active
                                    and user and record.email == user.email)
-        else:
+        elif identity is not None:
             identity.active = True
-        db.add(identity)
+        if identity is not None:
+            db.add(identity)
+        await db.delete(block)
         _audit(db, org_id, "sso.manual_access_restored", actor=actor_user_id, subject=user_id)
         await db.commit()
 

@@ -336,6 +336,17 @@ class EnterpriseSSOIdentity(SQLModel, table=True):
     created_at: NaiveUTC = Field(default_factory=_now)
 
 
+class EnterpriseSSOBlock(SQLModel, table=True):
+    """Minimal team access decision, independent of a replaceable WorkOS connection."""
+
+    __table_args__ = (UniqueConstraint("org_id", "user_id", name="uq_enterprise_sso_block_user"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    org_id: int = Field(foreign_key="org.id", index=True)
+    user_id: int = Field(foreign_key="user.id", ondelete="CASCADE", index=True)
+    created_at: NaiveUTC = Field(default_factory=_now)
+
+
 class EnterpriseSSOEvent(SQLModel, table=True):
     """Processed WorkOS event id; webhook redelivery must be harmless."""
 
