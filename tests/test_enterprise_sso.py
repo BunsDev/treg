@@ -322,7 +322,11 @@ async def test_role_change_on_sso_team_is_durable_with_old_and_new_role(clients)
 
 async def test_sso_email_discovery_routes_but_does_not_join(clients, monkeypatch):
     from treg.config import get_settings
-    await team(clients)
+    org_id = await team(clients)
+    async with session_maker() as db:
+        config = await db.get(EnterpriseSSO, org_id)
+        config.subscription_status = "past_due"  # SSO remains available during payment retries.
+        await db.commit()
     monkeypatch.setattr(get_settings(), "workos_api_key", "sk_test")
     async def find(_client, *, key, domain):
         assert key == "sk_test" and domain == "example.com"
@@ -767,7 +771,9 @@ async def test_workos_domain_rejection_returns_to_signin_without_raw_error(clien
     assert "treg_sso_state=" in callback.headers["set-cookie"]
     landing = await clients.get(callback.headers["location"])
     assert landing.status_code == 200
-    assert 'id="sso-team"' in landing.text
+    assert 'id="sso-team"' not in landing.text
+    assert 'treg-pending-sso' in landing.text
+    assert '/media/signin-sso.js' in landing.text
     assert "Company SSO sign-in did not finish" in landing.text
 
 

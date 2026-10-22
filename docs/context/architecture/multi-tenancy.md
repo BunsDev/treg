@@ -70,6 +70,10 @@ keeps its own `User`, `Membership`, roles, sessions, and API keys. A successful 
 is accepted only when the returned organization matches this team's stored WorkOS organization and
 its connection is the same one previously used. A new human joins the existing team as `member`;
 an owner changes roles through the normal Members controls. Email domain alone never grants access.
+Email discovery checks WorkOS verified organization domains and routes to matching paid team links;
+if several teams match, the employee chooses one. It accepts a `past_due` team while Stripe retries.
+The exact team link bypasses discovery. Neither route grants membership until the state-checked
+WorkOS callback verifies the person and their organization.
 
 The owner may require SSO after one successful test sign-in. `require_member` then requires a signed
 browser session carrying this team ID for non-owners. An SSO browser session or derived CLI identity

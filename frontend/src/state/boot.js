@@ -90,7 +90,15 @@ export default async function boot(){
     this._restoreAgent();
     const me = await meReq.catch(()=>null);
     this.sessionChecked=true;
-    if(me){ this.sessionMode=true; this.me=me.email; this.isAdmin=!!me.is_superadmin; this.onboarded=!!me.onboarded; this.icHash=me.intercom_user_hash||''; this.meAvatar=me.avatar_url||null; this.uploadsOn=!!me.uploads; await this.loadAll(); this.analyticsIdentify(); this.initIntercom();
+    if(me){
+      // A verified existing account must prove its normal treg login before its first SSO link.
+      // Resume that one SSO attempt after login; remove the hint first so a failed attempt cannot loop.
+      const pendingSso=sessionStorage.getItem('treg-pending-sso');
+      if(pendingSso){ sessionStorage.removeItem('treg-pending-sso');
+        if(/^[a-z0-9][a-z0-9-]*$/.test(pendingSso)){
+          location.replace('/auth/sso/'+encodeURIComponent(pendingSso)+'/start'); return;
+        } }
+      this.sessionMode=true; this.me=me.email; this.isAdmin=!!me.is_superadmin; this.onboarded=!!me.onboarded; this.icHash=me.intercom_user_hash||''; this.meAvatar=me.avatar_url||null; this.uploadsOn=!!me.uploads; await this.loadAll(); this.analyticsIdentify(); this.initIntercom();
       // Share-born arrival (/app/skills/x?invite_org=N from the invite email): accept silently and
       // enter that team — the emailed "Sign in & accept" click was the consent. Otherwise the normal
       // first-run / invite-banner flow.

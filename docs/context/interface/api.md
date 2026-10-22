@@ -1121,6 +1121,14 @@ tracks - so both doors read their response fields *before* granting, and the red
 expired `user`/`org` with `db.refresh` before touching them. The recovery path costs the team its
 credit, never the signup response or the referral attribution.
 
+## Payment history
+
+`GET /billing/history` serves the team's unified payment history. Its `kind` filter accepts
+`all`, `manual`, `auto`, or `subscription`; `cursor` pages newest first. Top-up amounts come from
+credited ledger entries, while SSO amounts and invoice documents come from Stripe. A paid SSO
+invoice includes a receipt URL only when Stripe has a successful Charge receipt for it. Stripe
+document failures do not remove ledger-backed top-up rows.
+
 ## Optional checkout attribution
 
 `POST /billing/topup` also accepts `checkout_source` alongside `amount_usd`. The dashboard sends

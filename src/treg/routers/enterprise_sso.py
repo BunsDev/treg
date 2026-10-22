@@ -164,7 +164,7 @@ async def sso_idp_start(request: Request, connection_id: str = ""):
     async with session_maker() as db:
         config = (await db.execute(select(EnterpriseSSO).where(
             EnterpriseSSO.connection_id == connection_id,
-            EnterpriseSSO.subscription_status.in_(("active", "trialing")),
+            EnterpriseSSO.subscription_status.in_(enterprise_sso.PAID_STATUSES),
         ))).scalar_one_or_none()
         org = await db.get(Org, config.org_id) if config else None
         if org is None or org.suspended:
@@ -234,7 +234,7 @@ async def sso_discover(body: DiscoverIn, request: Request) -> dict:
         matches = (await db.execute(select(Org, EnterpriseSSO).join(
             EnterpriseSSO, EnterpriseSSO.org_id == Org.id).where(
                 EnterpriseSSO.workos_org_id.in_(organization_ids),
-                EnterpriseSSO.subscription_status.in_(("active", "trialing")),
+                EnterpriseSSO.subscription_status.in_(enterprise_sso.PAID_STATUSES),
                 Org.suspended.is_(False),
         ))).all()
     return {"teams": sorted(({"name": org.name, "slug": org.slug}

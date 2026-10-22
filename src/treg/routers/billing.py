@@ -187,17 +187,16 @@ async def billing_autotopup(
 @app.get("/billing/history")
 async def billing_history(
     limit: int = Query(24, ge=1, le=100),
+    kind: str = Query("all"),
+    cursor: str = Query("", max_length=2048),
     caller: Caller = Depends(require_member),
 ) -> dict:
-    """This team's completed top-ups, newest first, each with its invoice PDF or card receipt.
-
-    Read-only in both directions: it moves no money, and the amounts come from our own credit blocks
-    rather than from Stripe, so the history can never contradict the balance. Stripe is asked only for
-    the document links, and `stripe_ok: false` says they were unavailable — the payments listed are
-    still correct.
-    """
+    """This team's paged top-ups and SSO invoices, newest first, with document links."""
     org = _billing_org(caller)
-    return await billing.get_payment_history(org.id, limit=limit)
+    try:
+        return await billing.get_payment_history(org.id, limit=limit, kind=kind, cursor=cursor)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @app.post("/billing/portal")

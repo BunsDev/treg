@@ -3,10 +3,10 @@ import { useDashboard } from '../state/context'
 import BrandMark from './BrandMark.vue'
 export default {
   components: { BrandMark }, setup: useDashboard,
-  data: () => ({ ssoEmail: '', ssoChoices: [], ssoBusy: false }),
+  data: () => ({ ssoChoices: [], ssoBusy: false }),
   methods: {
     async ssoLogin() {
-      const email = this.ssoEmail.trim()
+      const email = this.emailInput.trim()
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { this.loginErr = 'Enter your work email.'; return }
       this.ssoBusy = true; this.loginErr = ''; this.ssoChoices = []
       try {
@@ -18,11 +18,12 @@ export default {
         if (!response.ok) throw new Error(result.detail || 'Could not find company sign-in.')
         this.ssoChoices = result.teams || []
         if (this.ssoChoices.length === 1) this.ssoGo(this.ssoChoices[0].slug)
-        else if (!this.ssoChoices.length) this.loginErr = 'No company sign-in found. Ask your IT admin for the treg link, or use another sign-in method.'
+        else if (!this.ssoChoices.length) this.loginErr = 'This email has no company SSO connection. Use another sign-in method or ask your IT admin for your company link.'
       } catch (error) { this.loginErr = error.message || 'Could not find company sign-in.' }
       finally { this.ssoBusy = false }
     },
     ssoGo(slug) {
+      this._stashNext()
       location.href = `/auth/sso/${encodeURIComponent(slug)}/start`
     },
   },
@@ -42,27 +43,24 @@ export default {
            someone who arrived on a catalog page from a search result and has no sandbox. -->
       <p v-else-if="publicCatalog" class="sub">Verify your new account and create a team to call these tools. <b>$1.00 of credit once</b> on an eligible team, no card.</p>
       <p v-else class="sub">Sign in to connect your agent and manage your team.</p>
-      <button v-if="meta.github" class="btn primary" style="width:100%;padding:11px;margin-bottom:8px" @click="githubLogin">Continue with GitHub</button>
-      <button v-if="meta.google" class="btn" style="width:100%;padding:11px;margin-bottom:8px" @click="googleLogin">Continue with Google</button>
       <div v-if="!emailStage">
-        <div class="field"><input v-model="emailInput" type="email" data-captcha="email_start" placeholder="you@work.com" @keyup.enter="emailStart"/></div>
+        <label for="sign-in-email" class="sub" style="display:block;text-align:left;margin:14px 0 4px">Email</label>
+        <div class="field"><input id="sign-in-email" v-model="emailInput" type="email" autocomplete="email" data-captcha="email_start" placeholder="you@work.com" @keyup.enter="ssoLogin"/></div>
+        <button class="btn primary" style="width:100%;margin-bottom:8px" :disabled="ssoBusy" @click="ssoLogin">{{ssoBusy?'Finding company…':'Continue with company SSO'}}</button>
         <button class="btn" style="width:100%" @click="emailStart" :disabled="busy">{{busy?'Sending…':'Email me a sign-in code'}}</button>
+        <div v-if="ssoChoices.length > 1" style="margin-top:10px">
+          <p class="sub">Choose your company team:</p>
+          <button v-for="team in ssoChoices" :key="team.slug" class="btn" style="width:100%;margin-top:6px" @click="ssoGo(team.slug)">{{team.name}} · {{team.slug}}</button>
+        </div>
       </div>
       <div v-else>
         <p class="sub" style="font-size:11px;margin:2px 0 8px">Code sent to <b>{{emailInput}}</b><span v-if="devCode"> · dev code <b class="mono">{{devCode}}</b></span> · <a href="#" @click.prevent="emailStage=false">change</a></p>
         <div class="field"><input v-model="codeInput" inputmode="numeric" placeholder="6-digit code" @keyup.enter="emailVerify"/></div>
         <button class="btn primary" style="width:100%" @click="emailVerify" :disabled="busy">{{busy?'Verifying…':'Sign in'}}</button>
       </div>
-      <details v-if="!oauthSignin && !invitePrefill && !shareGate" style="margin-top:12px;text-align:left">
-        <summary class="sub" style="cursor:pointer;text-align:center">Sign in with company SSO</summary>
-        <p class="sub" style="font-size:11px">Enter your work email, or use the sign-in link your company shared.</p>
-        <div class="field"><input v-model="ssoEmail" type="email" autocomplete="email" aria-label="Work email for company SSO" placeholder="you@company.com" @keyup.enter="ssoLogin"/></div>
-        <button class="btn" style="width:100%" :disabled="ssoBusy" @click="ssoLogin">{{ssoBusy?'Finding company…':'Continue with SSO'}}</button>
-        <div v-if="ssoChoices.length > 1" style="margin-top:10px">
-          <p class="sub">Choose your company team:</p>
-          <button v-for="team in ssoChoices" :key="team.slug" class="btn" style="width:100%;margin-top:6px" @click="ssoGo(team.slug)">{{team.name}} · {{team.slug}}</button>
-        </div>
-      </details>
+      <div class="sub" style="margin:14px 0 8px;text-align:center">or sign in with</div>
+      <button v-if="meta.github" class="btn" style="width:100%;padding:11px;margin-bottom:8px" @click="githubLogin">Continue with GitHub</button>
+      <button v-if="meta.google" class="btn" style="width:100%;padding:11px;margin-bottom:8px" @click="googleLogin">Continue with Google</button>
       <details v-if="!oauthSignin" style="margin-top:12px;text-align:left">
         <summary class="sub" style="cursor:pointer;text-align:center">or paste an org token (agents &amp; CLI)</summary>
         <div class="field" style="margin-top:8px"><input v-model="tokenInput" type="password" placeholder="X-Treg-Token" @keyup.enter="addToken(tokenInput)"/></div>

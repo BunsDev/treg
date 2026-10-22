@@ -303,7 +303,7 @@ treg org access <member> --tools a,b          # per-member tool access (admin+)
 
 Team owners can enable enterprise SSO from the dashboard's **Team → SSO** tab. WorkOS connects the
 company's identity provider; owners can invite their IT admin to finish setup. Employees can enter
-their work email or use the team's direct sign-in link. treg keeps its team roles and API keys. The
+their work email in any sign-in dialog or use the team's direct sign-in link. treg keeps its team roles and API keys. The
 Directory Sync plan removes a deactivated employee's team access. See
 [enterprise SSO setup](docs/enterprise-sso.md).
 

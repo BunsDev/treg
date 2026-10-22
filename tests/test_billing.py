@@ -38,7 +38,7 @@ from treg.domain import money as ledger
 from treg.api import app
 from treg.config import get_settings
 from treg.infra.db import reset_db, session_maker
-from treg.models import AdConversion, Org
+from treg.models import AdConversion, EnterpriseSSO, Org
 
 WHSEC = "whsec_test_secret_for_the_suite"
 
@@ -384,6 +384,107 @@ async def test_history_of_a_team_that_never_paid_is_empty_not_an_error(c: AsyncC
     monkeypatch.setattr(billing, "_sdk", lambda *a, **k: pytest.fail("no customer — must not ask Stripe"))
     r = await c.get("/billing/history", headers=_h(owner))
     assert r.status_code == 200 and r.json()["items"] == []
+
+
+async def test_history_merges_and_pages_topups_with_sso_invoices(c: AsyncClient, monkeypatch):
+    org_id, owner = await _org(c)
+    await _set_org(org_id, stripe_customer_id="cus_one_team")
+    async with session_maker() as db:
+        db.add(EnterpriseSSO(org_id=org_id, plan="sso_directory", subscription_status="active",
+                             stripe_subscription_id="sub_one_team"))
+        await ledger.topup(db, org_id, 20_000_000, "pi_manual", meta={"source": "stripe"})
+        await db.commit()
+    seen = []
+
+    async def fake_sdk(fn, /, **kw):
+        seen.append((fn, kw))
+        if fn == billing.stripe_adapter.CHARGE_LIST:
+            if kw.get("payment_intent") == "pi_sso":
+                return {"data": [{"status": "succeeded", "receipt_url": "https://pay.stripe.test/sso-receipt"}]}
+            return {"data": [_charge("pi_manual")]}
+        if fn == billing.stripe_adapter.INVOICE_LIST:
+            assert kw["customer"] == "cus_one_team"
+            return {"data": [{**_invoice("in_sso"), "created": int(time.time()) + 3600,
+                              "total": 29900, "currency": "usd", "status": "paid",
+                              "parent": {"subscription_details": {"subscription": "sub_one_team"}},
+                              "payments": {"data": [{"payment": {"payment_intent": "pi_sso"}}]}}],
+                    "has_more": False} if not kw.get("starting_after") else {"data": [], "has_more": False}
+        pytest.fail(f"unexpected Stripe call: {fn}")
+
+    monkeypatch.setattr(billing, "_sdk", fake_sdk)
+    first = (await c.get("/billing/history?limit=1", headers=_h(owner))).json()
+    assert len(first["items"]) == 1
+    assert first["items"][0]["kind"] == "subscription"
+    assert first["items"][0]["amount_micro"] == 299_000_000
+    assert first["items"][0]["invoice_pdf"].endswith("/pdf")
+    assert first["items"][0]["receipt_url"] == "https://pay.stripe.test/sso-receipt"
+    assert first["next_cursor"]
+    second = (await c.get("/billing/history", params={"limit": 1, "cursor": first["next_cursor"]},
+                          headers=_h(owner))).json()
+    assert [i["kind"] for i in second["items"]] == ["manual"]
+    assert second["items"][0]["amount_micro"] == 20_000_000
+    assert second["next_cursor"] is None
+    assert any(kw.get("starting_after") == "in_sso" for _, kw in seen)
+
+
+async def test_history_keeps_invoices_from_an_earlier_sso_purchase(c: AsyncClient, monkeypatch):
+    org_id, owner = await _org(c)
+    await _set_org(org_id, stripe_customer_id="cus_one_team")
+    async with session_maker() as db:
+        db.add(EnterpriseSSO(org_id=org_id, stripe_subscription_id="sub_current"))
+        await db.commit()
+
+    async def fake_sdk(fn, /, **kw):
+        assert fn == billing.stripe_adapter.INVOICE_LIST
+        assert kw["customer"] == "cus_one_team"
+        return {"data": [
+            {**_invoice("in_topup"), "total": 2000, "created": 3,
+             "metadata": {"treg_kind": "topup"}},
+            {**_invoice("in_old_sso"), "total": 29900, "created": 2,
+             "parent": {"subscription_details": {"subscription": "sub_old",
+                         "metadata": {"treg_kind": "enterprise_sso", "treg_org_id": str(org_id)}}}},
+        ], "has_more": False}
+
+    monkeypatch.setattr(billing, "_sdk", fake_sdk)
+    body = (await c.get("/billing/history?kind=subscription", headers=_h(owner))).json()
+    assert [i["id"] for i in body["items"]] == ["in_old_sso"]
+
+
+async def test_history_filters_and_rejects_bad_cursor(c: AsyncClient, monkeypatch):
+    org_id, owner = await _org(c)
+    await _set_org(org_id, stripe_customer_id="cus_one_team")
+    async with session_maker() as db:
+        await ledger.topup(db, org_id, 10_000_000, "pi_manual", meta={"source": "stripe"})
+        await ledger.topup(db, org_id, 20_000_000, "pi_auto", meta={"source": "stripe", "auto": True})
+        await db.commit()
+    monkeypatch.setattr(billing, "_sdk", _docs_sdk([], []))
+    for kind, expected in [("manual", "pi_manual"), ("auto", "pi_auto")]:
+        body = (await c.get("/billing/history", params={"kind": kind}, headers=_h(owner))).json()
+        assert [i["payment_intent"] for i in body["items"]] == [expected]
+    first = (await c.get("/billing/history?limit=1&kind=all", headers=_h(owner))).json()
+    second = (await c.get("/billing/history", params={"limit": 1, "kind": "all",
+                                                       "cursor": first["next_cursor"]}, headers=_h(owner))).json()
+    assert {first["items"][0]["payment_intent"], second["items"][0]["payment_intent"]} == {"pi_auto", "pi_manual"}
+    assert second["next_cursor"] is None
+    assert (await c.get("/billing/history?cursor=invalid", headers=_h(owner))).status_code == 422
+
+
+async def test_history_stripe_outage_keeps_topups_but_marks_invoices_unavailable(c: AsyncClient, monkeypatch):
+    org_id, owner = await _org(c)
+    await _set_org(org_id, stripe_customer_id="cus_one_team")
+    async with session_maker() as db:
+        db.add(EnterpriseSSO(org_id=org_id, stripe_subscription_id="sub_one_team"))
+        await ledger.topup(db, org_id, 10_000_000, "pi_manual", meta={"source": "stripe"})
+        await db.commit()
+
+    async def unavailable(fn, /, **kw):
+        raise stripe.APIConnectionError("Stripe unavailable")
+
+    monkeypatch.setattr(billing, "_sdk", unavailable)
+    body = (await c.get("/billing/history", headers=_h(owner))).json()
+    assert [i["kind"] for i in body["items"]] == ["manual"]
+    assert body["subscription_invoices_ok"] is False
+    assert body["next_cursor"] is None
 
 
 # ---- webhook: signature ------------------------------------------------------------------------

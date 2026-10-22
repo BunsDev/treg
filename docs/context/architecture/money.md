@@ -11,6 +11,10 @@ sources:
   - src/treg/domain/asynctasks/__init__.py
   - src/treg/models.py
   - src/treg/application/billing.py
+  - src/treg/routers/billing.py
+  - frontend/src/state/billing.js
+  - frontend/src/state/data.js
+  - frontend/src/pages/TeamPage.vue
   - src/treg/application/enterprise_billing.py
   - src/treg/routers/enterprise_sso.py
   - src/treg/application/call/idempotency.py
@@ -85,7 +89,7 @@ before sending that Price ID to Checkout. This avoids creating a new Stripe
 Product and Price for every team. A pricing change creates a new Price ID for future checkouts;
 existing subscriptions retain their original Price unless explicitly migrated.
 The existing signed billing webhook records subscription status and gates WorkOS setup/sign-in on
-`active` or `trialing`; a redirect from Checkout grants nothing. Subscription metadata binds the
+`active`, `trialing`, or `past_due` while Stripe retries; a redirect from Checkout grants nothing. Subscription metadata binds the
 event to a team and plan, and the Stripe customer must match that team. Older Stripe events cannot
 restore an entitlement after a later cancellation. Owners can schedule cancellation at period end;
 Checkout uses one pending reservation per team and an idempotent Stripe session request, so
@@ -95,6 +99,9 @@ removes only SSO-created memberships and their keys. Pre-existing members
 keep their memberships. Team deletion
 waits until the subscription has ended. This subscription never credits or debits the
 prepaid tool-call balance, so the five ledger entry kinds remain unchanged.
+Payment history combines prepaid top-ups and SSO subscription invoices. A paid SSO invoice can
+also link to its Stripe receipt when its successful Charge has a receipt URL. A missing receipt
+never hides the invoice; zero-amount or non-card invoices may have no receipt.
 After the paid period ends, the enterprise cleanup worker deletes every WorkOS connection and
 directory belonging to the team's verified WorkOS organization. It retries failures and prevents
 a new checkout or team deletion until cleanup finishes, without holding a database connection
@@ -754,7 +761,7 @@ PaymentIntent is the payment. Note also that invoice creation can be **priced se
 and Stripe invoice emails depend on Customer emails → Successful payments being enabled in the
 dashboard. treg's own receipt email is sent independently.
 
-**`list_payments` reads rows from us and documents from Stripe.** The payment list is built from our
+**`get_payment_history` merges top-ups and SSO invoices for the Team Billing tab.** The top-up rows are built from our
 own `CreditBlock` rows - the same table the balance is computed from, so the history can never show a
 payment the balance disagrees with, and amounts and dates need no network call. Stripe is asked only
 for the links, in two list calls (`Charge.list` + `Invoice.list`, joined through invoice payments or
@@ -762,8 +769,14 @@ the legacy charge invoice field) rather than two
 per row; a failure degrades to rows without links and reports `stripe_ok: false`, because a Stripe
 hiccup should cost the payer a download button, not their payment history. Both Stripe windows cap at
 100 payments, so a very old top-up on a busy account comes back link-less - the portal is the
-unbounded archive. The dashboard marks these credited payments Paid and shows separate invoice and
-Stripe receipt links when each exists; the invoice PDF can still show the amount originally due.
+unbounded archive. SSO invoice rows use Stripe's own total, status and document links, and never
+add to the prepaid balance. `_subscription_invoices` scans the team's Stripe customer invoices and
+selects invoices whose subscription metadata identifies this team (or whose subscription ID matches
+its current SSO subscription); this includes an earlier subscription after cancellation and
+re-purchase without mixing in top-up invoices. The API's `kind` filter and per-source cursor build
+one newest-first page across both kinds; the dashboard has All, Manual top-ups, Auto top-ups and
+Subscriptions filters with Previous/Next controls. Stripe invoice failure is reported separately
+as `subscription_invoices_ok: false` while the ledger-backed top-ups remain visible.
 
 **`create_portal_session` is the self-serve surface** for card, billing address, tax ID and the full
 invoice archive: hosted, because every one of those is a form we would otherwise own and the tax-ID
