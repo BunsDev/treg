@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import json
+import re
 import time
 from urllib.parse import urlencode, urlsplit
 
@@ -44,6 +45,21 @@ async def create_organization(client: httpx.AsyncClient, *, key: str, name: str,
     if not isinstance(value, str) or not value.startswith("org_"):
         raise WorkOSError("WorkOS organization missing")
     return value
+
+
+async def get_organization(client: httpx.AsyncClient, *, key: str, organization: str) -> dict:
+    if not isinstance(organization, str) or not re.fullmatch(r"org_[A-Za-z0-9_]{1,96}", organization):
+        raise WorkOSError("invalid WorkOS organization")
+    try:
+        response = await client.get(BASE_URL + f"/organizations/{organization}",
+            headers={"Authorization": f"Bearer {key}", "Accept": "application/json"}, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise WorkOSError("WorkOS organization lookup failed") from exc
+    if not isinstance(data, dict) or data.get("id") != organization:
+        raise WorkOSError("WorkOS organization mismatch")
+    return data
 
 
 async def _list(client: httpx.AsyncClient, path: str, *, key: str, params: dict,

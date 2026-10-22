@@ -25,9 +25,10 @@ sources:
   - src/treg/domain/identity/api_keys.py
   - src/treg/domain/identity/session.py
   - src/treg/application/enterprise_sso.py
-  - src/treg/alembic/versions/0078_enterprise_sso.py
-  - src/treg/alembic/versions/0079_enterprise_sso_audit.py
-  - src/treg/alembic/versions/0080_sso_manual_block.py
+  - src/treg/alembic/versions/0079_enterprise_sso.py
+  - src/treg/alembic/versions/0080_enterprise_sso_audit.py
+  - src/treg/alembic/versions/0081_sso_manual_block.py
+  - src/treg/alembic/versions/0082_oauth_sso_provenance.py
   - src/treg/worker.py
   - src/treg/routers/enterprise_sso.py
   - src/treg/infra/workos.py
@@ -73,8 +74,14 @@ token can access only that team, even when the user belongs to several. Regular 
 the global user but does not open that team. The owner retains a regular-login recovery path. API
 keys are separate credentials, and a regular browser session cannot mint a new Default key for an
 enforced team. A WorkOS profile is linked by stable profile and IdP IDs, with account email checked
-on later sign-ins; email changes need explicit review rather than silent account reassignment. A
-profile can link to an existing global account only after that account has verified its email.
+on later sign-ins; email changes need explicit review rather than silent account reassignment. New
+accounts require an email matching a verified WorkOS organization domain and the organization's
+external ID must match the treg team. Outside-organization profiles are refused. An existing global
+account requires a concurrent normal treg session for the same verified user before first linking.
+CLI pairing and OAuth consent check SSO scope and enforcement at issuance. OAuth codes, refresh
+families, and access tokens retain the SSO team; exchange, refresh, and use recheck policy. An OAuth
+grant made before SSO enforcement cannot continue into the enforced team. Previously issued API
+keys remain independent of sign-in method until membership removal or key revocation.
 
 On the Directory Sync plan, signed WorkOS events maintain a roster of active directory users,
 including people who have not yet signed in. Once a directory is connected, SSO sign-in requires a

@@ -52,7 +52,9 @@ async def table_caller(
             team = org.slug if org is not None else ""
         # The token must never reach the provider: /table/ passes caller headers on, as /call/ does.
         request.state.table_oauth = True
-        identity = session.make_identity(user.id, token_version=user.token_version, ttl=120)
+        request.state.table_sso_org_id = claims.get("sso_org_id")
+        identity = session.make_identity(user.id, token_version=user.token_version, ttl=120,
+                                         sso_org_id=claims.get("sso_org_id"))
         return await require_member(request, x_treg_token=identity, x_treg_org=team,
                                     treg_session="", db=db)
     return await require_member(request, x_treg_token=x_treg_token, x_treg_org=x_treg_org,
@@ -109,12 +111,14 @@ async def table_columns(tool_id: str, caller: Caller = Depends(table_caller)):
 async def table_account(request: Request, caller: Caller = Depends(table_caller),
                         db: AsyncSession = Depends(get_session)):
     """Who is signed in and which teams can pay, with their balances: the add-on's panel header and
-    team switch. With a "treg for Sheets" token: every team of the person. With a team key: that one
-    team (a team key speaks for one team only)."""
+    team switch. With a "treg for Sheets" token: every team this sign-in may use. With a team key:
+    that one team (a team key speaks for one team only)."""
     if not table_app.enabled_for(caller.org.slug, caller.email):
         return JSONResponse({"detail": "Not Found"}, status_code=404)
     every = bool(getattr(request.state, "table_oauth", False))
     return {"email": caller.email, "active_team": caller.org.slug,
             "teams": await table_app.account_teams(db, user_id=caller.user.id,
-                                                   only_org_id=None if every else caller.org_id)}
+                                                   only_org_id=None if every else caller.org_id,
+                                                   oauth=every,
+                                                   oauth_sso_org_id=getattr(request.state, "table_sso_org_id", None))}
 

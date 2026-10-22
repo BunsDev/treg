@@ -654,6 +654,7 @@ async def _internal_auth(token: str) -> dict[str, str]:
     return {
         "X-Treg-Token": session.make_identity(
             user.id, token_version=user.token_version, ttl=120,
+            sso_org_id=claims.get("sso_org_id"),
         ),
         "X-Treg-Org": slug,
     }

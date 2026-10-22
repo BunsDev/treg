@@ -130,6 +130,16 @@ async def _resolve_org(ref: str, db: AsyncSession) -> Org | None:
     return await db.get(Org, int(ref)) if (ref.isdigit() and int(ref) < 2**63) else None
 
 
+async def sso_team_allowed(db: AsyncSession, membership: Membership,
+                           sso_org_id: int | None) -> bool:
+    """Whether this human sign-in may act for a team, including its SSO scope."""
+    if sso_org_id is not None and sso_org_id != membership.org_id:
+        return False
+    enterprise = await db.get(EnterpriseSSO, membership.org_id)
+    return not (enterprise is not None and enterprise.enforced
+                and membership.role != "owner" and sso_org_id != membership.org_id)
+
+
 async def require_identity(
     request: Request,
     x_treg_token: str = Header(default=""),
@@ -228,6 +238,8 @@ async def require_member(
     - **token** (agents/CLI): the token IS a membership, so the org is baked in.
     - **session** (dashboard): the cookie identifies the user; the org is chosen via `X-Treg-Org`.
     """
+    oauth_bridge = False
+    identity_claims = None
     membership, api_key = (
         await _membership_and_key_by_token(x_treg_token, db)
         if x_treg_token else (None, None)
@@ -337,11 +349,10 @@ async def require_member(
     # A regular email/GitHub/Google browser session may still identify this person globally,
     # but it is not proof of this team's corporate IdP. Bearer keys are separate machine/CLI
     # credentials; Directory Sync revokes those by removing the membership.
-    if not x_treg_token and membership.role != "owner":
-        enterprise = await db.get(EnterpriseSSO, org.id)
-        if enterprise is not None and enterprise.enforced:
-            if sso_claims.get("sso_org_id") != org.id:
-                raise HTTPException(status_code=403, detail="sign in through this team's SSO")
+    if not x_treg_token or oauth_bridge:
+        proof_org_id = (identity_claims or {}).get("sso_org_id") if oauth_bridge else sso_claims.get("sso_org_id")
+        if not await sso_team_allowed(db, membership, proof_org_id):
+            raise HTTPException(status_code=403, detail="sign in through this team's SSO")
     # Public-demo lockdown: the published token (non-admin roles) may ONLY call tools and read.
     # Centralized here — not per-endpoint — so every mutation (tools, secrets, skills, members,
     # leave, runs) is frozen no matter what routes are added later. Admin+ keeps full control.

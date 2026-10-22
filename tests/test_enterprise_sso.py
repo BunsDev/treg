@@ -4,23 +4,41 @@ import hashlib
 import hmac
 import json
 import time
+import base64
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
 from sqlmodel import select
 
-from treg.application import billing, enterprise_billing, enterprise_sso
+from treg import mcp
+from treg.application import auth as auth_use_cases, billing, enterprise_billing, enterprise_sso
 from treg.domain.identity import session as identity_session
+from treg.domain.identity import mcp_oauth
 from treg.infra import workos
 from treg.infra.db import session_maker
 from treg.models import EnterpriseSSO, EnterpriseSSOAudit, Membership, Org, User
+from treg.timeutil import utcnow_naive
 
 
 def profile(org="org_workos_1", email="employee@example.com"):
     return {"id": "prof_01DMC79VCBZ0NY2099737PSVF1", "organization_id": org,
             "connection_id": "conn_01E4ZCR3C56J083X43JQXF3JK5", "idp_id": "103456789012345678901",
             "email": email, "connection_type": "OktaSAML"}
+
+
+def organization(org_id: int, *, domains: list[dict] | None = None,
+                 allow_outside: bool = False) -> dict:
+    return {"id": "org_workos_1", "external_id": str(org_id),
+            "allow_profiles_outside_organization": allow_outside,
+            "domains": domains if domains is not None else
+                [{"domain": "example.com", "state": "verified"}]}
+
+
+async def signin(org_id: int, sso_profile: dict, *, proven_user_id: int | None = None,
+                 workos_org: dict | None = None):
+    return await enterprise_sso.finish_signin(org_id, sso_profile,
+        organization=workos_org or organization(org_id), proven_user_id=proven_user_id)
 
 
 async def team(clients, *, plan="sso"):
@@ -36,10 +54,10 @@ async def team(clients, *, plan="sso"):
 async def test_sso_profile_must_match_team_and_jit_is_member(clients):
     org_id = await team(clients)
     with pytest.raises(enterprise_sso.EnterpriseSSOError, match="another team"):
-        await enterprise_sso.finish_signin(org_id, profile(org="org_other"))
-    result = await enterprise_sso.finish_signin(org_id, profile())
+        await signin(org_id, profile(org="org_other"))
+    result = await signin(org_id, profile())
     assert result.org_id == org_id
-    assert (await enterprise_sso.finish_signin(org_id, profile())).user_id == result.user_id
+    assert (await signin(org_id, profile())).user_id == result.user_id
     async with session_maker() as db:
         member = (await db.execute(select(Membership).where(
             Membership.org_id == org_id, Membership.user_id == result.user_id))).scalar_one()
@@ -52,16 +70,16 @@ async def test_sso_profile_must_match_team_and_jit_is_member(clients):
 
 async def test_owner_can_restore_manually_removed_sso_member(clients):
     org_id = await team(clients)
-    result = await enterprise_sso.finish_signin(org_id, profile())
+    result = await signin(org_id, profile())
     removed = await clients.delete(f"/orgs/{org_id}/members/{result.user_id}")
     assert removed.status_code == 200
     with pytest.raises(enterprise_sso.EnterpriseSSOError, match="deactivated"):
-        await enterprise_sso.finish_signin(org_id, profile())
+        await signin(org_id, profile())
     blocked = await clients.get(f"/orgs/{org_id}/sso/blocked")
     assert blocked.json() == {"members": [{"user_id": result.user_id, "email": "employee@example.com"}]}
     restored = await clients.post(f"/orgs/{org_id}/sso/blocked/{result.user_id}/restore")
     assert restored.status_code == 200
-    assert (await enterprise_sso.finish_signin(org_id, profile())).user_id == result.user_id
+    assert (await signin(org_id, profile())).user_id == result.user_id
     assert (await clients.get(f"/orgs/{org_id}/sso/blocked")).json() == {"members": []}
     async with session_maker() as db:
         events = (await db.execute(select(EnterpriseSSOAudit.event).where(
@@ -78,14 +96,14 @@ async def test_directory_cannot_restore_a_manually_removed_member(clients):
     await enterprise_sso.apply_directory_event({"id": "activate", "event": "dsync.activated",
         "data": {"id": "directory_1", "organization_id": "org_workos_1"}})
     await enterprise_sso.apply_directory_event({"id": "create", "event": "dsync.user.created", "data": base})
-    result = await enterprise_sso.finish_signin(org_id, profile())
+    result = await signin(org_id, profile())
     assert (await clients.delete(f"/orgs/{org_id}/members/{result.user_id}")).status_code == 200
     await enterprise_sso.apply_directory_event({"id": "update", "event": "dsync.user.updated", "data": base})
     await enterprise_sso.reconcile_directory(org_id, "directory_1", [base], 1000)
     with pytest.raises(enterprise_sso.EnterpriseSSOError, match="deactivated"):
-        await enterprise_sso.finish_signin(org_id, profile())
+        await signin(org_id, profile())
     assert (await clients.post(f"/orgs/{org_id}/sso/blocked/{result.user_id}/restore")).status_code == 200
-    assert (await enterprise_sso.finish_signin(org_id, profile())).user_id == result.user_id
+    assert (await signin(org_id, profile())).user_id == result.user_id
 
 
 async def test_sso_does_not_link_an_unverified_existing_account(clients):
@@ -93,8 +111,8 @@ async def test_sso_does_not_link_an_unverified_existing_account(clients):
     async with session_maker() as db:
         db.add(User(email="employee@example.com"))
         await db.commit()
-    with pytest.raises(enterprise_sso.EnterpriseSSOError, match="verify this existing"):
-        await enterprise_sso.finish_signin(org_id, profile())
+    with pytest.raises(enterprise_sso.EnterpriseSSOError, match="sign in to your existing"):
+        await signin(org_id, profile())
     async with session_maker() as db:
         user = (await db.execute(select(User).where(User.email == "employee@example.com"))).scalar_one()
         assert user.email_verified_at is None
@@ -102,9 +120,121 @@ async def test_sso_does_not_link_an_unverified_existing_account(clients):
             Membership.org_id == org_id, Membership.user_id == user.id))).scalar_one_or_none() is None
 
 
+async def test_sso_does_not_take_over_a_verified_existing_account(clients):
+    org_id = await team(clients)
+    async with session_maker() as db:
+        victim = User(email="employee@example.com", email_verified_at=utcnow_naive())
+        db.add(victim)
+        await db.commit()
+        victim_id = victim.id
+    with pytest.raises(enterprise_sso.EnterpriseSSOError, match="sign in to your existing"):
+        await signin(org_id, profile())
+    with pytest.raises(enterprise_sso.EnterpriseSSOError, match="sign in to your existing"):
+        await signin(org_id, profile(), proven_user_id=victim_id + 1)
+    async with session_maker() as db:
+        assert (await db.execute(select(Membership).where(
+            Membership.org_id == org_id, Membership.user_id == victim_id))).scalar_one_or_none() is None
+    linked = await signin(org_id, profile(), proven_user_id=victim_id)
+    assert linked.user_id == victim_id
+    assert (await signin(org_id, profile())).user_id == victim_id
+
+
+async def test_sso_requires_verified_company_domain_even_for_new_users(clients):
+    org_id = await team(clients)
+    with pytest.raises(enterprise_sso.EnterpriseSSOError, match="verify the company's email domain"):
+        await signin(org_id, profile(), workos_org=organization(org_id, domains=[]))
+    with pytest.raises(enterprise_sso.EnterpriseSSOError, match="verify the company's email domain"):
+        await signin(org_id, profile(email="employee@other.example"))
+    with pytest.raises(enterprise_sso.EnterpriseSSOError, match="not trusted"):
+        await signin(org_id, profile(), workos_org=organization(org_id, allow_outside=True))
+    async with session_maker() as db:
+        assert (await db.execute(select(User).where(User.email == "employee@example.com"))).scalar_one_or_none() is None
+
+
+async def test_enforced_sso_blocks_browser_approved_cli_and_oauth_consent(clients):
+    org_id = await team(clients)
+    employee = await signin(org_id, profile())
+    async with session_maker() as db:
+        org = await db.get(Org, org_id)
+        other = Org(name="Personal", slug="personal")
+        db.add(other)
+        await db.flush()
+        db.add(Membership(org_id=other.id, user_id=employee.user_id, role="member", token_hash=""))
+        await db.commit()
+        slug, other_id = org.slug, other.id
+    await enterprise_sso.set_enforced(org_id, True)
+    regular = identity_session.make_session(employee.user_id, token_version=employee.token_version)
+    scoped = identity_session.make_session(employee.user_id, token_version=employee.token_version,
+                                          sso_org_id=org_id)
+    started = await auth_use_cases.start_cli_login()
+    assert [o["slug"] for o in (await auth_use_cases.cli_orgs(regular))["orgs"]] == ["personal"]
+    with pytest.raises(auth_use_cases.CliPairingError, match="sign_in_through_sso"):
+        await auth_use_cases.approve_cli_login(regular, started["login_id"], started["code"], slug)
+    assert (await auth_use_cases.approve_cli_login(
+        scoped, started["login_id"], started["code"], slug))["ok"]
+
+    registered = await clients.post("/oauth/register", json={
+        "client_name": "Test Client", "redirect_uris": ["https://client.test/cb"]})
+    client_id = registered.json()["client_id"]
+    verifier = "sso-security-regression-verifier"
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+    args = dict(client_id=client_id, redirect_uri="https://client.test/cb", response_type="code",
+                code_challenge=challenge, code_challenge_method="S256",
+                resource=mcp_oauth.mcp_resource_url(), scope="treg:call")
+    view = await auth_use_cases.prepare_oauth_authorization(session_cookie=regular, **args)
+    assert [team["org_id"] for team in view.teams] == [other_id]
+    with pytest.raises(auth_use_cases.OAuthServerError, match="access_denied"):
+        await auth_use_cases.approve_oauth_authorization(
+            session_cookie=regular, decision="allow", org_id=org_id, **args)
+    view = await auth_use_cases.prepare_oauth_authorization(session_cookie=scoped, **args)
+    assert [team["org_id"] for team in view.teams] == [org_id]
+    with pytest.raises(auth_use_cases.OAuthServerError, match="access_denied"):
+        await auth_use_cases.approve_oauth_authorization(
+            session_cookie=scoped, decision="allow", org_id=other_id, **args)
+    code = await auth_use_cases.approve_oauth_authorization(
+        session_cookie=scoped, decision="allow", org_id=org_id, **args)
+    tokens = await auth_use_cases.exchange_oauth_token(
+        grant_type="authorization_code", code=code, redirect_uri="https://client.test/cb",
+        client_id=client_id, code_verifier=verifier, resource=args["resource"], refresh_token="")
+    assert mcp_oauth.read_access_token(tokens["access_token"],
+        expected_audience=args["resource"])["sso_org_id"] == org_id
+    bridge = await mcp._internal_auth(tokens["access_token"])
+    assert (await clients.get(f"/orgs/{org_id}/balance", headers=bridge)).status_code == 200
+    with pytest.raises(auth_use_cases.OAuthGrantError, match="SSO"):
+        await auth_use_cases.move_oauth_grant(user_id=employee.user_id,
+            family_id=(await auth_use_cases.list_oauth_grants(employee.user_id))[0]["grant"],
+            team="personal")
+
+
+async def test_oauth_grant_from_regular_login_stops_when_sso_becomes_required(clients):
+    org_id = await team(clients)
+    employee = await signin(org_id, profile())
+    regular = identity_session.make_session(employee.user_id, token_version=employee.token_version)
+    registered = await clients.post("/oauth/register", json={
+        "client_name": "Test Client", "redirect_uris": ["https://client.test/cb"]})
+    client_id = registered.json()["client_id"]
+    verifier = "before-enforcement-verifier"
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+    resource = mcp_oauth.mcp_resource_url()
+    code = await auth_use_cases.approve_oauth_authorization(
+        session_cookie=regular, decision="allow", org_id=org_id,
+        client_id=client_id, redirect_uri="https://client.test/cb", response_type="code",
+        code_challenge=challenge, code_challenge_method="S256", resource=resource, scope="treg:call")
+    tokens = await auth_use_cases.exchange_oauth_token(
+        grant_type="authorization_code", code=code, redirect_uri="https://client.test/cb",
+        client_id=client_id, code_verifier=verifier, resource=resource, refresh_token="")
+    await enterprise_sso.set_enforced(org_id, True)
+    bridge = await mcp._internal_auth(tokens["access_token"])
+    assert (await clients.get(f"/orgs/{org_id}/balance", headers=bridge)).status_code == 403
+    with pytest.raises(auth_use_cases.OAuthServerError, match="invalid_grant"):
+        await auth_use_cases.exchange_oauth_token(
+            grant_type="refresh_token", code="", redirect_uri="", client_id=client_id,
+            code_verifier="", resource=resource, refresh_token=tokens["refresh_token"])
+
+
 async def test_company_sso_cookie_cannot_open_another_team_or_mint_its_key(clients):
     org_id = await team(clients)
-    result = await enterprise_sso.finish_signin(org_id, profile())
+    result = await signin(org_id, profile())
     async with session_maker() as db:
         other = Org(name="Unrelated", slug="unrelated")
         db.add(other)
@@ -134,7 +264,7 @@ async def test_company_sso_cookie_cannot_open_another_team_or_mint_its_key(clien
 
 async def test_company_sso_session_cannot_become_platform_admin(clients):
     org_id = await team(clients)
-    result = await enterprise_sso.finish_signin(org_id, profile())
+    result = await signin(org_id, profile())
     async with session_maker() as db:
         user = await db.get(User, result.user_id)
         user.is_superadmin = True
@@ -151,7 +281,7 @@ async def test_company_sso_session_cannot_become_platform_admin(clients):
 
 async def test_role_change_on_sso_team_is_durable_with_old_and_new_role(clients):
     org_id = await team(clients)
-    result = await enterprise_sso.finish_signin(org_id, profile())
+    result = await signin(org_id, profile())
     response = await clients.patch(f"/orgs/{org_id}/members/{result.user_id}",
         json={"role": "admin"})
     assert response.status_code == 200, response.text
@@ -203,7 +333,17 @@ async def test_directory_deactivation_removes_team_access(clients):
         "data": {"id": "directory_1", "organization_id": "org_workos_1"}})
     assert await enterprise_sso.apply_directory_event({"id": "event_user", "event": "dsync.user.created",
         "data": {**base, "state": "active"}})
-    result = await enterprise_sso.finish_signin(org_id, profile())
+    result = await signin(org_id, profile())
+    async with session_maker() as db:
+        org_slug = (await db.get(Org, org_id)).slug
+        employee = await db.get(User, result.user_id)
+        employee_token_version = employee.token_version
+    clients.cookies.set(identity_session.COOKIE, identity_session.make_session(
+        result.user_id, token_version=employee_token_version, sso_org_id=org_id))
+    employee_key = (await clients.get("/auth/cli-token", headers={
+        "X-Treg-Token": "", "X-Treg-Org": org_slug})).json()["token"]
+    assert (await clients.get(f"/orgs/{org_id}/balance", headers={
+        "X-Treg-Token": employee_key, "X-Treg-Org": org_slug})).status_code == 200
     event = {"id": "event_delete", "event": "dsync.user.deleted", "data": {**base, "state": "inactive"}}
     assert await enterprise_sso.apply_directory_event(event)
     assert not await enterprise_sso.apply_directory_event(event)
@@ -213,8 +353,10 @@ async def test_directory_deactivation_removes_team_access(clients):
         assert (await db.execute(select(EnterpriseSSOAudit).where(
             EnterpriseSSOAudit.org_id == org_id,
             EnterpriseSSOAudit.event == "sso.directory_access_removed"))).scalar_one().subject_user_id == result.user_id
+    assert (await clients.get(f"/orgs/{org_id}/balance", headers={
+        "X-Treg-Token": employee_key, "X-Treg-Org": org_slug})).status_code in (401, 403)
     with pytest.raises(enterprise_sso.EnterpriseSSOError, match="not active"):
-        await enterprise_sso.finish_signin(org_id, profile())
+        await signin(org_id, profile())
 
 
 async def test_reconciliation_repairs_a_missed_directory_removal(clients):
@@ -225,7 +367,7 @@ async def test_reconciliation_repairs_a_missed_directory_removal(clients):
     await enterprise_sso.apply_directory_event({"id": "activate", "event": "dsync.activated",
         "data": {"id": "directory_1", "organization_id": "org_workos_1"}})
     await enterprise_sso.apply_directory_event({"id": "add", "event": "dsync.user.created", "data": base})
-    result = await enterprise_sso.finish_signin(org_id, profile())
+    result = await signin(org_id, profile())
     with pytest.raises(enterprise_sso.EnterpriseSSOError, match="wrong directory roster"):
         await enterprise_sso.reconcile_directory(org_id, "directory_1", [{**base, "directory_id": "other"}], 1000)
     async with session_maker() as db:
@@ -246,19 +388,19 @@ async def test_whole_directory_removal_revokes_members(clients):
     await enterprise_sso.apply_directory_event({"id": "event_activate", "event": "dsync.activated",
         "data": {"id": "directory_1", "organization_id": "org_workos_1"}})
     await enterprise_sso.apply_directory_event({"id": "event_user", "event": "dsync.user.created", "data": base})
-    result = await enterprise_sso.finish_signin(org_id, profile())
+    result = await signin(org_id, profile())
     await enterprise_sso.apply_directory_event({"id": "event_directory_delete", "event": "dsync.deleted",
         "data": {"id": "directory_1", "organization_id": "org_workos_1"}})
     async with session_maker() as db:
         assert (await db.execute(select(Membership).where(
             Membership.org_id == org_id, Membership.user_id == result.user_id))).scalar_one_or_none() is None
     with pytest.raises(enterprise_sso.EnterpriseSSOError, match="directory access is inactive"):
-        await enterprise_sso.finish_signin(org_id, profile())
+        await signin(org_id, profile())
 
 
 async def test_whole_directory_removal_revokes_pre_sync_members(clients):
     org_id = await team(clients, plan="sso_directory")
-    result = await enterprise_sso.finish_signin(org_id, profile())
+    result = await signin(org_id, profile())
     await enterprise_sso.apply_directory_event({"id": "activate", "event": "dsync.activated",
         "data": {"id": "directory_1", "organization_id": "org_workos_1"}})
     await enterprise_sso.apply_directory_event({"id": "delete", "event": "dsync.deleted",
@@ -281,7 +423,7 @@ async def test_older_directory_events_cannot_restore_access(clients):
     assert not await enterprise_sso.apply_directory_event({"id": "old-create", "event": "dsync.user.created",
         "created_at": "2026-01-02T00:00:00Z", "data": {**base, "state": "active"}})
     with pytest.raises(enterprise_sso.EnterpriseSSOError, match="not active"):
-        await enterprise_sso.finish_signin(org_id, profile())
+        await signin(org_id, profile())
 
 
 def test_workos_webhook_signature_and_portal_response():
@@ -363,7 +505,10 @@ async def test_browser_callback_requires_company_proof_for_enforced_team(clients
         slug = org.slug
     async def exchange(_client, **_kwargs):
         return profile()
+    async def get_org(_client, **_kwargs):
+        return organization(org_id)
     monkeypatch.setattr(workos, "exchange_code", exchange)
+    monkeypatch.setattr(workos, "get_organization", get_org)
     start = await clients.get(f"/auth/sso/{slug}/start")
     assert start.status_code == 303
     state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
@@ -388,6 +533,46 @@ async def test_browser_callback_requires_company_proof_for_enforced_team(clients
         "X-Treg-Token": sso_key.json()["token"], "X-Treg-Org": slug})
     assert bearer_key.status_code == 200
     assert identity_session.read_identity_claims(bearer_key.json()["token"])["sso_org_id"] == org_id
+
+
+async def test_existing_account_links_only_after_normal_browser_signin(clients, monkeypatch):
+    from treg.config import get_settings
+    settings = get_settings()
+    monkeypatch.setattr(settings, "workos_api_key", "sk_test")
+    monkeypatch.setattr(settings, "workos_client_id", "client_test")
+    org_id = await team(clients)
+    async with session_maker() as db:
+        slug = (await db.get(Org, org_id)).slug
+        existing = User(email="employee@example.com", email_verified_at=utcnow_naive())
+        db.add(existing)
+        await db.commit()
+        existing_id = existing.id
+    async def exchange(_client, **_kwargs):
+        return profile()
+    async def get_org(_client, **_kwargs):
+        return organization(org_id)
+    monkeypatch.setattr(workos, "exchange_code", exchange)
+    monkeypatch.setattr(workos, "get_organization", get_org)
+
+    async def callback():
+        start = await clients.get(f"/auth/sso/{slug}/start")
+        state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
+        return await clients.get("/auth/sso/callback", params={"state": state, "code": "code_test"})
+
+    clients.cookies.delete(identity_session.COOKIE)
+    refused = await callback()
+    assert refused.status_code == 303 and "sso_error=link" in refused.headers["location"]
+    landing = await clients.get(refused.headers["location"])
+    assert landing.status_code == 200 and "You already have a treg account" in landing.text
+    async with session_maker() as db:
+        assert (await db.execute(select(Membership).where(
+            Membership.org_id == org_id, Membership.user_id == existing_id))).scalar_one_or_none() is None
+    clients.cookies.set(identity_session.COOKIE,
+        identity_session.make_session(existing_id, token_version=0))
+    linked = await callback()
+    assert linked.status_code == 303 and linked.headers["location"].startswith("/app?sso=success")
+    claims = identity_session.read_session_claims(linked.cookies.get(identity_session.COOKIE))
+    assert claims["uid"] == existing_id and claims["sso_org_id"] == org_id
 
 
 async def test_workos_domain_rejection_returns_to_signin_without_raw_error(clients, monkeypatch):
@@ -435,7 +620,7 @@ async def test_subscription_webhooks_activate_then_cancel_without_balance_credit
         row.workos_org_id = "org_workos_1"
         db.add(row)
         await db.commit()
-    result = await enterprise_sso.finish_signin(org_id, profile())
+    result = await signin(org_id, profile())
     async with session_maker() as db:
         canceled = await billing.handle_webhook_event(db, {"type": "customer.subscription.deleted",
             "created": 200, "data": {"object": {"id": "sub_test", "customer": "cus_test",

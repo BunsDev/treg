@@ -417,6 +417,7 @@ _CLI_HTTP_ERRORS = {
     "too_many_wrong_codes": (400, "too many wrong codes — run `treg login` again"),
     "wrong_code": (400, "that code doesn't match the one in your terminal"),
     "not_member": (403, "not a member of that team"),
+    "sign_in_through_sso": (403, "sign in through this team's SSO"),
     "unavailable": (503, "login storage unavailable — please try again"),
 }
 

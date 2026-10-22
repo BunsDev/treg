@@ -1390,6 +1390,7 @@ async function emailVerify(){
   const messages={
     domain:'Your company identity provider did not allow that email for this team. Try your company email or ask your IT admin.',
     failed:'Company SSO sign-in did not finish. Try again or ask your IT admin.',
+    link:'You already have a treg account. Sign in with your usual method, then use company SSO to link it.',
     expired:'Company SSO sign-in expired. Please start again.'
   };
   if(!Object.prototype.hasOwnProperty.call(messages,reason)) return;

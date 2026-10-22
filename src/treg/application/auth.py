@@ -33,6 +33,7 @@ from ..domain.identity.access import (
     _membership_by_token,
     _norm_email,
     _resolve_org,
+    sso_team_allowed,
     _user_from_identity_token,
     _user_from_session,
 )
@@ -395,7 +396,7 @@ async def poll_cli_login(login_id: str) -> dict:
         return result
 
 
-async def _orgs_brief(user: User, db: AsyncSession) -> list[dict]:
+async def _orgs_brief(user: User, db: AsyncSession, sso_org_id: int | None = None) -> list[dict]:
     """The user's teams for the /login picker: slug, name, role, tool_count, personal. Sorted so the
     team a CLI login should default to sits first (a real team over the personal org, then most tools).
     `personal` mirrors the dashboard's rule: the auto-created org named after the user's email."""
@@ -411,7 +412,7 @@ async def _orgs_brief(user: User, db: AsyncSession) -> list[dict]:
     out = []
     for m in memberships:
         o = orgs.get(m.org_id)
-        if o is None:
+        if o is None or not await sso_team_allowed(db, m, sso_org_id):
             continue
         out.append({"slug": o.slug, "name": o.name, "role": m.role,
                     "tool_count": counts.get(o.id, 0), "personal": o.name == user.email})
@@ -424,11 +425,8 @@ async def cli_orgs(session_cookie: str) -> dict:
         user = await _user_from_session(session_cookie, db)
         if user is None:
             return {"email": None, "orgs": []}
-        orgs = await _orgs_brief(user, db)
         sso_org_id = (sess.read_session_claims(session_cookie) or {}).get("sso_org_id")
-        if sso_org_id is not None:
-            scoped_org = await db.get(Org, sso_org_id)
-            orgs = [org for org in orgs if scoped_org is not None and org["slug"] == scoped_org.slug]
+        orgs = await _orgs_brief(user, db, sso_org_id)
         return {"email": user.email, "orgs": orgs}
 
 
@@ -475,6 +473,8 @@ async def approve_cli_login(
             ))).scalar_one_or_none() if org else None
             if org is None or membership is None:
                 raise CliPairingError("not_member")
+            if not await sso_team_allowed(db, membership, sso_org_id):
+                raise CliPairingError("sign_in_through_sso")
             active_org = org.slug
             default = await managed_keys.ensure_default_key(db, membership, user)
         result = {"token": sess.make_identity(
@@ -520,10 +520,7 @@ async def issue_cli_token(
                     Membership.org_id == org.id,
                 ))).scalar_one_or_none()
                 if membership is not None:
-                    from ..models import EnterpriseSSO
-                    enterprise = await db.get(EnterpriseSSO, org.id)
-                    if (enterprise is not None and enterprise.enforced and membership.role != "owner"
-                            and sso_org_id != org.id):
+                    if not await sso_team_allowed(db, membership, sso_org_id):
                         raise IdentityLookupError("sign in through this team's SSO")
                     org_slug = org.slug
                     user = await db.get(User, user_id)
@@ -1042,12 +1039,13 @@ async def prepare_oauth_authorization(
         if user is None:
             return None
 
+        sso_org_id = (sess.read_session_claims(session_cookie) or {}).get("sso_org_id")
         memberships = (await db.execute(
             select(Membership).where(Membership.user_id == user.id))).scalars().all()
         teams = []
         for membership in memberships:
             org = await db.get(Org, membership.org_id)
-            if org is not None and not org.suspended:
+            if org is not None and not org.suspended and await sso_team_allowed(db, membership, sso_org_id):
                 # The BALANCE belongs on this list. Choosing a team here decides which balance the
                 # client spends for the life of the grant, and a list of slugs makes the one question
                 # that matters - "which of these can actually pay?" - invisible at the moment of choosing.
@@ -1088,23 +1086,31 @@ async def approve_oauth_authorization(
         user = await _user_from_session(session_cookie, db)
         if user is None:
             raise OAuthServerError("access_denied", "not signed in", status=401)
+        sso_org_id = (sess.read_session_claims(session_cookie) or {}).get("sso_org_id")
         if client.client_id == mcp_oauth.SHEETS_CLIENT_ID and not org_id:
             # A Sheets grant names no team at consent: each request picks one with X-Treg-Org. The
             # token still carries a DEFAULT team, the person's first, for a request that names none.
-            first = (await db.execute(select(Membership).where(Membership.user_id == user.id)
-                                      .order_by(Membership.id).limit(1))).scalar_one_or_none()
-            org_id = first.org_id if first is not None else 0
+            candidates = (await db.execute(select(Membership).where(Membership.user_id == user.id)
+                                           .order_by(Membership.id))).scalars().all()
+            org_id = 0
+            for candidate in candidates:
+                if await sso_team_allowed(db, candidate, sso_org_id):
+                    org_id = candidate.org_id
+                    break
         # The chosen team must be one this user actually belongs to — the field is client-supplied.
         membership = (await db.execute(select(Membership).where(
             Membership.user_id == user.id, Membership.org_id == org_id))).scalar_one_or_none()
         if membership is None:
             raise _redirect_refusal("access_denied", "choose a team you are a member of")
+        if not await sso_team_allowed(db, membership, sso_org_id):
+            raise _redirect_refusal("access_denied", "sign in through this team's SSO")
 
         code = OAuthCode(
             code=_secrets.token_urlsafe(32), client_id=client.client_id, user_id=user.id, org_id=org_id,
             redirect_uri=redirect_uri, code_challenge=code_challenge,
             resource=effective_resource,
             scope=scope,
+            sso_org_id=sso_org_id,
             expires_at=datetime.now(timezone.utc).replace(tzinfo=None)
             + timedelta(seconds=AUTH_CODE_TTL_S))
         db.add(code)
@@ -1170,11 +1176,17 @@ async def _refresh_grant(*, refresh_token: str, client_id: str, resource: str) -
         # grant would spring back to life - with no new consent - the day the membership was restored.
         still_in = (await db.execute(select(Membership).where(
             Membership.user_id == row.user_id, Membership.org_id == live_org_id))).scalar_one_or_none()
+        grant = await _ensure_grant(row.family_id, db)
+        sso_org_id = grant.sso_org_id if grant is not None else None
         if still_in is None and mcp_oauth.is_sheets_resource(row.resource):
             # A Sheets grant is the person's, across their teams: losing the DEFAULT team moves the
-            # default to another team they are still in. Only losing every team ends the grant.
-            still_in = (await db.execute(select(Membership).where(Membership.user_id == row.user_id)
-                                         .order_by(Membership.id).limit(1))).scalar_one_or_none()
+            # default to another team this sign-in may use.
+            candidates = (await db.execute(select(Membership).where(Membership.user_id == row.user_id)
+                                           .order_by(Membership.id))).scalars().all()
+            for candidate in candidates:
+                if await sso_team_allowed(db, candidate, sso_org_id):
+                    still_in = candidate
+                    break
             if still_in is not None:
                 live_org_id = still_in.org_id
                 org = await db.get(Org, live_org_id)
@@ -1185,6 +1197,10 @@ async def _refresh_grant(*, refresh_token: str, client_id: str, resource: str) -
                 "invalid_grant",
                 "the account behind this grant is no longer a member of its team — sign in again",
             )
+        if not await sso_team_allowed(db, still_in, sso_org_id):
+            await _revoke_refresh_family(row.family_id, "SSO policy", db)
+            await db.commit()
+            raise OAuthServerError("invalid_grant", "sign in through this team's SSO again")
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         row.retired_at, row.retired_reason = now, "rotated"
@@ -1195,7 +1211,7 @@ async def _refresh_grant(*, refresh_token: str, client_id: str, resource: str) -
         access = mcp_oauth.make_access_token(
             user_id=row.user_id, org_id=live_org_id, scope=row.scope,
             audience=mcp_oauth.normalize_resource(row.resource),  # heal pre-normalization spellings
-            token_version=user.token_version)
+            token_version=user.token_version, sso_org_id=sso_org_id)
         await db.commit()
         return {"access_token": access, "token_type": "Bearer",
                 "expires_in": mcp_oauth.ACCESS_TTL_SECONDS, "scope": row.scope,
@@ -1248,14 +1264,18 @@ async def exchange_oauth_token(
             raise OAuthServerError(
                 "invalid_grant", "the account behind this grant is no longer active",
             )
+        member = (await db.execute(select(Membership).where(
+            Membership.user_id == row.user_id, Membership.org_id == row.org_id))).scalar_one_or_none()
+        if member is None or not await sso_team_allowed(db, member, row.sso_org_id):
+            raise OAuthServerError("invalid_grant", "sign in through this team's SSO again")
 
         token = mcp_oauth.make_access_token(
             user_id=row.user_id, org_id=row.org_id, scope=row.scope,
             audience=mcp_oauth.normalize_resource(row.resource),  # heal pre-normalization spellings
-            token_version=user.token_version)
+            token_version=user.token_version, sso_org_id=row.sso_org_id)
         refresh = await _issue_refresh(family_id=_secrets.token_urlsafe(16), client_id=row.client_id,
                                        user_id=row.user_id, org_id=row.org_id, resource=row.resource,
-                                       scope=row.scope, db=db)
+                                       scope=row.scope, db=db, sso_org_id=row.sso_org_id)
         await db.commit()
         return {"access_token": token, "token_type": "Bearer",
                 "expires_in": mcp_oauth.ACCESS_TTL_SECONDS, "scope": row.scope,
@@ -1330,6 +1350,8 @@ async def move_oauth_grant(*, user_id: int, family_id: str, team: str) -> dict:
         grant = await _ensure_grant(family_id, db)
         if grant is None:  # the live-row check above makes this defensive, not a normal outcome
             raise OAuthGrantError(f"no live grant {family_id!r} on this account")
+        if not await sso_team_allowed(db, member, grant.sso_org_id):
+            raise OAuthGrantError("sign in through this team's SSO before moving this grant")
         grant.current_org_id = org.id
         db.add(grant)
         await db.commit()

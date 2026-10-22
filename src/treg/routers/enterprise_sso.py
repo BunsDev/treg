@@ -16,7 +16,7 @@ from .. import client_ip, crypto, ratestore
 from ..application import enterprise_billing, enterprise_sso
 from ..config import get_settings
 from ..domain.identity import session as identity_session
-from ..domain.identity.access import Caller, require_member
+from ..domain.identity.access import Caller, _user_from_session, require_member
 from ..infra import workos
 from ..infra.db import session_maker
 from ..models import EnterpriseSSO, Org
@@ -263,8 +263,21 @@ async def sso_callback(request: Request, code: str = "", state: str = "", error:
         async with httpx.AsyncClient() as client:
             profile = await workos.exchange_code(client, key=settings.workos_api_key,
                                                  client_id=settings.workos_client_id, code=code)
-        result = await enterprise_sso.finish_signin(org_id, profile)
-    except (workos.WorkOSError, enterprise_sso.EnterpriseSSOError):
+            organization = await workos.get_organization(client, key=settings.workos_api_key,
+                                                         organization=profile.get("organization_id", ""))
+        original = identity_session.read_session_claims(request.cookies.get(identity_session.COOKIE, ""))
+        proven_user_id = None
+        if original is not None and original.get("sso_org_id") is None:
+            async with session_maker() as db:
+                user = await _user_from_session(request.cookies.get(identity_session.COOKIE, ""), db)
+                proven_user_id = user.id if user is not None else None
+        result = await enterprise_sso.finish_signin(org_id, profile, organization=organization,
+                                                    proven_user_id=proven_user_id)
+    except enterprise_sso.EnterpriseSSOError as exc:
+        await enterprise_sso.record_action(org_id, "sso.signin_failed")
+        reason = "link" if "sign in to your existing treg account" in str(exc) else "failed"
+        return _signin_failure(reason, saved.get("slug", ""))
+    except workos.WorkOSError:
         await enterprise_sso.record_action(org_id, "sso.signin_failed")
         return _signin_failure("failed", saved.get("slug", ""))
     response = RedirectResponse("/app?sso=success", status_code=303)

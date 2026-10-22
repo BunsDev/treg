@@ -3228,7 +3228,7 @@ async def landing(request: Request, treg_session: str = Cookie(default=""),
     # never parks the code.
     ref_only = all(k == "ref" or k.startswith("utm_") for k in request.query_params.keys())
     sso_error = request.query_params.get("sso_error", "")
-    sso_result = (sso_error in {"domain", "failed", "expired"} and
+    sso_result = (sso_error in {"domain", "failed", "expired", "link"} and
                   set(request.query_params.keys()) <= {"sso_error", "team"})
     if page.exists() and (not request.query_params or (ref and ref_only) or sso_result):
         signed_in = bool(treg_session and await _user_from_session(treg_session, db))

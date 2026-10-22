@@ -1309,6 +1309,7 @@ class OAuthCode(SQLModel, table=True):
     client_id: str = Field(index=True)
     user_id: int = Field(foreign_key="user.id", index=True)
     org_id: int = Field(foreign_key="org.id", index=True)
+    sso_org_id: int | None = Field(default=None)
     redirect_uri: str
     code_challenge: str = Field(default="")
     resource: str = Field(default="")
@@ -1331,6 +1332,7 @@ class OAuthGrant(SQLModel, table=True):
 
     family_id: str = Field(primary_key=True)
     current_org_id: int = Field(foreign_key="org.id", index=True)
+    sso_org_id: int | None = Field(default=None)
     granted_at: NaiveUTC = Field(default_factory=_now)
 
 

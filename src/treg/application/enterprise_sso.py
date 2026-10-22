@@ -78,7 +78,8 @@ async def bind_workos_org(org_id: int, workos_org_id: str) -> None:
         await db.commit()
 
 
-async def finish_signin(org_id: int, profile: dict) -> SigninResult:
+async def finish_signin(org_id: int, profile: dict, *, organization: dict,
+                        proven_user_id: int | None = None) -> SigninResult:
     """A WorkOS code exchange is the only caller; untrusted browser data never reaches here."""
     async with session_maker() as db:
         config = await db.get(EnterpriseSSO, org_id)
@@ -88,6 +89,12 @@ async def finish_signin(org_id: int, profile: dict) -> SigninResult:
             raise EnterpriseSSOError("SSO is not active for this team")
         if profile.get("organization_id") != config.workos_org_id:
             raise EnterpriseSSOError("SSO response belongs to another team")
+        # WorkOS can be configured to allow out-of-domain profiles. Never treat such an
+        # assertion as proof of ownership of a global treg email account.
+        if (organization.get("id") != config.workos_org_id
+                or organization.get("external_id") != str(org_id)
+                or organization.get("allow_profiles_outside_organization") is True):
+            raise EnterpriseSSOError("SSO organization is not trusted for account creation")
         connection = profile.get("connection_id")
         profile_id = profile.get("id")
         idp_id = profile.get("idp_id")
@@ -99,6 +106,12 @@ async def finish_signin(org_id: int, profile: dict) -> SigninResult:
         email = _norm_email(email)
         if _is_machine_email(email):
             raise EnterpriseSSOError("machine identity cannot sign in")
+        domains = organization.get("domains") or []
+        email_domain = email.rsplit("@", 1)[-1]
+        if not any(isinstance(item, dict) and item.get("state") == "verified"
+                   and isinstance(item.get("domain"), str)
+                   and item["domain"].lower() == email_domain for item in domains):
+            raise EnterpriseSSOError("verify the company's email domain before SSO sign-in")
         directory_user = None
         if config.plan == "sso_directory" and config.directory_id:
             if not config.directory_active:
@@ -124,10 +137,25 @@ async def finish_signin(org_id: int, profile: dict) -> SigninResult:
                 raise EnterpriseSSOError("SSO identity changed; contact the team owner")
         else:
             try:
-                user = await signup.find_or_create_user(db, email, door="enterprise_sso",
-                    verified=True, reject_unverified_existing=True)
+                existing_user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
+                if existing_user is not None:
+                    if (proven_user_id != existing_user.id
+                            or existing_user.email_verified_at is None):
+                        raise EnterpriseSSOError(
+                            "sign in to your existing treg account normally, then retry company SSO")
+                    if signup.blocked_email(email, "enterprise_sso"):
+                        raise signup.BlockedEmailError
+                    user = existing_user
+                else:
+                    created: set[int] = set()
+                    user = await signup.find_or_create_user(db, email, door="enterprise_sso",
+                        created=created, verified=True, reject_unverified_existing=True)
+                    if user.id not in created:
+                        raise EnterpriseSSOError(
+                            "sign in to your existing treg account normally, then retry company SSO")
             except signup.UnverifiedExistingUserError as exc:
-                raise EnterpriseSSOError("verify this existing treg account before linking SSO") from exc
+                raise EnterpriseSSOError(
+                    "sign in to your existing treg account normally, then retry company SSO") from exc
             except (signup.MachineIdentityError, signup.BlockedEmailError) as exc:
                 raise EnterpriseSSOError("this identity cannot sign in") from exc
             existing_link = (await db.execute(select(EnterpriseSSOIdentity).where(

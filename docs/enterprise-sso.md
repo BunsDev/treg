@@ -14,7 +14,7 @@ link if email discovery returns no match or several teams. Email is a routing hi
 
 ## Configure the deployment
 
-1. Apply Alembic migrations through `0080` before running the new code.
+1. Apply Alembic migrations through `0082` before running the new code.
 2. In the WorkOS environment, create an API key and find the client ID. Set
    `TREG_WORKOS_API_KEY` and `TREG_WORKOS_CLIENT_ID` on the server. Set a stable
    `TREG_SECRET_KEY` and `TREG_SESSION_SECRET` for the state and browser cookies.
@@ -57,14 +57,22 @@ not need a treg owner account. The Admin Portal button remains for owners doing 
 An employee who signs in through the team's WorkOS organization gets a team membership with the
 `member` role. A regular email or social sign-in does not satisfy SSO enforcement for that team,
 even if it uses the same company email address. Existing team roles are never overwritten by an
-IdP group. SSO links to an existing treg account only if its email was already verified; an
-unverified existing account must prove its email through treg first. Owners retain their normal
-sign-in as a recovery path. Team API keys remain separate
+IdP group. SSO creates a new account only when its email matches a verified WorkOS organization
+domain. An existing treg account must sign in by its usual method in the same browser, then
+complete one company SSO sign-in to link the IdP identity. An SSO assertion alone cannot claim
+that global account. Verify domain ownership before marking a WorkOS domain verified; the dashboard
+can mark a manually added domain verified without a DNS challenge. Keep WorkOS's
+outside-organization profile option disabled. Owners retain
+their normal sign-in as a recovery path. Team API keys remain separate
 credentials; Directory Sync deactivation removes the affected membership and revokes its keys.
 On the SSO-only plan, removing someone from the IdP stops future SSO sign-ins, but treg cannot
 promise immediate revocation of an existing team session or key. Use Directory Sync for that.
-An SSO browser session and any CLI identity token it mints are limited to the company team, even
-when that person belongs to other treg teams. Use an ordinary sign-in to access those other teams.
+An SSO browser session and any CLI or MCP OAuth credential it mints are limited to the company
+team, even when that person belongs to other treg teams. CLI and OAuth consent omit teams requiring
+a different sign-in; approval, token exchange, refresh, and use check the same rule. An existing
+OAuth grant made through regular login stops working on that team when SSO becomes required.
+Previously issued team API keys remain separate credentials until the member is removed or the
+key is revoked. Use an ordinary sign-in to access other teams.
 If an admin removes an SSO member in treg, that person stays blocked even if the directory still
 lists them as active. The owner can allow SSO again from the SSO tab. Directory deactivation and
 later reactivation remain automatic unless a team admin explicitly removed the person.
@@ -89,8 +97,9 @@ processing terms are necessary for SOC 2 and GDPR; code and tests alone do not e
 ## Verification before production
 
 The repository tests simulate the documented WorkOS profile and directory event payloads and
-verify wrong-organization rejection, JIT membership, regular-session denial, webhook signature,
-and deprovisioning. After account access is granted, perform a staging sign-in through a real
-WorkOS connection and a Stripe test subscription, confirm webhook delivery and cancellation, and
+verify wrong-organization rejection, verified-domain and account-link checks, CLI and OAuth scope,
+regular-session denial, webhook signature, and deprovisioning. Before production, perform a staging
+sign-in through a WorkOS organization with a verified company domain and a Stripe test subscription,
+confirm webhook delivery and cancellation, and
 test deactivating a directory user. The simulated tests cannot prove the external dashboard
 configuration or provider-specific SAML/OIDC handshake.

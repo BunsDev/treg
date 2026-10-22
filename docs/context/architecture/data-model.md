@@ -59,7 +59,8 @@ sources:
   - src/treg/alembic/versions/0073_org_flow_control_version.py
   - tests/test_org_flow_control_schema.py
   - src/treg/alembic/versions/0075_ad_click_stash.py
-  - src/treg/alembic/versions/0078_enterprise_sso.py
+  - src/treg/alembic/versions/0079_enterprise_sso.py
+  - src/treg/alembic/versions/0082_oauth_sso_provenance.py
   - src/treg/timeutil.py
   - src/treg/infra/db.py
   - src/treg/infra/money_timing.py

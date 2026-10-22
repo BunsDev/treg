@@ -9,6 +9,7 @@ sources:
   - src/treg/domain/identity/session.py
   - src/treg/domain/identity/access.py
   - src/treg/domain/identity/api_keys.py
+  - src/treg/alembic/versions/0082_oauth_sso_provenance.py
   - src/treg/routers/api_keys.py
   - src/treg/routers/auth.py
   - src/treg/web/claude-connector.html
@@ -27,6 +28,13 @@ related:
 The same authorization server also serves one non-MCP client, "treg for Sheets" (`treg-sheets`):
 its own resource (`<public_url>/table`) and scope, a grant that belongs to the person rather than one
 team, and a token accepted only on the table routes. See [table](table.md).
+
+When a team requires enterprise SSO, normal-login consent cannot create a grant for that team.
+SSO consent is scoped to its own team, including Sheets requests that select a team per call.
+`OAuthCode.sso_org_id` and `OAuthGrant.sso_org_id` retain that proof through code exchange and
+refresh; access tokens pass it through the internal identity bridge to `require_member`. A grant
+created before enforcement has no such proof and stops working on the enforced team at use and
+refresh. An SSO-scoped grant cannot be moved to another team.
 
 # MCP
 
