@@ -486,22 +486,37 @@ async def _enterprise_reconcile(args) -> int:
     async with session_maker() as db:
         statement = select(EnterpriseSSO).where(
             EnterpriseSSO.plan == "sso_directory",
-            EnterpriseSSO.directory_active.is_(True),
-            EnterpriseSSO.subscription_status.in_(("active", "trialing")),
+            EnterpriseSSO.subscription_status.in_(("active", "trialing", "past_due")),
         )
         if args.org:
             statement = statement.where(EnterpriseSSO.org_id == args.org)
-        targets = [(row.org_id, row.directory_id) for row in
-                   (await db.execute(statement)).scalars().all() if row.directory_id]
+        targets = [(row.org_id, row.workos_org_id, row.directory_id, row.directory_active) for row in
+                   (await db.execute(statement)).scalars().all() if row.workos_org_id]
     results = []
     failed = False
     async with httpx.AsyncClient() as client:
-        for org_id, directory_id in targets:
+        for org_id, workos_org_id, known_directory_id, was_active in targets:
             observed_at_ms = int(time.time() * 1000)
             try:
+                directories = await workos.directories_for_organization(
+                    client, key=key, organization=workos_org_id)
+                active = [row for row in directories if row.get("state") == "active"
+                          and row.get("organization_id") == workos_org_id]
+                if not active:
+                    removed = await enterprise_sso.deactivate_directory_from_api(
+                        org_id, workos_org_id)
+                    results.append({"org_id": org_id, "roster_size": 0,
+                                    "memberships_removed": removed})
+                    continue
+                if len(active) != 1 or not isinstance(active[0].get("id"), str):
+                    raise enterprise_sso.EnterpriseSSOError("expected one active directory")
+                directory_id = active[0]["id"]
+                if was_active and known_directory_id != directory_id:
+                    raise enterprise_sso.EnterpriseSSOError("directory changed; review required")
                 roster = await workos.directory_users(client, key=key, directory=directory_id)
                 result = await enterprise_sso.reconcile_directory(
-                    org_id, directory_id, roster, observed_at_ms)
+                    org_id, directory_id, roster, observed_at_ms,
+                    verified_workos_org_id=workos_org_id)
                 results.append({"org_id": org_id, **result})
             except (workos.WorkOSError, enterprise_sso.EnterpriseSSOError):
                 failed = True

@@ -29,6 +29,7 @@ sources:
   - src/treg/alembic/versions/0080_enterprise_sso_audit.py
   - src/treg/alembic/versions/0081_sso_manual_block.py
   - src/treg/alembic/versions/0082_oauth_sso_provenance.py
+  - src/treg/alembic/versions/0083_enterprise_sso_safety.py
   - src/treg/worker.py
   - src/treg/routers/enterprise_sso.py
   - src/treg/infra/workos.py
@@ -80,8 +81,11 @@ external ID must match the treg team. Outside-organization profiles are refused.
 account requires a concurrent normal treg session for the same verified user before first linking.
 CLI pairing and OAuth consent check SSO scope and enforcement at issuance. OAuth codes, refresh
 families, and access tokens retain the SSO team; exchange, refresh, and use recheck policy. An OAuth
-grant made before SSO enforcement cannot continue into the enforced team. Previously issued API
-keys remain independent of sign-in method until membership removal or key revocation.
+grant made before SSO enforcement cannot continue into the enforced team. Earlier non-owner
+bearer keys, including agent keys, stop authorizing this team after enforcement. New human or
+agent keys issued through an authorized team session carry issuance provenance and work until
+their membership or key is revoked. Employees can also issue an SSO-scoped CLI key after company
+sign-in; the owner retains recovery access.
 
 On the Directory Sync plan, signed WorkOS events maintain a roster of active directory users,
 including people who have not yet signed in. Once a directory is connected, SSO sign-in requires a
@@ -94,6 +98,11 @@ active directory records until the owner restores access. Durable, minimal `Ente
 rows record SSO sign-ins and failures, setup actions, role changes, enforcement switches, directory
 removals, manual team removals, and owner restores. Access changes and their audit rows commit together; setup actions are recorded after
 WorkOS responds. A retention worker deletes expired rows under the deployment's chosen policy.
+Full-roster repair also discovers an active directory if its activation webhook was missed, and
+removes pre-sync SSO identities absent from the roster. Only `active` directory users count as
+provisioned. SSO and Directory Sync stay active while Stripe retries a `past_due` subscription.
+When the subscription ends, enforcement is lifted so existing members can use normal sign-in.
+Cancellation removes only SSO-created memberships; pre-existing members remain.
 
 The registry is **tenant-isolated**: an **Org** owns resources, a **User** is a global identity, and a
 **Membership** links them with a role and IS where the caller's token lives. A token = a `(user, org)`

@@ -103,6 +103,13 @@ async def verified_organizations_for_domain(client: httpx.AsyncClient, *, key: s
     return found
 
 
+async def directories_for_organization(client: httpx.AsyncClient, *, key: str,
+                                       organization: str) -> list[dict]:
+    """Discover connected directories even when activation webhooks were lost."""
+    return await _list(client, "/directories", key=key,
+                       params={"organization_id": organization})
+
+
 async def directory_users(client: httpx.AsyncClient, *, key: str, directory: str) -> list[dict]:
     """Fetch a complete roster before a caller makes any revocation decision."""
     users: list[dict] = []

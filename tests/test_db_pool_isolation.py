@@ -37,7 +37,7 @@ EXPECTED_MAKERS: dict[str, set[str]] = {
     "application/auth.py": {API}, "application/billing.py": {API}, "application/connect.py": {API},
     # SSO reads/writes close before WorkOS and Stripe requests; the callback and webhook use
     # short API-pool transactions on the request path.
-    "application/enterprise_sso.py": {API}, "application/enterprise_billing.py": {API},
+    "application/enterprise_sso.py": {API},
     "routers/enterprise_sso.py": {API},
     "application/asynctasks.py": {API},
     # Organization resource CRUD uses short API-pool transactions around, never during, upstream I/O.

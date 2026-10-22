@@ -14,7 +14,7 @@ from ..domain.identity import api_keys as managed
 from ..domain.identity import session as identity_session
 from ..domain.identity.access import Caller, _role_at_least, require_member
 from ..infra.db import get_session
-from ..models import ApiKey, ApiKeyEvent, Membership, Org, User
+from ..models import ApiKey, ApiKeyEvent, EnterpriseSSO, Membership, Org, User
 from ..timeutil import utcnow_naive
 
 
@@ -228,6 +228,7 @@ async def create_api_key(
         raise HTTPException(status_code=403, detail="viewers cannot create additional keys")
     if managed.is_machine_email(caller.email):
         raise HTTPException(status_code=403, detail="machine identities cannot create human keys")
+    enterprise = await db.get(EnterpriseSSO, org_id)
     secret, prefix, key_hash = managed.mint_secret()
     row = ApiKey(
         org_id=org_id,
@@ -238,6 +239,7 @@ async def create_api_key(
         safe_prefix=prefix,
         key_hash=key_hash,
         state=managed.ACTIVE,
+        sso_org_id=org_id if enterprise is not None and enterprise.enforced else None,
         created_by=caller.email,
     )
     db.add(row)
@@ -349,6 +351,8 @@ async def rotate_api_key(
     db: AsyncSession = Depends(get_session),
 ) -> dict:
     old = await _key(org_id, key_id, db, caller)
+    enterprise = await db.get(EnterpriseSSO, org_id)
+    sso_org_id = org_id if enterprise is not None and enterprise.enforced else None
     if old.kind == managed.DEFAULT_KIND:
         if not _assigned(caller, old):
             raise HTTPException(status_code=403, detail="only the assigned human can rotate this key")
@@ -371,6 +375,7 @@ async def rotate_api_key(
             user.id, user.token_version, org=org.slug,
             key_generation=generation,
             scope=identity_session.TEAM_SCOPE,
+            sso_org_id=sso_org_id,
         )
         response.headers["Cache-Control"] = "no-store"
         return {**_view(old, caller, user.id, safe_prefix=secret[:12]), "secret": secret,
@@ -390,6 +395,7 @@ async def rotate_api_key(
         try:
             secret, new = await managed.rotate_agent_key(
                 db, membership, user, actor_email=caller.email, expected_key_id=old.id,
+                sso_org_id=sso_org_id,
             )
         except (managed.RotationConflict, IntegrityError) as exc:
             await db.rollback()
@@ -401,7 +407,7 @@ async def rotate_api_key(
             raise HTTPException(status_code=409, detail="a revoked key cannot be rotated")
         try:
             secret, new = await managed.rotate_human_key(
-                db, old, actor_email=caller.email,
+                db, old, actor_email=caller.email, sso_org_id=sso_org_id,
             )
         except (managed.RotationConflict, IntegrityError) as exc:
             await db.rollback()

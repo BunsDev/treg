@@ -76,7 +76,11 @@ The existing signed billing webhook records subscription status and gates WorkOS
 `active` or `trialing`; a redirect from Checkout grants nothing. Subscription metadata binds the
 event to a team and plan, and the Stripe customer must match that team. Older Stripe events cannot
 restore an entitlement after a later cancellation. Owners can schedule cancellation at period end;
-when the subscription ends, linked non-owner memberships and their keys are revoked. Team deletion
+Checkout uses one pending reservation per team and an idempotent Stripe session request, so
+concurrent clicks cannot create parallel subscriptions. When paid entitlement ends, enforcement
+is lifted; `past_due` retains SSO and Directory Sync while Stripe retries payment. Cancellation
+removes only SSO-created memberships and their keys. Pre-existing members
+keep their memberships. Team deletion
 waits until the subscription has ended. This subscription never credits or debits the
 prepaid tool-call balance, so the five ledger entry kinds remain unchanged.
 

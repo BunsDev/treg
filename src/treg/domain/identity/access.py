@@ -162,7 +162,7 @@ async def require_identity(
                 "but cannot act as a user"))
         if user is not None and not user.suspended:
             claims = sess.read_identity_claims(x_treg_token)
-            sso_org_id = (claims or {}).get("sso_org_id")
+            sso_org_id = (claims or {}).get("sso_org_id", key.sso_org_id if key else None)
             if sso_org_id is not None and not _sso_scope_allows(request, sso_org_id):
                 raise HTTPException(status_code=403, detail="sign in normally for account-wide actions")
             oauth_bridge = bool(
@@ -196,6 +196,7 @@ async def require_identity(
             # holding this pool slot while waiting for a second one can deadlock a bounded pool.
             await db.commit()
             managed_keys.touch(key)
+            request.state.sso_org_id = sso_org_id
             return user
         raise HTTPException(status_code=401, detail="invalid token")
     user = await _user_from_session(treg_session, db)
@@ -204,6 +205,7 @@ async def require_identity(
         if sso_org_id is not None and not _sso_scope_allows(request, sso_org_id):
             raise HTTPException(status_code=403, detail="sign in normally for account-wide actions")
         await db.commit()
+        request.state.sso_org_id = sso_org_id
         return user
     raise HTTPException(status_code=401, detail="not authenticated")
 
@@ -213,7 +215,8 @@ def _sso_scope_allows(request: Request, org_id: int) -> bool:
     scoped_team_path = len(path) > 2 and path[1] == "orgs" and path[2] == str(org_id)
     scoped_entry = request.url.path == "/orgs" and request.method == "GET"
     scoped_key = request.url.path == "/auth/cli-token"
-    return scoped_team_path or scoped_entry or scoped_key
+    account_kill_switch = request.url.path == "/auth/revoke-tokens" and request.method == "POST"
+    return scoped_team_path or scoped_entry or scoped_key or account_kill_switch
 
 
 async def _user_from_identity_token(token: str, db: AsyncSession) -> User | None:
@@ -346,13 +349,13 @@ async def require_member(
         sso_claims = sess.read_session_claims(treg_session) or {}
         if sso_claims.get("sso_org_id") is not None and sso_claims["sso_org_id"] != org.id:
             raise HTTPException(status_code=403, detail="sign in separately for this team")
-    # A regular email/GitHub/Google browser session may still identify this person globally,
-    # but it is not proof of this team's corporate IdP. Bearer keys are separate machine/CLI
-    # credentials; Directory Sync revokes those by removing the membership.
-    if not x_treg_token or oauth_bridge:
-        proof_org_id = (identity_claims or {}).get("sso_org_id") if oauth_bridge else sso_claims.get("sso_org_id")
-        if not await sso_team_allowed(db, membership, proof_org_id):
-            raise HTTPException(status_code=403, detail="sign in through this team's SSO")
+    # All non-owner credentials need corporate proof once SSO is required.
+    # This also invalidates bearer keys minted before enforcement.
+    proof_org_id = ((identity_claims or {}).get("sso_org_id", api_key.sso_org_id if api_key else None)
+                    if x_treg_token
+                    else sso_claims.get("sso_org_id"))
+    if not await sso_team_allowed(db, membership, proof_org_id):
+        raise HTTPException(status_code=403, detail="sign in through this team's SSO")
     # Public-demo lockdown: the published token (non-admin roles) may ONLY call tools and read.
     # Centralized here — not per-endpoint — so every mutation (tools, secrets, skills, members,
     # leave, runs) is frozen no matter what routes are added later. Admin+ keeps full control.

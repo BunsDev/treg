@@ -71,15 +71,21 @@ An SSO browser session and any CLI or MCP OAuth credential it mints are limited 
 team, even when that person belongs to other treg teams. CLI and OAuth consent omit teams requiring
 a different sign-in; approval, token exchange, refresh, and use check the same rule. An existing
 OAuth grant made through regular login stops working on that team when SSO becomes required.
-Previously issued team API keys remain separate credentials until the member is removed or the
-key is revoked. Use an ordinary sign-in to access other teams.
+When the owner requires SSO, earlier non-owner bearer keys stop authorizing this team, including
+Default and agent keys. Employees can sign in with company SSO and issue new CLI or additional
+keys. An owner can issue new agent keys. These new credentials work until their key or membership
+is revoked; Directory Sync removal revokes both.
+Use an ordinary sign-in to access other teams.
 If an admin removes an SSO member in treg, that person stays blocked even if the directory still
 lists them as active. The owner can allow SSO again from the SSO tab. Directory deactivation and
 later reactivation remain automatic unless a team admin explicitly removed the person.
 
 The owner can schedule subscription cancellation at the end of the current billing period from
-the SSO tab. When Stripe reports the subscription ended, SSO-linked non-owner memberships and
-their team keys are revoked. An active subscription must end before the team can be deleted.
+the SSO tab. While Stripe retries a `past_due` payment, SSO and Directory Sync remain active.
+When the subscription ends, treg lifts enforcement so existing members can use normal sign-in.
+SSO-created memberships and their team keys are revoked;
+pre-existing members keep their memberships. An active subscription must end before the team can
+be deleted.
 
 ## Evidence and personal data
 

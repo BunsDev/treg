@@ -61,6 +61,7 @@ sources:
   - src/treg/alembic/versions/0075_ad_click_stash.py
   - src/treg/alembic/versions/0079_enterprise_sso.py
   - src/treg/alembic/versions/0082_oauth_sso_provenance.py
+  - src/treg/alembic/versions/0083_enterprise_sso_safety.py
   - src/treg/timeutil.py
   - src/treg/infra/db.py
   - src/treg/infra/money_timing.py
@@ -104,6 +105,9 @@ connection and directory; `EnterpriseSSOIdentity` for a stable team-specific SSO
 `EnterpriseDirectoryUser` for the directory roster, including users who have never signed in;
 and `EnterpriseSSOEvent` for WorkOS webhook deduplication. Team deletion removes the team-scoped
 rows before its `Org`, and active subscriptions block team deletion until canceled.
+Migration `0083` records whether SSO created a membership, makes an IdP subject unique within
+its team, reserves one pending enterprise Checkout per team, and marks keys issued under SSO
+enforcement. Existing keys have no SSO issuance proof and cannot enter an enforced team.
 
 Migration `0043` adds `ProviderResource`, the durable organization-owned counterpart to the existing
 async ownership rows. It stores provider, resource kind, upstream id, display name, creator, source
@@ -252,7 +256,7 @@ uses this metadata, never the encrypted token's shape.
   pair.** `ROLE_RANK` orders the roles.
 - **`ApiKey`** — a credential control row. It keeps `org_id`, nullable `membership_id`, the retained
   identity label, kind, name, safe prefix, optional unique SHA-256 hash, state, `default_generation`, lifecycle times,
-  creator, and replacement id. A human membership has one `default_human` row for signed identity
+  creator, replacement id, and optional SSO issuance team. A human membership has one `default_human` row for signed identity
   keys and can have many `additional_human` rows. A scoped agent has one current `agent` row.
   `legacy_human` rows keep old stored membership tokens working during the compatibility release;
   new human memberships leave the old token-hash field empty and do not create legacy rows.

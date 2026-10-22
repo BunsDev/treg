@@ -1203,6 +1203,7 @@ token_router = app
 @app.get("/auth/cli-token")
 async def auth_cli_token(
     response: Response,
+    request: Request,
     user: User = Depends(require_identity),
     x_treg_org: str = Header(default=""),
     x_treg_token: str = Header(default=""),
@@ -1229,8 +1230,7 @@ async def auth_cli_token(
         result = await auth_use_cases.issue_cli_token(
             user_id=user.id, email=user.email, token_version=user.token_version,
             org_ref=x_treg_org,
-            sso_org_id=((claims or {}).get("sso_org_id") if x_treg_token else
-                        (sess.read_session_claims(treg_session) or {}).get("sso_org_id")),
+            sso_org_id=getattr(request.state, "sso_org_id", None),
         )
     except auth_use_cases.IdentityLookupError as exc:
         raise HTTPException(403, str(exc)) from exc
@@ -1250,7 +1250,8 @@ async def auth_revoke_tokens(
     a fresh session cookie + token for the caller, so the device that pressed the button stays signed in
     while every other device is signed out. (Org membership tokens from accept-invite are a separate token
     type and are unaffected — those are revoked by removing the membership.)"""
-    revoked = await auth_use_cases.revoke_identity_tokens(user.id)
+    revoked = await auth_use_cases.revoke_identity_tokens(
+        user.id, sso_org_id=getattr(request.state, "sso_org_id", None))
     resp = JSONResponse({"token": revoked.token, "email": revoked.email, "revoked": True})
     resp.headers["Cache-Control"] = "no-store"
     resp.set_cookie(sess.COOKIE, revoked.session_cookie, httponly=True,

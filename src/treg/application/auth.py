@@ -547,7 +547,7 @@ async def issue_cli_token(
         }
 
 
-async def revoke_identity_tokens(user_id: int) -> RevokedIdentityTokens:
+async def revoke_identity_tokens(user_id: int, *, sso_org_id: int | None = None) -> RevokedIdentityTokens:
     async with database.session_maker() as db:
         user = await db.get(User, user_id)
         if user is None:
@@ -557,10 +557,11 @@ async def revoke_identity_tokens(user_id: int) -> RevokedIdentityTokens:
         return RevokedIdentityTokens(
             token=sess.make_identity(
                 user.id, user.token_version, ttl=sess.BOOTSTRAP_TTL_SECONDS,
-                scope=sess.BOOTSTRAP_SCOPE,
+                scope=sess.BOOTSTRAP_SCOPE, sso_org_id=sso_org_id,
             ),
             email=user.email,
-            session_cookie=sess.make_session(user.id, token_version=user.token_version),
+            session_cookie=sess.make_session(user.id, token_version=user.token_version,
+                                             sso_org_id=sso_org_id),
         )
 
 

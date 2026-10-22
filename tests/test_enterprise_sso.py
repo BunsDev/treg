@@ -5,6 +5,7 @@ import hmac
 import json
 import time
 import base64
+import asyncio
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
@@ -17,7 +18,7 @@ from treg.domain.identity import session as identity_session
 from treg.domain.identity import mcp_oauth
 from treg.infra import workos
 from treg.infra.db import session_maker
-from treg.models import EnterpriseSSO, EnterpriseSSOAudit, Membership, Org, User
+from treg.models import EnterpriseSSO, EnterpriseSSOAudit, EnterpriseSSOIdentity, Membership, Org, User
 from treg.timeutil import utcnow_naive
 
 
@@ -162,10 +163,36 @@ async def test_enforced_sso_blocks_browser_approved_cli_and_oauth_consent(client
         db.add(Membership(org_id=other.id, user_id=employee.user_id, role="member", token_hash=""))
         await db.commit()
         slug, other_id = org.slug, other.id
-    await enterprise_sso.set_enforced(org_id, True)
     regular = identity_session.make_session(employee.user_id, token_version=employee.token_version)
     scoped = identity_session.make_session(employee.user_id, token_version=employee.token_version,
                                           sso_org_id=org_id)
+    clients.cookies.set(identity_session.COOKIE, regular)
+    old_additional = (await clients.post(f"/orgs/{org_id}/api-keys",
+        json={"name": "Before SSO"}, headers={"X-Treg-Token": "", "X-Treg-Org": slug})).json()["secret"]
+    old_agent = (await clients.post(f"/orgs/{org_id}/agents",
+        json={"name": "before-sso"})).json()["token"]
+    await enterprise_sso.set_enforced(org_id, True)
+    old_key = identity_session.make_identity(employee.user_id, employee.token_version,
+                                             org=slug, scope=identity_session.TEAM_SCOPE)
+    assert (await clients.get(f"/orgs/{org_id}/balance", headers={
+        "X-Treg-Token": old_key, "X-Treg-Org": slug})).status_code == 403
+    assert (await clients.get(f"/orgs/{org_id}/balance", headers={
+        "X-Treg-Token": old_additional, "X-Treg-Org": slug})).status_code == 403
+    assert (await clients.get(f"/orgs/{org_id}/balance", headers={
+        "X-Treg-Token": old_agent, "X-Treg-Org": slug})).status_code == 403
+    renewed_key = identity_session.make_identity(employee.user_id, employee.token_version,
+        org=slug, scope=identity_session.TEAM_SCOPE, sso_org_id=org_id)
+    assert (await clients.get(f"/orgs/{org_id}/balance", headers={
+        "X-Treg-Token": renewed_key, "X-Treg-Org": slug})).status_code == 200
+    clients.cookies.set(identity_session.COOKIE, scoped)
+    new_additional = (await clients.post(f"/orgs/{org_id}/api-keys",
+        json={"name": "After SSO"}, headers={"X-Treg-Token": "", "X-Treg-Org": slug})).json()["secret"]
+    assert (await clients.get(f"/orgs/{org_id}/balance", headers={
+        "X-Treg-Token": new_additional, "X-Treg-Org": slug})).status_code == 200
+    new_agent = (await clients.post(f"/orgs/{org_id}/agents",
+        json={"name": "after-sso"})).json()["token"]
+    assert (await clients.get(f"/orgs/{org_id}/balance", headers={
+        "X-Treg-Token": new_agent, "X-Treg-Org": slug})).status_code == 200
     started = await auth_use_cases.start_cli_login()
     assert [o["slug"] for o in (await auth_use_cases.cli_orgs(regular))["orgs"]] == ["personal"]
     with pytest.raises(auth_use_cases.CliPairingError, match="sign_in_through_sso"):
@@ -375,6 +402,52 @@ async def test_reconciliation_repairs_a_missed_directory_removal(clients):
             Membership.org_id == org_id, Membership.user_id == result.user_id))).scalar_one_or_none()
     repaired = await enterprise_sso.reconcile_directory(org_id, "directory_1", [], 1000)
     assert repaired["memberships_removed"] == 1
+    async with session_maker() as db:
+        assert (await db.execute(select(Membership).where(
+            Membership.org_id == org_id, Membership.user_id == result.user_id))).scalar_one_or_none() is None
+
+
+async def test_reconciliation_removes_pre_sync_identity_missing_from_roster(clients):
+    org_id = await team(clients, plan="sso_directory")
+    result = await signin(org_id, profile())
+    await enterprise_sso.apply_directory_event({"id": "activate", "event": "dsync.activated",
+        "data": {"id": "directory_1", "organization_id": "org_workos_1"}})
+    repaired = await enterprise_sso.reconcile_directory(org_id, "directory_1", [], 1000)
+    assert repaired["memberships_removed"] == 1
+    async with session_maker() as db:
+        assert (await db.execute(select(Membership).where(
+            Membership.org_id == org_id, Membership.user_id == result.user_id))).scalar_one_or_none() is None
+
+
+async def test_user_event_before_activation_and_lost_activation_repair(clients):
+    org_id = await team(clients, plan="sso_directory")
+    user = {"organization_id": "org_workos_1", "directory_id": "directory_1",
+            "id": "directory_user_1", "idp_id": profile()["idp_id"],
+            "email": "employee@example.com", "state": "active"}
+    assert await enterprise_sso.apply_directory_event({"id": "first-user", "event": "dsync.user.created",
+        "data": user})
+    assert (await signin(org_id, profile())).org_id == org_id
+    async with session_maker() as db:
+        config = await db.get(EnterpriseSSO, org_id)
+        config.directory_active = False
+        db.add(config)
+        await db.commit()
+    repaired = await enterprise_sso.reconcile_directory(org_id, "directory_1", [user], 1000,
+        verified_workos_org_id="org_workos_1")
+    assert repaired["roster_size"] == 1
+    assert (await signin(org_id, profile())).org_id == org_id
+
+
+async def test_suspended_directory_user_loses_access(clients):
+    org_id = await team(clients, plan="sso_directory")
+    user = {"organization_id": "org_workos_1", "directory_id": "directory_1",
+            "id": "directory_user_1", "idp_id": profile()["idp_id"],
+            "email": "employee@example.com", "state": "active"}
+    await enterprise_sso.apply_directory_event({"id": "created", "event": "dsync.user.created",
+        "data": user})
+    result = await signin(org_id, profile())
+    await enterprise_sso.apply_directory_event({"id": "suspended", "event": "dsync.user.updated",
+        "data": {**user, "state": "suspended"}})
     async with session_maker() as db:
         assert (await db.execute(select(Membership).where(
             Membership.org_id == org_id, Membership.user_id == result.user_id))).scalar_one_or_none() is None
@@ -636,6 +709,84 @@ async def test_subscription_webhooks_activate_then_cancel_without_balance_credit
             Membership.org_id == org_id, Membership.user_id == result.user_id))).scalar_one_or_none() is None
 
 
+async def test_billing_loss_preserves_preexisting_member_and_lifts_enforcement(clients):
+    org_id = await team(clients)
+    async with session_maker() as db:
+        org = await db.get(Org, org_id)
+        org.stripe_customer_id = "cus_test"
+        user = User(email="employee@example.com", email_verified_at=utcnow_naive())
+        db.add(user)
+        await db.flush()
+        db.add(Membership(org_id=org_id, user_id=user.id, role="admin", token_hash=""))
+        config = await db.get(EnterpriseSSO, org_id)
+        config.stripe_subscription_id = "sub_test"
+        db.add(org)
+        db.add(config)
+        await db.commit()
+        user_id = user.id
+    await signin(org_id, profile(), proven_user_id=user_id)
+    async with session_maker() as db:
+        identity = (await db.execute(select(EnterpriseSSOIdentity).where(
+            EnterpriseSSOIdentity.org_id == org_id))).scalar_one()
+        assert not identity.membership_created_by_sso
+        config = await db.get(EnterpriseSSO, org_id)
+        config.connection_id = profile()["connection_id"]
+        db.add(config)
+        await db.commit()
+    await enterprise_sso.set_enforced(org_id, True)
+    meta = {"treg_kind": "enterprise_sso", "treg_org_id": str(org_id), "treg_plan": "sso"}
+    async with session_maker() as db:
+        await billing.handle_webhook_event(db, {"type": "customer.subscription.updated",
+            "created": 100, "data": {"object": {"id": "sub_test", "customer": "cus_test",
+            "status": "past_due", "metadata": meta}}})
+        config = await db.get(EnterpriseSSO, org_id)
+        assert config.subscription_status == "past_due" and config.enforced
+        assert (await db.execute(select(Membership).where(
+            Membership.org_id == org_id, Membership.user_id == user_id))).scalar_one().role == "admin"
+    assert (await signin(org_id, profile())).user_id == user_id
+    async with session_maker() as db:
+        await billing.handle_webhook_event(db, {"type": "customer.subscription.deleted",
+            "created": 101, "data": {"object": {"id": "sub_test", "customer": "cus_test",
+            "metadata": meta}}})
+        assert (await db.execute(select(Membership).where(
+            Membership.org_id == org_id, Membership.user_id == user_id))).scalar_one().role == "admin"
+        assert not (await db.get(EnterpriseSSO, org_id)).enforced
+    regular = identity_session.make_session(user_id, token_version=0)
+    clients.cookies.set(identity_session.COOKIE, regular)
+    clients.headers.pop("X-Treg-Token")
+    assert (await clients.get(f"/orgs/{org_id}/balance", headers={
+        "X-Treg-Org": str(org_id)})).status_code == 200
+
+
+async def test_idp_id_cannot_link_two_profiles(clients):
+    org_id = await team(clients)
+    await signin(org_id, profile())
+    second = {**profile(email="other@example.com"), "id": "prof_different"}
+    with pytest.raises(enterprise_sso.EnterpriseSSOError, match="already linked"):
+        await signin(org_id, second)
+
+
+async def test_sso_session_can_revoke_tokens_without_losing_scope(clients):
+    org_id = await team(clients)
+    result = await signin(org_id, profile())
+    await enterprise_sso.set_enforced(org_id, True)
+    clients.headers.pop("X-Treg-Token")
+    clients.cookies.set(identity_session.COOKIE, identity_session.make_session(
+        result.user_id, token_version=result.token_version, sso_org_id=org_id))
+    response = await clients.post("/auth/revoke-tokens")
+    assert response.status_code == 200
+    claims = identity_session.read_session_claims(response.cookies.get(identity_session.COOKIE))
+    assert claims["sso_org_id"] == org_id
+    assert identity_session.read_identity_claims(response.json()["token"])["sso_org_id"] == org_id
+    clients.cookies.set(identity_session.COOKIE, response.cookies.get(identity_session.COOKIE))
+    key = (await clients.post(f"/orgs/{org_id}/api-keys", json={"name": "Scoped key"},
+        headers={"X-Treg-Token": "", "X-Treg-Org": str(org_id)})).json()["secret"]
+    via_key = await clients.post("/auth/revoke-tokens", headers={"X-Treg-Token": key})
+    assert via_key.status_code == 200
+    assert identity_session.read_session_claims(
+        via_key.cookies.get(identity_session.COOKIE))["sso_org_id"] == org_id
+
+
 async def test_owner_can_lift_enforcement_after_subscription_ends(clients):
     org_id = await team(clients)
     async with session_maker() as db:
@@ -678,3 +829,33 @@ async def test_checkout_uses_monthly_team_subscription_without_touching_balance(
     assert checkout["line_items"][0]["price_data"]["unit_amount"] == 25000
     assert checkout["line_items"][0]["price_data"]["recurring"] == {"interval": "month"}
     assert checkout["subscription_data"]["metadata"]["treg_org_id"] == str(org_id)
+
+
+async def test_two_checkout_clicks_create_only_one_stripe_session(clients, monkeypatch):
+    from treg.config import get_settings
+    settings = get_settings()
+    monkeypatch.setattr(settings, "workos_api_key", "sk_workos_test")
+    monkeypatch.setattr(settings, "workos_client_id", "client_test")
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_stripe_test")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_test")
+    org_id = (await clients.get("/orgs")).json()[0]["org_id"]
+    async with session_maker() as db:
+        org = await db.get(Org, org_id)
+        org.stripe_customer_id = "cus_test"
+        db.add(org)
+        await db.commit()
+    calls = []
+    async def fake_call(operation, *, api_key, **kwargs):
+        calls.append(operation)
+        await asyncio.sleep(0.02)
+        return {"url": "https://checkout.stripe.com/c/pay/test"}
+    monkeypatch.setattr(enterprise_billing.stripe_adapter, "call", fake_call)
+    results = await asyncio.gather(*(
+        enterprise_billing.start_checkout(org_id, "sso_directory",
+            base="https://treg.example", email="owner@example.com")
+        for _ in range(2)), return_exceptions=True)
+    assert sum(isinstance(item, dict) for item in results) == 1
+    assert calls == [enterprise_billing.stripe_adapter.CHECKOUT_SESSION_CREATE]
+    successful = next(item for item in results if isinstance(item, dict))
+    assert (await enterprise_billing.start_checkout(org_id, "sso_directory",
+        base="https://treg.example", email="owner@example.com"))["url"] == successful["url"]

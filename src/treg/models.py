@@ -299,6 +299,9 @@ class EnterpriseSSO(SQLModel, table=True):
     subscription_status: str = Field(default="pending")
     stripe_subscription_id: str | None = Field(default=None, index=True, unique=True)
     stripe_event_created: int = Field(default=0)
+    checkout_token: str | None = Field(default=None)
+    checkout_pending_until: int = Field(default=0)
+    checkout_url: str | None = Field(default=None)
     cancel_at_period_end: bool = Field(default=False)
     workos_org_id: str | None = Field(default=None, index=True, unique=True)
     connection_id: str | None = Field(default=None)
@@ -316,6 +319,7 @@ class EnterpriseSSOIdentity(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("org_id", "profile_id", name="uq_enterprise_sso_profile"),
         UniqueConstraint("org_id", "user_id", name="uq_enterprise_sso_user"),
+        UniqueConstraint("org_id", "idp_id", name="uq_enterprise_sso_idp"),
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -327,6 +331,7 @@ class EnterpriseSSOIdentity(SQLModel, table=True):
     directory_user_id: str | None = Field(default=None, index=True)
     active: bool = Field(default=True)
     manually_blocked: bool = Field(default=False)
+    membership_created_by_sso: bool = Field(default=False)
     created_at: NaiveUTC = Field(default_factory=_now)
 
 
@@ -398,6 +403,8 @@ class ApiKey(SQLModel, table=True):
     name: str
     safe_prefix: str | None = Field(default=None)
     key_hash: str | None = Field(default=None, index=True, unique=True)
+    # Corporate SSO proof at issuance for long-lived team credentials.
+    sso_org_id: int | None = Field(default=None)
     state: str = Field(default="active", index=True)  # active | disabled | revoked
     # Signed Default keys carry this per-team generation. Rotating increments it so only that
     # membership's previously issued Default token stops working; no replacement row is needed.

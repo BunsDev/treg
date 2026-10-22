@@ -56,6 +56,7 @@ from ..models import (
     Bundle,
     CallRecord,
     DenyRule,
+    EnterpriseSSO,
     Invite,
     Membership,
     Org,
@@ -1115,9 +1116,11 @@ async def create_agent(
         # rows without ever passing the parser.
         pins = dict(_validate_tag_pair(k, v) for k, v in pins.items())
     membership.pinned_tags = pins or None
+    enterprise = await db.get(EnterpriseSSO, org_id)
     try:
         token, key = await managed_keys.rotate_agent_key(
             db, membership, user, actor_email=caller.email,
+            sso_org_id=org_id if enterprise is not None and enterprise.enforced else None,
         )
         await db.commit()
     except (managed_keys.RotationConflict, IntegrityError) as exc:

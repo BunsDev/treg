@@ -466,3 +466,17 @@ async def delete_membership(
         IdempotentCall.membership_id == membership.id))
     await drop_member_deny_rules(db, membership.user_id, membership.org_id)
     await db.delete(membership)
+
+
+async def ensure_sso_membership(db: AsyncSession, user: User, org_id: int) -> tuple[Membership, bool]:
+    """Join an authenticated SSO user to a team as a member; caller commits."""
+    membership = (await db.execute(select(Membership).where(
+        Membership.org_id == org_id, Membership.user_id == user.id,
+    ))).scalar_one_or_none()
+    if membership is not None:
+        return membership, False
+    membership = Membership(user_id=user.id, org_id=org_id, role="member", token_hash="")
+    db.add(membership)
+    await db.flush()
+    await managed_keys.ensure_default_key(db, membership, user)
+    return membership, True
