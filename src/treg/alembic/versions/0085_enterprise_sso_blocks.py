@@ -2,6 +2,9 @@
 
 Revision ID: 0085
 Revises: 0084
+
+This is a rollback floor: the new code can delete obsolete WorkOS identity rows
+while retaining admin blocks here. An older build cannot enforce those blocks.
 """
 from collections.abc import Sequence
 
@@ -12,6 +15,7 @@ revision: str = "0085"
 down_revision: str | Sequence[str] | None = "0084"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+contract = True
 
 
 def upgrade() -> None:
@@ -25,6 +29,11 @@ def upgrade() -> None:
     )
     op.create_index("ix_enterprisessoblock_org_id", "enterprisessoblock", ["org_id"])
     op.create_index("ix_enterprisessoblock_user_id", "enterprisessoblock", ["user_id"])
+    op.execute(sa.text("""
+        INSERT INTO enterprisessoblock (org_id, user_id, created_at)
+        SELECT org_id, user_id, CURRENT_TIMESTAMP FROM enterprisessoidentity
+        WHERE manually_blocked = true
+    """))
 
 
 def downgrade() -> None:

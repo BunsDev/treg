@@ -112,7 +112,7 @@ its team, reserves one pending enterprise Checkout per team, and marks keys issu
 enforcement. Existing keys have no SSO issuance proof and cannot enter an enforced team.
 Migration `0084` records when WorkOS cleanup completes. That marker keeps cancellation retries
 idempotent and prevents a new checkout while billable WorkOS resources may remain.
-Migration `0085` stores manual removal decisions separately from identity rows in minimal
+Migration `0085` backfills and stores manual removal decisions separately from identity rows in minimal
 `EnterpriseSSOBlock` rows. Those rows survive connection cleanup, but leave with the team or
 the erased user; they contain no email or WorkOS identifiers.
 
