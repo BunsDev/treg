@@ -35,13 +35,23 @@ async def test_start_copy_keeps_the_public_promises(clients: AsyncClient):
     lowered = text.lower()
     assert "misses are free" not in lowered and "nothing for a miss" not in lowered
     assert "monid" not in html.lower()
-    # The page only sells: one action, and the per-call prices it quotes come from real runs.
-    assert len(re.findall(r'<button[^>]* data-cta="', html)) == 3
-    assert "Sales Navigator $119.99/mo" in html and "$0.019" in html and "$317" in html
-    # Retired or mismatched comparisons must not come back: X dropped its subscription tiers, and
-    # SpyFu researches Google ads, not Meta's.
+    # The page's action is a ready prompt: every copy carries the llms.txt setup, so it works for a
+    # visitor with no account; connector agents get the dashboard's doors; the nav Start free (and the
+    # "no agent yet" button the script adds) are the sign-in fallbacks.
+    assert "https://treg.to/install.sh | sh && treg login" in html and "https://treg.to/llms.txt" in html
+    assert "modal=add-custom-connector" in html and "x.ai/bot/plugin/55647425" in html
+    assert "chatgpt.com/plugins/plugins_6a7fb961a34881918798681dade464ec" in html and "Developer mode" not in html
+    # The general prompt is in the HTML itself, so a visitor without JavaScript still has something to copy.
+    assert "Then: </span>" in html and "<noscript>" in html
+    # The brand in prose is treg.to; a bare "treg" only names the CLI, the wordmark and the prompts.
+    assert "© 2026 treg.to" in html and "Add treg.to to Claude.ai" in html
+    assert len(re.findall(r'<button[^>]* data-cta="', html)) == 1
+    assert len(re.findall(r'data-copy-job="(seo|leads|ads|social)"', html)) == 4
+    # The cards quote real runs; retired or mismatched comparisons must not come back: X dropped its
+    # subscription tiers, and SpyFu researches Google ads, not Meta's.
+    assert "$0.0036" in html and "$119.99/mo" in html and "$0.019" in html and "18 for $0.88" in html
     assert "$200" not in html and "SpyFu" not in html and "$471" not in html and "$238" not in html and "$358" not in html
-    # One price per vendor: the bill quotes Apollo Basic at $49 and Semrush AI Visibility at $99.
+    # One price per vendor: Semrush AI Visibility is quoted at $99.
     assert "$59" not in html and "$139" not in html
     # The custom page-view event is sent from the page script, so the tracker must load before it.
     assert html.index('<script src="/sitetrack.js">') < html.index("track('start_viewed'")
