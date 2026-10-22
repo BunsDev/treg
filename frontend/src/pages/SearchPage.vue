@@ -135,7 +135,6 @@ export default {
       this.findRun(q);
     },
     pick(ex){ this.text=ex; this.ask(); },
-    // Back to the empty page: the answer goes, its tiles fall back into the pile.
     exit(){
       this.text='';
       history.replaceState(history.state, '', '/search');

@@ -2262,11 +2262,11 @@ async def test_the_trial_allowance_bites_at_the_fx_number(clients: AsyncClient, 
     from treg.models import CallRecord
 
     async with session_maker() as db:
-        for i in range(50):
+        for _ in range(50):
             db.add(CallRecord(org_id=1, user_email="u@example.com", tool_name="finnhub.quote",
                               method="GET", path="/quote", status_code=200,
                               credential_tier="platform"))
-        for i in range(10):  # failures do not consume the allowance
+        for _ in range(10):  # failures do not consume the allowance
             db.add(CallRecord(org_id=1, user_email="u@example.com", tool_name="finnhub.quote",
                               method="GET", path="/quote", status_code=502))
         await db.commit()
@@ -2284,7 +2284,7 @@ async def test_failures_alone_never_exhaust_a_trial(clients: AsyncClient, trial_
     from treg.models import CallRecord
 
     async with session_maker() as db:
-        for i in range(60):
+        for _ in range(60):
             db.add(CallRecord(org_id=1, user_email="u@example.com", tool_name="finnhub.quote",
                               method="GET", path="/quote", status_code=429))
         await db.commit()
@@ -2317,7 +2317,7 @@ async def test_another_orgs_usage_never_burns_MY_trial(clients: AsyncClient, tri
     other = await clients.post("/orgs", json={"name": "another-trial-team"})
     assert other.status_code == 200, other.text
     async with session_maker() as db:
-        for i in range(50):
+        for _ in range(50):
             db.add(CallRecord(org_id=other.json()["org_id"], user_email="other@example.com",
                               tool_name="finnhub.quote", method="GET", path="/quote",
                               status_code=200, credential_tier="platform"))
@@ -2408,7 +2408,7 @@ def test_observed_cost_counts_brightdata_records():
     assert call_settle._observed_cost_micro(bd, b'{"status": "running", "message": "not ready"}') == 0
     # ndjson: one record per line
     assert call_settle._observed_cost_micro(bd, b'{"url": "a"}\n{"url": "b"}\n') == 3000
-    # csv: header + rows
+    # a csv body counts the rows under its header line
     assert call_settle._observed_cost_micro(bd, b"url,name\na,x\nb,y\n") == 3000
     # a payload the 8MB metered buffer truncated must settle at the estimate, never a partial count
     assert call_settle._observed_cost_micro(bd, b'[{"url": "a"}, {"url"') is None

@@ -231,7 +231,7 @@ def _note_fault(key: tuple[str, str], fault: tuple[str, str, str, str | None],
             _fault_windows.move_to_end(key)
             while len(_fault_windows) > _FAULT_MAX_KEYS:
                 # Evict the oldest window that is NOT holding a count. Evicting one that is would
-                # discard occurrences nobody has reported — the exact loss this rewrite removes.
+                # discard occurrences nobody has reported.
                 # If every key holds one, the ledger runs over until the next sweep clears them.
                 # `k != key` because the window just opened is the only clean one in that case, and
                 # evicting it means this key is never in the ledger, so every occurrence opens and

@@ -48,8 +48,6 @@ _DROP_FROM_CHILD = frozenset({b"content-length", b"content-type", b"transfer-enc
                               # The RUNNER reads every step's bytes itself (a script gets `json`
                               # and `text`), so a step must never be answered compressed: the
                               # caller's accept-encoding is dropped and identity is asked below.
-                              # Found live 2026-09-09: a 20-row Supabase answer came back gzip
-                              # and the script saw an empty list; a 2-row one was fine.
                               b"accept-encoding"})
 # Refusals that are the same for every step: no point starting anything else.
 _GLOBAL_REFUSALS = frozenset({"insufficient_balance", "tag_spend_cap_reached",
@@ -85,9 +83,6 @@ class RunStopped(Exception):
         super().__init__(kind)
         self.kind, self.status, self.detail = kind, status, detail
 
-
-# ---------------------------------------------------------------------------------------------
-# Inputs
 
 class InputError(ValueError):
     def __init__(self, field: str, rule: str) -> None:
@@ -144,9 +139,6 @@ def masked(specs: dict[str, dict[str, Any]], inputs: dict[str, Any]) -> dict[str
     return {k: ("***" if specs.get(k, {}).get("secret") else v) for k, v in inputs.items()}
 
 
-# ---------------------------------------------------------------------------------------------
-# The run
-
 async def run_hub_tool(
     parent: CallContext, tool: HubTool, body_bytes: bytes, get_header: Callable[[str], str | None],
     upstream_client: httpx.AsyncClient, execute_child, *, audit_client: str = "",
@@ -171,14 +163,14 @@ async def run_hub_tool(
         inputs = coerce_inputs(manifest["inputs"], given)
     except InputError as exc:
         raise ResolutionFailed("hub_input_invalid", status_code=422, detail={
-            "error": "hub_input_invalid", "field": exc.field, "rule": exc.rule})
+            "error": "hub_input_invalid", "field": exc.field, "rule": exc.rule}) from exc
     ceiling = _ceiling(get_header(RUN_MAX_COST_HEADER), manifest["limits"].get("cost_usd"))
     maker = await _maker_snapshot(parent, tool)
     catalog = catalog_store.load()
     own_tools = {u for u in manifest["uses"] if "." not in u}
     if own_tools:
-        # A maker's own tool pointed at treg itself is a relay to other hub tools (hub simulation
-        # run 3). Refused when the tool is added; checked again here for a tool added before that.
+        # A maker's own tool pointed at treg itself is a relay to other hub tools. Refused when the
+        # tool is added; checked again here for a tool added before that.
         from . import points_at_treg
         from ...models import Tool
         async with session_maker() as s:
@@ -378,23 +370,22 @@ async def run_hub_tool(
         return _json(body_out, 200, {"X-Treg-Run-Id": run_id, "X-Treg-Steps": str(counted)}), spent + earned
 
 
-    # ---------------------------------------------------------------------------------------------
-    # The seller's price (docs/HUB-DECISIONS.md round 3): one extra hold `{run}:price` on the CALLER
+    # The seller's price (docs/HUB-DECISIONS.md): one extra hold `{run}:price` on the CALLER
     # at run start, settled to the MAKER as `earned` credit on success, released on failure. Not
     # charged when the caller IS the maker (their own tool, and the publish check run), so the check
     # never costs the seller their own price.
 
 
-    # Non-negotiable 2: the price hold closes exactly once on EVERY path. The success paths
-    # settle it themselves (a second close is a no-op); anything else releases it here: a
-    # refusal, a client disconnect, and a crash, which becomes a 424 with a plain name instead
-    # of a 500 with an open hold (the 8.1 review found seven such paths).
+    # The price hold closes exactly once on EVERY path. The success paths settle it themselves
+    # (a second close is a no-op); anything else releases it here: a refusal, a client
+    # disconnect, and a crash, which becomes a 424 with a plain name instead of a 500 with an
+    # open hold.
     try:
         return await _after_reserve()
     except (CallFailure, asyncio.CancelledError):
         await _close_price(tool, run_id, price_held, payer_org_id=parent.input.caller.org_id, success=False, reason="hub_run_stopped")
         raise
-    except Exception as exc:  # noqa: BLE001 - the last line of defence for the caller's money
+    except Exception as exc:
         await _close_price(tool, run_id, price_held, payer_org_id=parent.input.caller.org_id, success=False, reason="hub_run_crashed")
         raise ResolutionFailed("hub_run_failed", status_code=424, detail={
             "error": "hub_run_crashed", "run_id": run_id, "recipe": f"{tool.tool_id}@{tool.version}",
@@ -567,10 +558,10 @@ async def _maker_snapshot(parent: CallContext, tool: HubTool):
         raise ResolutionFailed("hub_not_runnable", status_code=404, detail={
             "error": "hub_not_runnable", "message": "the maker's team no longer exists"})
     from ..call.types import UserSnapshot
-    # The maker's call log must not name the caller (round 3 q10): the own-tool step audits as
+    # The maker's call log must not name the caller: the own-tool step audits as
     # "hub-caller:<caller org>", the way the scheduled check audits as "hub-check".
     # The caller's key is theirs, not the maker's: its id, name and prefix stay out of the maker's
-    # log too (found reviewing a CI failure of the privacy test below, 2026-09-26).
+    # log too.
     return replace(caller,
                    membership=replace(caller.membership, org_id=tool.org_id, tool_access=None,
                                       project_access=None),
@@ -661,9 +652,6 @@ def _json(value, status: int, headers: dict[str, str]) -> UpstreamResponse:
     return UpstreamResponse(status, tuple(raw), _one(), _closed)
 
 
-# ---------------------------------------------------------------------------------------------
-# The script road: the same child call, asked for by run.js through the sandbox bridge
-
 async def _run_script_road(parent, tool, inputs, ceiling, maker, catalog, own_tools,
                            upstream_client, execute_child, started, audit_client, price_held=0,
                            pricing=None):
@@ -687,9 +675,8 @@ async def _run_script_road(parent, tool, inputs, ceiling, maker, catalog, own_to
         return int(round(float(usd) * 1_000_000)) if usd else 0
 
     # The maker's own tools named in `uses`, with their base URLs: a full URL in ctx.call resolves
-    # to `<tool>/<path>` when it starts with one of them (HUB-DECISIONS round 2 q2, the third
-    # target shape), and is refused for any other host - the sandbox never reaches a host the
-    # manifest did not name.
+    # to `<tool>/<path>` when it starts with one of them, and is refused for any other host - the
+    # sandbox never reaches a host the manifest did not name.
     bases: dict[str, str] = {}
     if own_tools:
         from ...models import Tool
@@ -762,7 +749,7 @@ async def _run_script_road(parent, tool, inputs, ceiling, maker, catalog, own_to
             ms = int((time.monotonic() - t0) * 1000)
             trace.append(_entry(step, "failed", exc.status_code, ms, 0, key=None, error=_short(exc.detail)))
             if exc.kind in _GLOBAL_REFUSALS:
-                raise sandbox.SandboxError("refused", f"{exc.kind}: a refusal that applies to every call")
+                raise sandbox.SandboxError("refused", f"{exc.kind}: a refusal that applies to every call") from exc
             return {"status": exc.status_code, "headers": {}, "json": exc.detail if isinstance(exc.detail, dict) else None,
                     "text": str(exc.detail)[:4000]}
         raw, truncated = await _read(response)
@@ -800,7 +787,7 @@ async def _run_script_road(parent, tool, inputs, ceiling, maker, catalog, own_to
         await _record(tool, parent, run_id, "failed", counted, spent, ms_total,
                       masked(manifest["inputs"], inputs), trace, error=detail, log=log)
         _audit_parent(parent, tool, 424, spent, audit_client)
-        raise ResolutionFailed("hub_run_failed", status_code=424, detail=_public_detail(detail))
+        raise ResolutionFailed("hub_run_failed", status_code=424, detail=_public_detail(detail)) from exc
     missing = [f for f in fields if f not in output]
     ms_total = int((time.monotonic() - started) * 1000)
     if missing:
@@ -821,8 +808,8 @@ async def _run_script_road(parent, tool, inputs, ceiling, maker, catalog, own_to
     for i, c in enumerate(charges):
         trace.append({"wave": counted + i, "name": f"charge{i + 1}", "call": c["label"] or "charge",
                       "outcome": "charged", "status": None, "ms": 0, "cost_micro": c["micro"], "key": "team"})
-    # An answer with every declared field empty earns no seller price, whatever the script charged
-    # (hub simulation run 2: a fee was taken for an all-null answer). Its lines stay in the trace.
+    # An answer with every declared field empty earns no seller price, whatever the script
+    # charged. Its lines stay in the trace.
     empty = _empty_answer(output, fields)
     earned = await _close_price(tool, run_id, price_held, payer_org_id=parent.input.caller.org_id, success=True,
                                 actual=0 if empty else min(charged_micro, price_held))

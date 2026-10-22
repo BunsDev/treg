@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, func, or_, update
+from sqlalchemy import delete, or_, update
 from sqlalchemy.exc import IntegrityError, TimeoutError as PoolTimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -298,7 +298,7 @@ async def _release_idempotent_claim(claim: tuple[int, str, str] | None) -> None:
 
     try:
         await _with_pool_retry(_drop)
-    except Exception as exc:  # noqa: BLE001 — an error is already on its way out
+    except Exception as exc:
         logging.getLogger("treg.idempotency").error(
             "could not release idempotency claim %s: %s", key, exc, exc_info=True)
 
@@ -389,6 +389,6 @@ async def _store_idempotent(key: str, caller: Caller, *, status_code: int, body:
 
     try:
         await _with_pool_retry(_write)
-    except Exception as exc:  # noqa: BLE001 — loudly, but never into the caller's response
+    except Exception as exc:
         logging.getLogger("treg.idempotency").error(
             "could not record idempotency key %s: %s", key, exc, exc_info=True)

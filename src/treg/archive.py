@@ -26,8 +26,12 @@ observations or learning evidence.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import logging
+import weakref
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from collections import Counter
 from collections.abc import Iterable
@@ -36,8 +40,6 @@ from urllib.parse import parse_qsl
 from .config import get_settings
 from . import archive_bodies
 
-# ---------------------------------------------------------------------------------------------
-# Mode
 
 MODES = ("off", "shadow", "serve")
 
@@ -55,7 +57,6 @@ def recording() -> bool:
 
 def serving() -> bool:
     return mode() == "serve"
-
 
 
 SERVE_ALL = "*"
@@ -97,7 +98,6 @@ def rollout_reason(endpoint_id: str, cohort: str, capability: str = "") -> str:
     return "selected" if bucket < percent else "control"
 
 
-# ---------------------------------------------------------------------------------------------
 # Eligibility (gates 1 + 2; gate 3 — the tier — is the caller's context and is checked at the
 # hook site, where "metered platform call" is already an established fact)
 
@@ -146,7 +146,6 @@ def storable(entry: dict[str, Any] | None) -> bool:
     return policy(entry) in _STORABLE
 
 
-# ---------------------------------------------------------------------------------------------
 # Sharing: whose question is it? (orthogonal to the licence, which says whether bytes are kept)
 
 SHARING_PUBLIC = "public"          # the same answer for everyone: treg's platform key asked
@@ -191,11 +190,6 @@ def scope_tags(share: str, org_id: int | None, secret_ids) -> list[str]:
     if share == SHARING_ORG:
         return [f"org:{org_id}", ""]
     return [""]
-
-
-# ---------------------------------------------------------------------------------------------
-# The cache key
-
 
 
 def cache_key(
@@ -259,11 +253,9 @@ def _body_digest(body: bytes | None) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-# ---------------------------------------------------------------------------------------------
-# Body compression (zlib, stdlib). Measured on 40 real prod bodies (2026-09-03): 5.2x at
-# 68 MB/s compress / 1 GB/s decompress — the write path averages under 1 MB/s, so the cost is
-# invisible and ~6.5 GB/day of JSON becomes ~1.25 GB/day. The exact ORIGINAL bytes come back on
-# every read: hashes, dedup, and the verbatim-relay promise all operate on raw bytes only.
+# Body compression (zlib, stdlib). JSON bodies compress several-fold at a speed far above the
+# write path's rate, so the cost is invisible. The exact ORIGINAL bytes come back on every read:
+# hashes, dedup, and the verbatim-relay promise all operate on raw bytes only.
 
 _COMPRESS_MIN_BYTES = 256  # below this, zlib overhead can exceed the win — store raw
 
@@ -291,16 +283,10 @@ def content_hash(body: bytes) -> str:
     return hashlib.sha256(body).hexdigest()
 
 
-# ---------------------------------------------------------------------------------------------
-# The recorder (PR 2) — fire-and-forget, audit's discipline: bounded, swallowed, drainable.
+# The recorder - fire-and-forget, audit's discipline: bounded, swallowed, drainable.
 # A recording hiccup must NEVER surface into a call's result, and a burst must never OOM the
 # server. Unlike audit there is no shed-counter subtlety: a dropped snapshot is one lost sample
 # in a statistics stream that the next identical call re-supplies.
-
-import asyncio
-import logging
-import weakref
-from datetime import datetime, timedelta, timezone
 
 # Losing a recording is ERROR, not WARNING: the fault handler starts at ERROR, so anything below it
 # reaches stdout and nowhere else. Degradations that cost nothing (a lookup miss serving live, a
@@ -308,18 +294,16 @@ from datetime import datetime, timedelta, timezone
 _log = logging.getLogger("treg.archive")
 _pending: set[asyncio.Task] = set()
 _MAX_PENDING = 512
-# Memory bound: each pending task holds its body bytes in a closure. 512 tasks × 8 MB = 4 GB in the
-# worst case — the 2026-09-07 OOM. This cap sheds recordings when total pending body bytes exceeds
-# the threshold, BEFORE the task count would shed them. 256 MB is generous for a 4 GB container and
-# still allows ~128 concurrent recordings of typical 2 MB bodies.
+# Memory bound: each pending task holds its body bytes in a closure, so the task cap alone allows
+# gigabytes in the worst case. This cap sheds recordings when total pending body bytes exceeds the
+# threshold, BEFORE the task count would shed them.
 _MAX_PENDING_BYTES = 256 * 1024 * 1024
 _pending_bytes = 0
 # At most this many recordings TOUCH THE DATABASE at once (audit's discipline, and its exact
-# loop-bound pattern). Without it a traffic burst put up to 512 concurrent short sessions in
-# front of the API's 15-slot pool — SToneX's pool-pressure report, 2026-09-03. Queued recordings
-# wait INSIDE their task; the caller's response left long ago either way. Two, not four: every
-# slot here is paid twice (two uvicorn workers) and again at every deploy against the database's
-# 103-connection ceiling, and a recording is one INSERT of a body that is already in memory.
+# loop-bound pattern). Without it a traffic burst puts hundreds of concurrent short sessions in
+# front of the pool. Queued recordings wait INSIDE their task; the caller's response left long ago
+# either way. Every slot here is paid per process and again at every deploy against the database's
+# connection ceiling, and a recording is one INSERT of a body that is already in memory.
 _MAX_CONCURRENT_WRITES = 2
 
 _sem: asyncio.Semaphore | None = None
@@ -355,8 +339,7 @@ def _get_key_lock(key_hash: str) -> asyncio.Lock:
 # A recording is best-effort by contract (audit's discipline: shed, never wedge). A database that
 # does not answer in this window — a lock, a stuck pool slot, a dying connection — costs ONE
 # dropped sample, which the next identical call re-supplies; it must never hold drain(), a test,
-# or a shutdown hostage. CI's serial Postgres job hung exactly that way three times before this
-# bound existed, at whichever drain() happened to gather the stuck task.
+# or a shutdown hostage.
 _STORE_TIMEOUT_S = 30
 _CHANGE_TIMEOUT_S = 3
 change_outcomes: Counter[str] = Counter()
@@ -539,10 +522,6 @@ async def drain() -> None:
     while _pending:
         tasks = list(_pending)
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        # Remove what was just gathered HERE: a gather of already-finished tasks returns without
-        # yielding, so the queued `_pending.discard` callbacks may not have run yet, and a loop
-        # keyed on them busy-spins forever, starving the loop and every timer on it (the 2026-08
-        # serial-Postgres CI hang). Same discipline as audit.drain(); test_audit.py pins both.
         _pending.difference_update(tasks)
         for r in results:
             if isinstance(r, asyncio.TimeoutError | TimeoutError):
@@ -682,7 +661,7 @@ async def _store(
     except TimeoutError:
         reason = "record_timeout"
         _log.error("archive record_timeout for %s", endpoint_id)
-    except Exception:
+    except Exception:  # noqa: BLE001 - a lookup fault must degrade to a live call, never a 500
         reason = "record_failed"
         _log.error("archive recording dropped for %s", endpoint_id, exc_info=True)
     finally:
@@ -824,7 +803,7 @@ async def _ignored_matches(key_hash: str, body: bytes, paths: list[str],
                         initial_results[row.id] = classify(key.endpoint_id, row.status_code, previous)
                     if new_hash is not None and await _change_compute(_normalized_hash, previous, paths) == new_hash:
                         matches.add(row.id)
-    except Exception:
+    except Exception:  # noqa: BLE001
         change_outcomes["ignore_comparison_failed"] += 1
     return matches
 
@@ -905,7 +884,7 @@ async def _observe_change(previous_id: int, body: bytes, endpoint_id: str, provi
             analytics.capture("archive", "archive_change_observed",
                               dict(endpoint_id=endpoint_id, provider=provider, **props))
             change_outcomes["observed"] += 1
-    except Exception:
+    except Exception:  # noqa: BLE001 - one dead key must not stop the pass
         # Observation is optional and happens after commit. Never log provider bytes/errors.
         change_outcomes["observation_failed"] += 1
 
@@ -1000,7 +979,7 @@ async def _store_locked(
 
         # Snapshot versions are allocated from the newest row. Serialize that read and insert per
         # key across processes; the in-process semaphore only bounds pool pressure and cannot stop
-        # two Render instances from both choosing version N+1. Re-lock after the key-creation commit
+        # two processes from both choosing version N+1. Re-lock after the key-creation commit
         # as well, because that commit necessarily released the insert transaction's locks.
         key = await _lock_archive_key(s, key.id)
 
@@ -1102,8 +1081,6 @@ async def _store_locked(
                 and origin in ("caller", "refresh") else None)
 
 
-
-# ---------------------------------------------------------------------------------------------
 # The pruner — profit-shaped shelf clearing. A served hit is revenue with no vendor cost, so a
 # body's right to disk is its earning potential. It strips BYTES only: every version row stays
 # (hash, size, timestamp — the history and the statistics are untouched), the newest version of
@@ -1208,7 +1185,6 @@ async def prune_once() -> int:
     return stripped
 
 
-# ---------------------------------------------------------------------------------------------
 # Reading one call's stored answer back (the team-facing `/calls/{id}/result`)
 
 def _decode(body: bytes | None) -> str | None:
@@ -1258,14 +1234,12 @@ async def resolve_result(key_hash: str, content_hash: str) -> dict[str, Any] | N
     }
 
 
-# ---------------------------------------------------------------------------------------------
-# Serving (PR 4) — the cache answers instead of the vendor, and NOTHING about money changes.
-# The lookup replaces only the network trip: reserve, settle, audit and the cost header all run
-# exactly as on a live call, at today's price, and the response is tagged cached. Whatever
-# billing rule the founder later chooses attaches to that tag without touching this code.
+# Serving - the cache answers instead of the vendor. The lookup replaces only the network trip:
+# reserve, settle, audit and the cost header all run exactly as on a live call, and the response
+# is tagged cached.
 
-# Phase-1 freshness: FIXED guesses per capability prefix, longest prefix wins, seconds. These are
-# deliberately conservative starting values, not knowledge — the learner (PR 5) replaces them per
+# Default freshness: FIXED guesses per capability prefix, longest prefix wins, seconds. These are
+# deliberately conservative starting values, not knowledge - the learner replaces them per
 # key. A vendor-declared `cache.max_age_s` (CoinGecko's 24h refresh duty) always CAPS the result.
 _TTL_DEFAULTS: tuple[tuple[str, int], ...] = (
     ("crypto.price", 300),        # live-ish market numbers: minutes, not hours
@@ -1532,7 +1506,7 @@ async def note_org_uses_in_transaction(db, uses: Iterable[tuple[int, str]]) -> N
             set_={"calls": ArchiveKeyOrg.calls + statement.excluded.calls,
                   "last_call_at": statement.excluded.last_call_at},
         ).returning(ArchiveKeyOrg).execution_options(populate_existing=True))
-        # Refresh any mark already loaded by the caller, just as the previous ORM UPDATE did.
+        # Refresh any mark already loaded by the caller.
         result.scalars().all()
 
 
@@ -1572,8 +1546,7 @@ async def _touch_write(key_hash: str) -> None:
         _log.error("archive touch dropped", exc_info=True)
 
 
-# ---------------------------------------------------------------------------------------------
-# The learner (PR 5): AIMD timers on admitted results, applied inside the recorder.
+# The learner: AIMD timers on admitted results, applied inside the recorder.
 
 TTL_FLOOR_S = 60
 TTL_CEILING_S = 30 * 86400
@@ -1598,8 +1571,7 @@ def learn(key, *, stable: bool, entry: dict[str, Any] | None) -> None:
         key.ttl_s = max(int(current * 0.5), TTL_FLOOR_S)
 
 
-# ---------------------------------------------------------------------------------------------
-# The refresh worker (PR 5) — serve mode only. A key EARNS refreshing; it is never entitled:
+# The refresh worker - serve mode only. A key EARNS refreshing; it is never entitled:
 # refreshed only when its window is ≥80% consumed AND a caller asked for it since its last fetch.
 # A refresh is treg's own vendor spend with no caller attached, so two brakes bound it — the
 # per-provider daily call cap (archive_refresh_daily_cap; 0 disables) and the per-pass limit.

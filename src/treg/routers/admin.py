@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 import json
-import logging
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -22,14 +21,12 @@ from ..config import get_settings
 from ..infra import kv
 from ..infra.db import get_admin_read_session, get_admin_session
 from ..domain import money
-from ..models import ArchiveEndpointStat, ArchiveKey, ArchiveSnapshot, Bundle, CallRecord, EndpointDayStat, LedgerEntry, Membership, Org, Referral, Secret, Tool, User
-from ..timeutil import as_naive as _as_naive
+from ..models import ArchiveEndpointStat, ArchiveSnapshot, Bundle, CallRecord, EndpointDayStat, LedgerEntry, Membership, Org, Referral, Secret, Tool, User
 from ..timeutil import utcnow_naive as _utcnow_naive
 from ..domain.identity.access import require_superadmin
 from ..domain.governance.teams import cascade_delete_org, delete_membership, drop_member_deny_rules
 
 
-# The app alias preserves the moved handlers' original @app.get decorator text byte-for-byte.
 app = APIRouter()
 reads_router = app
 
@@ -108,7 +105,7 @@ async def admin_stats(_: str = Depends(require_superadmin), db: AsyncSession = D
 async def admin_orgs(_: str = Depends(require_superadmin), db: AsyncSession = Depends(get_admin_session)) -> list[dict]:
     orgs = (await db.execute(select(Org))).scalars().all()
 
-    async def _counts(model) -> dict[int, int]:  # one grouped COUNT instead of one-per-org (was O(orgs) queries)
+    async def _counts(model) -> dict[int, int]:  # one grouped COUNT instead of one per org
         rows = await db.execute(select(model.org_id, func.count()).group_by(model.org_id))
         return {oid: n for oid, n in rows.all()}
 
@@ -116,7 +113,6 @@ async def admin_orgs(_: str = Depends(require_superadmin), db: AsyncSession = De
     for m in (await db.execute(select(Membership))).scalars().all():
         mems.setdefault(m.org_id, []).append(m)
     tool_n, secret_n, bundle_n = await _counts(Tool), await _counts(Secret), await _counts(Bundle)
-    # Was 1 + 4N serial queries (401 at 100 orgs); now a constant ~4 regardless of tenant count.
     return [
         {
             "id": o.id, "slug": o.slug, "name": o.name, "suspended": o.suspended,
@@ -138,7 +134,7 @@ async def admin_org_detail(
     mem = (await db.execute(select(Membership).where(Membership.org_id == org_id))).scalars().all()
     umap = {u.id: u for u in (await db.execute(
         select(User).where(User.id.in_([m.user_id for m in mem]))
-    )).scalars().all()}  # batched (was one db.get per member)
+    )).scalars().all()}  # batched, not one db.get per member
     members = [{"user_id": m.user_id, "email": umap[m.user_id].email if m.user_id in umap else None, "role": m.role}
                for m in mem]
     tools = (await db.execute(select(Tool).where(Tool.org_id == org_id))).scalars().all()
@@ -160,10 +156,10 @@ async def admin_org_detail(
 @app.get("/admin/users")
 async def admin_users(_: str = Depends(require_superadmin), db: AsyncSession = Depends(get_admin_session)) -> list[dict]:
     users = (await db.execute(select(User))).scalars().all()
-    mems_by_user: dict[int, list] = {}  # all memberships in one query, grouped (was one query per user)
+    mems_by_user: dict[int, list] = {}  # all memberships in one query, grouped
     for m in (await db.execute(select(Membership))).scalars().all():
         mems_by_user.setdefault(m.user_id, []).append(m)
-    omap = {o.id: o for o in (await db.execute(  # all referenced orgs in one query (was one db.get per membership)
+    omap = {o.id: o for o in (await db.execute(  # all referenced orgs in one query
         select(Org).where(Org.id.in_({m.org_id for ms in mems_by_user.values() for m in ms}))
     )).scalars().all()}
     return [
@@ -180,7 +176,7 @@ async def admin_users(_: str = Depends(require_superadmin), db: AsyncSession = D
 @app.get("/admin/tools")
 async def admin_tools(_: str = Depends(require_superadmin), db: AsyncSession = Depends(get_admin_session)) -> list[dict]:
     tools = (await db.execute(select(Tool))).scalars().all()
-    omap = {o.id: o for o in (await db.execute(  # batched (was one db.get per tool)
+    omap = {o.id: o for o in (await db.execute(  # batched, not one db.get per tool
         select(Org).where(Org.id.in_({t.org_id for t in tools}))
     )).scalars().all()}
     return [{"id": t.id, "name": t.name, "org": omap[t.org_id].slug if t.org_id in omap else None,
@@ -411,9 +407,8 @@ async def admin_errors(
         "errors": [{
             "id": c.id, "call_ref": c.call_ref, "at": c.created_at.isoformat(),
             "org": omap[c.org_id].slug if c.org_id in omap else None,
-            # `method` is already on the row and is the whole diagnosis for a real failure class:
-            # 47 of apollo.people.enrich's failures were a GET at a POST endpoint. Omitting a field
-            # we already store, in the view built to explain failures, was a free loss.
+            # `method` is already on the row and is the whole diagnosis for a failure class: a GET
+            # at a POST endpoint.
             "endpoint_id": c.endpoint_id, "provider": c.provider, "tier": c.credential_tier,
             "status": c.status_code,
             "method": c.method, "refused_by": c.refused_by, "duration_ms": c.duration_ms,
@@ -431,7 +426,7 @@ async def admin_errors(
 @app.get("/admin/health")
 async def admin_health(_: str = Depends(require_superadmin), db: AsyncSession = Depends(get_admin_session)) -> list[dict]:
     rows = (await db.execute(select(Secret).where(Secret.health_status != "ok"))).scalars().all()
-    omap = {o.id: o for o in (await db.execute(  # batched (was one db.get per secret)
+    omap = {o.id: o for o in (await db.execute(  # batched, not one db.get per secret
         select(Org).where(Org.id.in_({s.org_id for s in rows}))
     )).scalars().all()}
     out: list[dict] = []
@@ -450,12 +445,11 @@ async def admin_kv(_: str = Depends(require_superadmin)) -> dict:
     return {"configured": kv.configured(), "reachable": await kv.store().ping()}
 
 
-# Rebind app so the second block keeps its decorator text and remains a separate attach point.
 app = APIRouter()
 reports_router = app
 
 
-# ---- reconciliation: is the money real? ----------------------------------------------------
+# Reconciliation: is the money real?
 # Cross-org aggregates over platform spend, so `require_superadmin` and nothing weaker — an org admin
 # may see their own bill (`/orgs/{id}/balance`), never the platform's margin. See reconcile.py.
 @app.get("/admin/reconcile/drift")
@@ -599,10 +593,9 @@ async def admin_archive_keys(
         select(AK).where(AK.endpoint_id == endpoint_id)
         .order_by(AK.last_requested_at.desc().nulls_last(), AK.fetched_at.desc())
         .limit(limit))).scalars().all()
-    # ONE columns-only query for every key's recent versions — the previous shape ran a query
-    # per key AND selected whole rows, dragging every stored BODY out of the database just to
-    # report whether one exists (12 bodies × up to 100 keys × the panel's fan-out = the
-    # 2026-09-03 pool-pressure repeat). `body IS NOT NULL` reads the row header, never the bytes.
+    # ONE columns-only query for every key's recent versions, never whole rows: a stored BODY must
+    # not leave the database just to report whether one exists. `body IS NOT NULL` reads the row
+    # header, never the bytes.
     key_ids = [k.id for k in keys]
     vrows = (await db.execute(
         select(AS.key_id, AS.version, AS.origin, AS.size_bytes, AS.fetched_at,
@@ -860,8 +853,8 @@ def _usd_to_micro(amount_usd: str | int | float) -> int:
     """
     try:
         value = Decimal(str(amount_usd))
-    except InvalidOperation:
-        raise HTTPException(status_code=400, detail=f"amount_usd {amount_usd!r} is not a valid number")
+    except InvalidOperation as exc:
+        raise HTTPException(status_code=400, detail=f"amount_usd {amount_usd!r} is not a valid number") from exc
     if value <= 0:
         raise HTTPException(status_code=400, detail="amount_usd must be positive")
     micro = value * 1_000_000

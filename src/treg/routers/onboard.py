@@ -25,7 +25,6 @@ from .signup_cookies import REFERRAL_COOKIE
 from ..domain.governance.teams import OwnedTeamLimitReached
 
 
-# app is the APIRouter alias so mechanically moved @app decorators stay byte-identical.
 app = APIRouter()
 
 
@@ -118,13 +117,12 @@ async def onboard_team(
 onboard_entry_router = app
 
 
-# app is rebound so the landing-sandbox block keeps its original attachment point.
 app = APIRouter()
 
 
-# ---- landing-page sandbox studio: an anonymous, throwaway team the visitor builds ----------
+# Landing-page sandbox studio: an anonymous, throwaway team the visitor builds.
 # Per-IP limiter for the unauthenticated mint endpoint, in the DB (treg.ratestore) so it survives a
-# restart and holds across instances (backlog #3). It caps DB churn from the public landing page (abuse
+# restart and holds across instances. It caps DB churn from the public landing page (abuse
 # is otherwise structurally contained — sandbox calls never touch the network, each sandbox is capped + TTL'd).
 SANDBOX_HIT_NS = onboard_use_cases.SANDBOX_HIT_NS
 SANDBOX_RATE_MAX = onboard_use_cases.SANDBOX_RATE_MAX
@@ -154,7 +152,6 @@ async def demo_sandbox_live(caller: Caller = Depends(require_member)) -> dict:
         raise _sandbox_http_error(exc) from exc
 
 
-# ---- landing-page live payments feed (the public Stripe demo — see pubfeed.py) --------------
 @app.post("/stripe/webhook", include_in_schema=False)
 async def stripe_webhook(request: Request) -> dict:
     """Stripe → treg: a signed event from the demo sandbox account. Only `charge.succeeded` feeds
@@ -218,7 +215,6 @@ async def skill_install(name: str, token: str = ""):
 
 sandbox_router = app
 
-# The third router preserves the later attachment point after the landing-sandbox routes.
 app = APIRouter()
 
 

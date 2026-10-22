@@ -192,7 +192,6 @@ async def test_env_revert_is_a_complete_rollback(monkeypatch):
     from treg import mcp
     from treg.domain.identity import mcp_oauth
     from treg.api import app
-    from treg.routers.auth import _login_callback_base
 
     monkeypatch.setenv("TREG_PUBLIC_URL", "https://treg.superdesign.dev")
     monkeypatch.setenv("TREG_PUBLIC_HOST_ALIASES", '["treg.superdesign.dev","treg.to"]')

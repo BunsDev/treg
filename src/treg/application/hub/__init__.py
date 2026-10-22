@@ -115,9 +115,9 @@ async def _tool_for(db: AsyncSession, rest: str, *, live_only: bool = True,
     if row is None:
         return None
     if row.status in ("checking", "review"):
-        # the check run pins it (round 2 q10); a version waiting for review (round 4) is the maker's to
-        # try by @N and nobody else's; anyone else who guesses @N gets nothing (8.1 review). The public
-        # views (no caller) never show it: its contract is not reviewed yet (hub simulation run 1).
+        # the check run pins it; a version waiting for review is the maker's to try by @N and nobody
+        # else's; anyone else who guesses @N gets nothing. The public views (no caller) never show it:
+        # its contract is not reviewed yet.
         return row if caller_org_id is not None and row.org_id == caller_org_id else None
     if live_only and row.status != "live":
         return None
@@ -143,7 +143,7 @@ class Published:
     kind: str
 
 
-MAX_DATA_BYTES = 5_000_000   # the engine holds 64 MB; the rows travel into it on every run (8.1 review)
+MAX_DATA_BYTES = 5_000_000   # the engine holds 64 MB; the rows travel into it on every run
 
 
 def validate_data(data: Any) -> str | None:
@@ -290,9 +290,8 @@ async def price_ranges(db: AsyncSession, tools: dict[str, dict[str, Any]], *, da
             charged[rid] = sum(int(e.get("cost_micro") or 0) for e in (trace or [])
                                if isinstance(e, dict) and e.get("outcome") == "charged")
     # Runs by other teams decide the number once there are any; before that the maker's own runs and
-    # checks stand in, marked `from_tests` (hub simulation run 2: free own runs shaped the figure).
-    # Only runs of the version the manifest belongs to: an unapproved version's check run moved the
-    # serving version's public price (hub simulation run 3).
+    # checks stand in, marked `from_tests`. Only runs of the version the manifest belongs to: an
+    # unapproved version's check run must not move the serving version's public price.
     buckets: dict[str, dict[bool, dict[str, Any]]] = {}
     for rid, tid, ver, cost, price, is_own in (await db.execute(
             select(HubRun.id, HubRun.tool_id, HubRun.version, HubRun.cost_micro, HubRun.price_micro, own)
@@ -423,9 +422,9 @@ async def set_price(db: AsyncSession, *, org_id: int, tool_id: str, price_usd: f
         return None
     lst = await db.get(HubListing, tool_id)
     if lst is not None and lst.reviewed:
-        # A reviewed tool's price is public: the new one waits for review (round 4), also after the
-        # maker unlisted it (run 2: unlisting was a way round the review); check it now so
-        # the maker hears a bad number at once, not from the reviewer.
+        # A reviewed tool's price is public: the new one waits for review, also after the maker
+        # unlisted it (unlisting must not be a way round the review); check it now so the maker
+        # hears a bad number at once, not from the reviewer.
         if row.kind == "script":
             hub_manifest._money_micro("max_price_usd", price_usd, allow_zero=False)
         else:
@@ -539,7 +538,7 @@ async def set_flags(db: AsyncSession, *, org_id: int, tool_id: str, maker_email:
         if not listed:
             if current is not None and current.reviewed:
                 # Hidden from search, still reviewed: callers by id keep the approved version and
-                # price, and every later change still waits (hub simulation run 2).
+                # price, and every later change still waits.
                 if current.state == "approved":
                     current.state = "unlisted"
                     db.add(current)
@@ -583,8 +582,8 @@ async def pending_listings(db: AsyncSession, state: str = "requested") -> list[d
                     **({"version": tool.version, "kind": tool.kind, "summary": tool.summary,
                         "price_label": price_label(tool.manifest), "uses": tool.manifest.get("uses", []),
                         "check": (tool.check_result or {}).get("status"),
-                        # What the reviewer approves is the code, not the summary (hub simulation run 3:
-                        # a date switch in run.js was invisible to the queue).
+                        # What the reviewer approves is the code, not the summary: a change inside
+                        # run.js would be invisible to the queue otherwise.
                         "script": tool.script, "steps": tool.manifest.get("steps"),
                         "own_tools": await own_tool_urls(db, tool)} if tool else {})})
     return out
@@ -672,8 +671,7 @@ async def approved_capability(db: AsyncSession, tool_id: str) -> str:
     return lst.capability if lst is not None and lst.state == "approved" else ""
 
 
-# ---------------------------------------------------------------------------------------------
-# Updates to an approved tool wait for review (docs/hub-listing-decisions.md round 4): a new version
+# Updates to an approved tool wait for review (docs/hub-listing-decisions.md): a new version
 # and a price change. The approved version and price keep serving until treg decides.
 
 async def _hold_for_review(db: AsyncSession, row: HubTool) -> None:

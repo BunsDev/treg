@@ -43,7 +43,7 @@ export function loadScript(src: string): Promise<void> {
       const script = document.createElement('script')
       script.src = src
       script.onload = () => resolve()
-      // The Help view has empty fallbacks for missing data, as it did when the tag failed.
+      // The Help view has empty fallbacks for missing data.
       script.onerror = () => { scripts.delete(src); console.error('Failed to load', src); resolve() }
       document.head.appendChild(script)
     })

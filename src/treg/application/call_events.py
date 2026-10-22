@@ -65,8 +65,6 @@ _VALUE_MAX = 64
 _fingerprints: dict[int, tuple[Adapter, str]] = {}
 
 
-# ---- hashing and normalization ----------------------------------------------------------------
-
 def keyed(value: str) -> str:
     """HMAC-SHA256 of an already normalized value, 32 hex characters."""
     secret = get_settings().call_events_hmac_secret.encode()
@@ -123,8 +121,6 @@ def _stringify(value: Any) -> str | None:
     return None
 
 
-# ---- references and fingerprints --------------------------------------------------------------
-
 def ref_parts(call_ref: str | None) -> tuple[str | None, str | None, int | None]:
     """`X:r2` -> (`X`, `r2`, 2); `X:v` -> (`X`, `v`, None); a root ref -> (None, None, None)."""
     m = _STEP.match(call_ref or "")
@@ -151,8 +147,6 @@ def is_eval(org_id: int | None) -> bool:
     raw = get_settings().call_events_eval_orgs
     return org_id is not None and str(org_id) in {p.strip() for p in raw.split(",") if p.strip()}
 
-
-# ---- input and answer columns -----------------------------------------------------------------
 
 def vendor_identity(adapter: Adapter, contract: Contract, query_items: Iterable[tuple[str, str]],
                     body: bytes | None) -> dict:
@@ -254,8 +248,6 @@ def answer_columns(contract: Contract, output: dict, input_norm: dict | None = N
     return {"answer_keys": keys or None, "answer_values": values or None,
             "answer_flags": flags or None}
 
-
-# ---- emission ---------------------------------------------------------------------------------
 
 def emit(kind: str, *, org_id: int | None, endpoint_id: str | None, call_ref: str | None,
          capability: str | None = None, query_items: Iterable[tuple[str, str]] = (),

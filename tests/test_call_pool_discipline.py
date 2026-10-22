@@ -28,7 +28,6 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from treg import api as A
 from treg.application import catalog_stats
 from treg.application.call import service as call_service
-from treg.routers import call as call_routes
 from treg import audit
 from treg.domain import money as ledger
 from treg.domain.identity import api_keys as managed_keys

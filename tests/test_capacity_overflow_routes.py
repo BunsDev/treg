@@ -134,7 +134,7 @@ async def test_sync_reproduces_the_verified_set_and_never_enables_a_bad_ratio(mo
         row = await db.get(OverflowRoute, ("findymail.search.business-profile", "monid"))
         assert not row.enabled and row.disabled_reason.startswith("ratio 6.5")
     async with session_maker() as db:
-        r2 = await R.apply_sync(db, [x for x in seed if x["endpoint_id"] != "findymail.search.business-profile"],
+        await R.apply_sync(db, [x for x in seed if x["endpoint_id"] != "findymail.search.business-profile"],
                                 catalog=cat, now=now)
         await db.commit()
         row = await db.get(OverflowRoute, ("findymail.search.business-profile", "orthogonal"))

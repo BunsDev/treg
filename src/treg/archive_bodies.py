@@ -223,7 +223,7 @@ async def prepare(body: bytes, content_hash: str, *, mode: str, observation: Sto
                             if info != ObjectInfo(content_hash, len(body)):
                                 raise ObjectStoreError("hash_mismatch")
                         reason = None
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001 - every upload failure is classified into the report
                         reason, error_type = failure_reason(exc), exception_name(exc)
                     finally:
                         observation.props["archive_body_upload_ms"] += (
@@ -437,7 +437,7 @@ async def _read_object(pointer, path, report):
                 if report["r2_retry_recovered"]:
                     outcomes["read_retry_recovered_" + path] += 1
                 return body
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - every read failure is classified, then retried or reported
                 reason, error_type = failure_reason(exc), exception_name(exc)
             if reason not in _RETRYABLE_FAILURES or attempt == _READ_ATTEMPTS:
                 break

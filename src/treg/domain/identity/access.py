@@ -140,17 +140,11 @@ async def require_identity(
     if x_treg_token:
         m, key = await _membership_and_key_by_token(x_treg_token, db)
         if m is not None:
-            # A published public-demo token must never act as a USER — user-level endpoints mint
-            # identity tokens (/auth/cli-token), create real orgs, and accept invites, all of which
-            # would let a stranger escape the demo org. Admin+ (the real operator) is exempt.
             org = await db.get(Org, m.org_id)
             if org is not None and org.public_demo and not _role_at_least(m.role, "admin"):
                 raise HTTPException(status_code=403, detail=(
                     "this is a public demo token — it can only call the demo team's tools"))
         user = await db.get(User, m.user_id) if m else await _user_from_identity_token(x_treg_token, db)
-        # A machine token must never act as a USER. `create_org` depends on THIS dependency, so an
-        # agent could otherwise create a fresh org in which it is the OWNER — and owners are exempt
-        # from `_require_tool_access` and `_require_local_run`, escaping every limit set on it.
         if user is not None and _is_machine_email(user.email):
             raise HTTPException(status_code=403, detail=(
                 "this token belongs to a machine identity — it can call this team's tools, "
@@ -383,7 +377,6 @@ def _norm_email(email: str) -> str:
     return f"{local}@{domain.rstrip('.')}" if at and domain.rstrip(".") else email
 
 
-# ---- machine identities: the publishable demo token, and agents ----------------------------
 # Both are Users on an UNROUTABLE domain, which is what makes them machines rather than people: no
 # login door can ever resolve one (guarded in `_find_or_create_user`) and neither may act as a USER
 # (guarded in `require_identity`). Everything else they inherit from Membership for free.
@@ -403,7 +396,6 @@ def _is_machine_email(email: str) -> bool:
     return _is_agent_email(email) or _norm_email(email).endswith(f"@{PUBLIC_DEMO_DOMAIN}")
 
 
-# ---- the email-domain blocklist ------------------------------------------------------------------
 # Entirely configuration: `TREG_BLOCKED_EMAIL_DOMAINS` and nothing else. An unset variable blocks
 # nothing, which is the default. Two rules:
 #   - match the DOMAIN only, never the whole address. Matching the address false-flags real people
@@ -417,9 +409,7 @@ def _is_machine_email(email: str) -> bool:
 #
 # There is deliberately no list in the code. A blocklist is a speed bump — a new domain costs the
 # other side minutes — so its only value is being editable in the same minutes, which a deploy is
-# not. Substring rules on the domain were tried and removed: measured against a public
-# throwaway-domain corpus they matched 0.17% of it, added nothing over the exact entries, and
-# refused a real company whose domain merely contained one of the strings.
+# not.
 
 
 def _email_domain(email: str) -> str:

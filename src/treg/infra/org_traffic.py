@@ -110,14 +110,14 @@ def _emit(event: str, fields: dict) -> None:
     try:
         log.info("%s %s", event, json.dumps({"worker_pid": os.getpid(), **fields},
                                           separators=(",", ":")))
-    except Exception:
+    except Exception:  # noqa: BLE001 - telemetry must never fail a request
         pass
 
 
 def emit_snapshot() -> None:
     try:
         _emit("org_traffic_top", {**counters.snapshot(), "window_end_unix_s": time.time()})
-    except Exception:
+    except Exception:  # noqa: BLE001 - telemetry must never fail a request
         pass
 
 
@@ -135,7 +135,7 @@ def start_reporting() -> bool:
             _timer = asyncio.get_running_loop().call_later(WINDOW_S, _tick)
         _users += 1
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001 - telemetry must never fail a request
         return False
 
 
@@ -158,7 +158,7 @@ def identify(scope: dict, org_id: int, *, enter: bool = False,
             if enter and observation.started is None:
                 observation.started = time.perf_counter()
                 observation.tracked = observation.counters.begin(org_id)
-    except Exception:
+    except Exception:  # noqa: BLE001 - telemetry must never fail a request
         pass
 
 
@@ -175,7 +175,7 @@ def describe(scope: dict, *, tool_name: str | None, endpoint_id: str | None,
             observation.provider = provider
             observation.credential_tier = credential_tier
             observation.refused_by = refused_by
-    except Exception:
+    except Exception:  # noqa: BLE001 - telemetry must never fail a request
         pass
 
 
@@ -203,7 +203,7 @@ class Observation:
             if self.tracked is not None:
                 tracked, self.tracked = self.tracked, None
                 self.counters.finish(self.org_id, status, elapsed, tracked=tracked)
-        except Exception:
+        except Exception:  # noqa: BLE001 - telemetry must never fail a request
             pass
         _emit("request", {"surface": self.surface, "adapter": self.adapter,
                           "org_id": self.org_id, "api_key_id": self.api_key_id,
@@ -240,7 +240,7 @@ class RequestLogMiddleware:
                 state["org_traffic"] = observation
                 if adapter is not None and call_path is not None:
                     adapter["forwarded"] = True
-        except Exception:
+        except Exception:  # noqa: BLE001 - telemetry must never fail a request
             observation = None
         if observation is None:
             return await self.app(scope, receive, send)
@@ -269,7 +269,7 @@ class RequestLogMiddleware:
                 if not mcp_transport or status == 401:
                     observation.finish(status, outcome, call_ref=state.get("call_ref"),
                                        failure_kind=state.get("call_failure_kind"))
-            except Exception:
+            except Exception:  # noqa: BLE001 - telemetry must never fail a request
                 pass
 
 

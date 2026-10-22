@@ -763,7 +763,7 @@ async def _run(run_id, mode, capability, payload, caller, client, client_ip, onl
                 await attempt(a["verification"], policy["capability"])
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - a failed check is recorded on the arena row, never raised
                 if not a.get("verification"):
                     detail = str(exc) if isinstance(exc, rules.ArenaError) else "Verification unavailable; the found value is preserved."
                     a["verification"] = {"state":"error", "not_started":True, "automatic":True, "capability":policy["capability"], "provider":policy["provider"], "charged_micro":0, "output":{}, "detail":detail}

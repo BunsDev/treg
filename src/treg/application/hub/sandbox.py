@@ -27,7 +27,7 @@ from typing import Any, Awaitable, Callable
 
 try:
     import resource
-except ImportError:  # pragma: no cover — Windows
+except ImportError:  # Windows
     resource = None  # type: ignore[assignment]
 
 MEMORY_MB = 64                 # the engine's own heap cap
@@ -126,7 +126,7 @@ async def run_script(
         # Calls run as tasks, MAX_PARALLEL at a time (the JSON road's width), and each reply goes
         # back to the child by id the moment its task finishes: five calls in one Promise.all are
         # five in flight. The child's stdout is read by one reader task so a reply write and a
-        # pending readline never contend. A refused call still ends the run, as before.
+        # pending readline never contend. A refused call still ends the run.
         sem = asyncio.Semaphore(MAX_PARALLEL)
         in_flight: set[asyncio.Task] = set()
         failure: SandboxError | None = None

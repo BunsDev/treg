@@ -29,10 +29,10 @@ from .models import AsyncTaskRecord, CallRecord, RunRecord, SearchLog, SearchMis
 
 _pending: set[asyncio.Task] = set()
 # ONE writer per process, and it writes in batches. Audit rows are single-row inserts that cost
-# milliseconds each, so four concurrent writers bought nothing but four `background` slots - and
-# every slot is paid twice (two uvicorn workers) and again at every deploy against the database's
-# 103-connection ceiling (ops/deploy.md). One writer draining a queue in batches of `_BATCH` rows
-# lands the same rows in fewer round trips and holds one connection.
+# milliseconds each, so concurrent writers buy nothing but `background` slots, each paid per
+# process and again at every deploy against the database's connection ceiling. One writer
+# draining a queue in batches of `_BATCH` rows lands the same rows in fewer round trips and holds
+# one connection.
 _MAX_CONCURRENT_WRITES = 1
 _MAX_PENDING = 5000          # shed load past this: drop the audit row rather than grow unbounded
 _BATCH = 200                 # queued operations per batch; a failed batch retries one by one
@@ -238,7 +238,7 @@ async def _write_batch(rows: list[tuple[type, dict]]) -> bool:
             await mark_dirty(session, dirty)
             await session.commit()
         return True
-    except Exception:  # noqa: BLE001 — audit must never surface into a call's result
+    except Exception:
         # Swallowed on purpose, but neither silent nor local: the row is lost — that is the
         # contract — and ERROR is what puts that loss in front of someone. At WARNING it stayed
         # in the container's stdout, below the fault handler's threshold, so the only way to
@@ -250,18 +250,6 @@ async def _write_batch(rows: list[tuple[type, dict]]) -> bool:
 
 
 async def drain() -> None:
-    # Loop until quiescent, not a one-shot snapshot: a call finishing DURING shutdown enqueues a new
-    # record_call after we'd have gathered, and that audit write would otherwise be dropped.
-    #
-    # Drain must remove what it gathered ITSELF. A finished task leaves `_pending` through a
-    # call_soon'd done-callback — and awaiting a gather whose tasks are all already complete never
-    # suspends, so a loop keyed only on the callback spins synchronously forever while that callback
-    # (and every timer on the loop) starves. Latent since the first import; a CI Postgres runner hit
-    # the window deterministically and wedged whole 15-minute jobs on it.
-    #
-    # Whatever is still queued once no writer is running is flushed HERE, inline, not through
-    # `_schedule`: a drain that depends on scheduling a task to make progress spins forever the
-    # moment scheduling is stubbed out (a test kills the pipeline exactly that way).
     while True:
         tasks = list(_pending)
         if tasks:

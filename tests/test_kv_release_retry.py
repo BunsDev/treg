@@ -468,11 +468,11 @@ async def test_first_attempt_cleanup_cannot_grant_second_attempt_a_fresh_budget(
         if len(attempts) == 1:
             try:
                 await asyncio.Event().wait()
-            except asyncio.CancelledError:
+            except asyncio.CancelledError as exc:
                 # A timed-out driver can take time to close its connection. That time must
                 # come out of the original per-key budget, not buy the next attempt 100ms.
                 await asyncio.sleep(0.070)
-                raise redis_errors.TimeoutError("timed-out connection cleanup finished")
+                raise redis_errors.TimeoutError("timed-out connection cleanup finished") from exc
         await asyncio.Event().wait()
 
     started = loop.time()
@@ -495,9 +495,9 @@ async def test_exhausted_total_budget_does_not_start_a_second_command(monkeypatc
         calls += 1
         try:
             await asyncio.Event().wait()
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as exc:
             await asyncio.sleep(0.030)
-            raise redis_errors.TimeoutError("cleanup used remaining budget")
+            raise redis_errors.TimeoutError("cleanup used remaining budget") from exc
 
     assert await _invoke_retry(_store_with(command), phase) == "unavailable"
     assert calls == 1

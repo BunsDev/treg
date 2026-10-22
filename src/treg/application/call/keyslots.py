@@ -35,8 +35,7 @@ from ...infra.upstream.limiter import limiter
 from .types import ResolutionFailed
 
 # Per provider, so one provider's calls never skew another's. Each process starts at a random
-# point: every web worker counting from 0 sent its first call on a provider to the primary, so at
-# low traffic across several workers nearly every call landed there.
+# point, so at low traffic across several workers the calls do not all land on the primary.
 _rotation: dict[str, itertools.count] = {}
 
 

@@ -81,9 +81,9 @@ async def _resolve_call(rest: str, caller: Caller, db: AsyncSession) -> Resolved
     if norm.startswith("http://") or norm.startswith("https://"):
         try:
             host = urlsplit(norm).netloc.lower()
-        except ValueError:  # malformed passthrough URL (e.g. unbalanced IPv6 brackets) → 400, not 500
+        except ValueError as exc:  # malformed passthrough URL (e.g. unbalanced IPv6 brackets) → 400, not 500
             raise ResolutionFailed(
-                "invalid_target", status_code=400, detail="malformed upstream URL")
+                "invalid_target", status_code=400, detail="malformed upstream URL") from exc
         on_host = (await db.execute(
             select(Tool).where(Tool.host == host, Tool.org_id == org_id)
         )).scalars().all()
@@ -217,24 +217,6 @@ async def resolve_call_target(
         return await resolver(rest, caller, db)
 
 
-# ---- direct marketplace calls: `treg call <catalog-endpoint-id>`, no tool registration ----------
-# See docs/context/interface/cli-audit-2026-07-28.md (design section). The registry stays "our
-# stuff"; the catalog is "everything callable". Credential ladder: (1) an org tool bound to the
-# provider — resolved via the URL-passthrough shape, so ACLs and ambiguity handling are identical —
-# then (2) an org credential matching the provider, injected via a VIRTUAL tool that is never
-# persisted (no registry pollution), then (4) TREG'S OWN key for the provider, metered against the
-# org's prepaid balance — the keyless first call — and only then (3) an actionable error naming the
-# connect/secret fix.
-#
-# Tier 4 is the only rung that spends OUR money, so it is fenced on every side: the endpoint must be
-# `platform_eligible` (priced, price-provenanced, live-verified, not the caller's own account's
-# business — see catalog_store.platform_eligible), the provider must be allow-listed AND keyed
-# (config.platform_key_for — the kill switch), the org must not be a demo, the estimated cost is
-# RESERVED from the balance before the request leaves, and a per-org daily ceiling caps the damage a
-# runaway agent can do. The key itself only ever exists as a `platform_setting` NAME in a virtual
-# tool's bindings; `relay` reads the value from settings at call time, so no platform credential is
-# stored, listable, or reachable from a local run.
-
 def _catalog_endpoint_for(rest: str) -> dict | None:
     """The catalog endpoint `rest` names, or None. Only a dotted, slash-free rest can be an
     endpoint id, so tool names and URL/named shapes never reach the catalog lookup."""
@@ -259,9 +241,8 @@ def _enforce_catalog_status(ep: dict) -> None:
     if successor := str(ep.get("superseded_by") or "").strip():
         detail += f" Use {successor} instead."
     elif alternatives := _capability_alternatives(ep):
-        # 41 of the 50 TikHub retirements have no same-provider successor, so `superseded_by` has
-        # nothing to say for them. A cross-provider sibling is the only help left — and it is the
-        # difference between a tombstone and a migration path.
+        # Most retirements have no same-provider successor, so `superseded_by` has nothing to say
+        # for them. A cross-provider sibling is the only help left.
         detail += " " + " ".join(alternatives)
     else:
         detail += " No replacement is currently catalogued."
@@ -336,7 +317,7 @@ class MarketplaceCall:
     unit_micro: int = 0             # RAW per-resource price for a per_result settle-by-count
     reported_charge_unit_micro: int = 0  # RAW value of one response-reported provider credit
     # treg's own account is marked exhausted AND an overflow route is enabled: skip the direct
-    # attempt (no hold, no vendor 402) and go straight to the child cycle (plan §4 ladder).
+    # attempt (no hold, no vendor 402) and go straight to the child cycle.
     skip_direct: bool = False
     settlement_basis: dict = field(default_factory=dict)
     request_data: dict = field(default_factory=dict)
@@ -473,9 +454,7 @@ def _body_limit(body: bytes) -> int | None:
         val = doc.get(name)  # one row per item: moz targets, dataforseo keywords, companyenrich domains, brightdata urls, lusha contacts/companies
         if isinstance(val, list) and val:
             return len(val)
-    # icypeas / lusha: {"pagination": {"size": 10}}; influencersclub: {"paging": {"limit": 10}} —
-    # the miss on `paging` left discovery reserving the 20-row default whatever the caller asked
-    # (found live 2026-08-30, the same calls whose settle over-billed).
+    # icypeas / lusha: {"pagination": {"size": 10}}; influencersclub: {"paging": {"limit": 10}}.
     for envelope in ("pagination", "paging"):
         nested = doc.get(envelope)
         if isinstance(nested, dict):
@@ -620,8 +599,7 @@ def _platform_estimate_micro(cost: dict, query, body: bytes = b"") -> int:
         n = _body_text_utf8_bytes(body)
     elif cost.get("type") in ("per_result", "quota_rows") and cost.get("unit") in _ENTITY_UNITS:
         # Priced per INPUT entity, not per returned row: the page-size default below has no
-        # meaning here and billed one-target calls 20x (seranking summary, serpstat overview —
-        # 2026-09-05). The request names how many entities it asks about.
+        # meaning here. The request names how many entities it asks about.
         n = 1 if cost.get("unit") == "call" else _entity_count(query, body)
     elif cost.get("type") in ("per_result", "quota_rows"):
         asked = None
@@ -640,10 +618,9 @@ def _platform_estimate_micro(cost: dict, query, body: bytes = b"") -> int:
     return whole + 1 if raw_micro > whole else whole
 
 
-# ---- oauth-billed metering: providers whose upstream bill lands on treg's app -------------------
-# X moved to pay-per-use (Feb 2026): the APP OWNER is billed per resource read / per post written,
+# X bills pay-per-use: the APP OWNER is billed per resource read / per post written,
 # whoever's user token made the call. A registry connect rides treg's app, so those calls spend
-# treg's prepaid credits and must be metered against the org's balance — the same reserve→settle
+# treg's prepaid credits and must be metered against the org's balance - the same reserve->settle
 # path as tier 4. A BYO connect (/oauth/start with the caller's own client_id) stores
 # `secret.provider == ""` and is therefore never flagged: its upstream bill is already the org's.
 
@@ -926,8 +903,7 @@ def _marketplace_pricing(
                 if cost.get("type") in ("per_result", "quota_rows") and cost.get("usd") else 0)
     if endpoint_id in ("icypeas.bulk.search", "icypeas.people.email.find") and credit_rate:
         # The answer is an id ({file} / {item: {_id}}) with no rows, so this reserve IS the bill: one
-        # row per bulk `data` entry at its task's rate, one for a single search. Without it the
-        # 20-row default billed a 3-row job, and a single email lookup, $0.38.
+        # row per bulk `data` entry at its task's rate, one for a single search.
         # ponytail: a search row is billed as if found; per-found billing needs a settle on job end.
         doc = _json_object(body)
         rows = doc.get("data") if isinstance(doc.get("data"), list) else []
@@ -969,8 +945,6 @@ def _marketplace_pricing(
     if provider == "hunter" and endpoint_id == "hunter.companies.emails":
         # Hunter charges 1 search credit per 10 emails RETURNED, rounded UP — not linear per-email.
         # The settle logic uses ceil(emails/10); the estimate must match to avoid billing mismatch.
-        # With limit=1 returning 1 email: linear estimate would be $0.00245, but settle is 1 credit
-        # = $0.0245 — a 10x overbill. Use the same rounding here.
         raw = query.get("limit")
         asked = int(str(raw)) if raw is not None and str(raw).isdigit() else 10  # Hunter's default
         asked = max(1, min(asked, 100))  # Hunter's max
@@ -1070,11 +1044,9 @@ def _oauth_billed_estimate(provider, ep: dict | None, method: str, query, body: 
     default); the provider-level rates cover the extended/passthrough long tail. `unit_micro` is
     the per-resource price a `per_result` settle counts the response against."""
     cv = catalog_store.load().cost_view(ep.get("cost"), provider.service) if ep and ep.get("cost") else None
-    # A ZERO price must fall through to the provider rate, not bill zero — on an oauth-billed
+    # A ZERO price must fall through to the provider rate, not bill zero - on an oauth-billed
     # provider the upstream charges us whatever the catalog says, so `free` there is a catalog bug
-    # (a stale ingest), never a fact. Spelled out because it used to ride on `0.0` being falsy:
-    # the same expression read as "no price recorded" and "the price is nothing", and the catalog
-    # could publish free while the balance was debited the fallback.
+    # (a stale ingest), never a fact.
     if cv and cv.get("type") != "free" and cv.get("usd"):
         ctype = str(cv.get("type") or "per_call")
         est = _platform_estimate_micro(cv, query, body)
@@ -1519,7 +1491,7 @@ def _multipart_fields(body: bytes, content_type: str, ep_id: str) -> dict[str, o
             else:
                 fields[name] = value
         return fields
-    except Exception as exc:  # noqa: BLE001 - malformed multipart is one caller error
+    except Exception as exc:
         raise ResolutionFailed(
             "catalog_parameter_invalid", status_code=400,
             detail=f"{ep_id} requires a valid multipart/form-data request body",
@@ -2300,8 +2272,7 @@ async def _resolve_marketplace_call(
         params_hash=phash, cost_type=str((ep.get("cost") or {}).get("type") or ""),
         estimate_micro=info_est,
         # The per-ROW price, carried on every tier (settle only reads it on metered calls):
-        # a `per_result` settle that can't count rows can only ever bill the estimate,
-        # which is how 6,000 delivered Bright Data records once billed as one (2026-08-24).
+        # a `per_result` settle that can't count rows can only ever bill the estimate.
         unit_micro=info_unit, reported_charge_unit_micro=reported_charge_unit_micro,
         settlement_basis=basis, request_data=request_data,
         async_descriptor=ep.get("async"), resource_ownership=ep.get("resource_ownership"),
@@ -2405,8 +2376,8 @@ async def _resolve_marketplace_call(
         # treg's own account for this call is known to be out (the call-path lock, or the sweep).
         # Either admits one probe a minute so a recovered account is noticed. Otherwise never
         # relay a call we know will 402: with an enabled overflow route the ladder skips straight
-        # to the child cycle (plan §4); else refuse BEFORE reserve with a typed 503 naming when
-        # and what else (§4.2). With every account out, the probe goes to the primary.
+        # to the child cycle; else refuse BEFORE reserve with a typed 503 naming when and what
+        # else. With every account out, the probe goes to the primary.
         key_slot = key_slot or keyslots.PRIMARY_SLOT
         cap_slot = keyslots.capacity_slot(key_slot)
         lock = capacity_view.active_lock(service, ep["id"], cap_slot, metered=metered)
@@ -2450,8 +2421,8 @@ def _provider_capacity_unavailable(ep: dict, service: str, resets, *,
     """The typed floor (plan §4.5): no charge, `resets_at` when known, and the same-capability
     alternatives — treg names them and leaves the choice to the caller (charter: no failover)."""
     # Say what treg is doing about it before what the caller could do: an agent quotes the first
-    # imperative line back to its user, and "use your own key" read as "your plan lost access"
-    # (2026-09-17). Nothing about the caller's plan or balance changed.
+    # imperative line back to its user, and "use your own key" reads as "your plan lost access".
+    # Nothing about the caller's plan or balance changed.
     lines = [f"treg's own {service} account is out of capacity right now — {ep['id']} can't be "
              f"served on treg's key" + (f" until about {resets:%Y-%m-%d %H:%M} UTC" if resets else "")
              + "; nothing about your plan or balance changed and nothing was charged"]
@@ -2490,9 +2461,9 @@ async def resolve_marketplace_target(
 ) -> MarketplaceCall:
     if oauth_providers.is_paused(ep.get("provider")):
         raise provider_paused(ep["provider"], ep["id"])
-    # The exhausted view is refreshed here — before the resolution session opens, so at most one
+    # The exhausted view is refreshed here - before the resolution session opens, so at most one
     # connection is held at a time, and before any hold exists. Cached 60 s; a stale or empty view
-    # never refuses (plan §4.1: blocking fires on confirmed signals only).
+    # never refuses: blocking fires on confirmed signals only.
     await capacity_view.load()
     if get_settings().overflow_mode != "off":
         await overflow_routes_view.load()  # same discipline: before the session, cached 60 s

@@ -62,8 +62,6 @@ class ShowcaseError(Exception):
         super().__init__(kind)
 
 
-# ---- shared helpers ------------------------------------------------------------------------------
-
 def _insert(db: AsyncSession):
     if db.get_bind().dialect.name == "postgresql":
         from sqlalchemy.dialects.postgresql import insert
@@ -159,7 +157,6 @@ def app_view(app: ShowcaseApp, *, org: Org | None = None, usage: dict | None = N
     return view
 
 
-# ---- where an app's activity comes from ----------------------------------------------------------
 # An app counts all of its team's calls, or only those made with the API keys linked to it. A key
 # that was rotated points at its replacement (`ApiKey.replacement_key_id`); the replacement counts
 # for the same app, so a rotation never needs an edit.
@@ -244,8 +241,6 @@ async def _owned_app(db: AsyncSession, user: User, app_id: int) -> ShowcaseApp:
         raise ShowcaseError("forbidden", "owner or admin role in this team is required")
     return app
 
-
-# ---- makers -------------------------------------------------------------------------------------
 
 async def my_teams(user: User) -> list[dict]:
     """The teams this person may apply for (owner or admin), with how many entries each has."""
@@ -422,8 +417,6 @@ async def remove(user: User, app_id: int) -> dict:
         await db.commit()
         return await _view(db, app)
 
-
-# ---- staff --------------------------------------------------------------------------------------
 
 async def queue(status: str | None = None) -> list[dict]:
     """Everything staff may act on, newest change first; `status=review` is what waits for them."""
@@ -602,7 +595,6 @@ async def staff_create(org_id: int, raw: dict, *, approve_now: bool, actor: str,
     return await staff_get(app_id)
 
 
-# ---- weekly activity ----------------------------------------------------------------------------
 # Activity is counted per source: a team's calls (`api_key_id` TEAM) for an app that shows its
 # team's activity, or one API key's calls for an app linked to keys. Each source an approved app uses
 # is counted once, however many apps read it. Counted a little at a time: each run reads only the
@@ -740,8 +732,6 @@ async def refresh_activity(session_factory: Callable = session_maker, *, now: da
     return {"sources": len(sources), "calls": read, "caught_up": not waiting,
             "newest_week": rules.last_complete_week(now.date()).isoformat()}
 
-
-# ---- the public board and votes -----------------------------------------------------------------
 
 async def _upvotes(db: AsyncSession, app_id: int | None = None) -> dict[int, int]:
     query = select(ShowcaseVote.app_id, func.count()).group_by(ShowcaseVote.app_id)

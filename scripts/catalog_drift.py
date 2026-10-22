@@ -30,9 +30,9 @@ HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "tra
 # the truncation, and the ingester's shared salvage routine is the one parser already maintained for
 # that shape. Import it rather than growing a second almost-identical recovery algorithm.
 try:  # Running as a script puts `scripts/` on sys.path; importing in tests puts the repo root there.
-    from catalog_ingest import salvage_json_map  # type: ignore[import-not-found]  # noqa: E402
+    from catalog_ingest import salvage_json_map  # type: ignore[import-not-found]
 except ModuleNotFoundError:
-    from scripts.catalog_ingest import salvage_json_map  # noqa: E402
+    from scripts.catalog_ingest import salvage_json_map
 
 
 class UnsupportedSpec(ValueError):

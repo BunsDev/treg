@@ -324,7 +324,8 @@ def test_v2_name_pages():
 def test_v2_provider_name_survives_judge_abstention():
     cat = catalog_store.load()
     ix = fr.index(cat)
-    display = lambda service: "Context.dev" if service == "branddev" else service
+    def display(service):
+        return "Context.dev" if service == "branddev" else service
     for query in ("context.dev", "brand.dev"):
         found = F.decide(query, [], judge_infra.Judgement(probs=None, ms=1), ix,
                          provider_display=display)

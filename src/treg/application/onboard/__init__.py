@@ -22,7 +22,7 @@ from ...sandbox_identity import visitor_name
 sys.modules.setdefault(__name__ + ".crypto", _crypto)
 sys.modules.setdefault(__name__ + ".models", _models)
 
-from . import demo as demo_seed
+from . import demo as demo_seed  # noqa: E402 - needs the sys.modules aliases above
 
 
 SANDBOX_HIT_NS = "sandbox_hit"
@@ -108,11 +108,10 @@ async def mint_sandbox(*, client_ip: str) -> dict:
             raise SandboxError("rate_limited")
         await db.commit()
         # Reap opportunistically, but never let the reaper close the front door: a gc failure is
-        # logged and rolled back, and the visitor still gets their sandbox. Before this guard, one
-        # undeletable expired sandbox turned every mint into a 500 for six hours.
+        # logged and rolled back, and the visitor still gets their sandbox.
         try:
             await landing_sandbox.gc(db)
-        except Exception:  # noqa: BLE001 - anything the reaper raises is a bug to log, not to serve
+        except Exception:
             await db.rollback()
             logging.getLogger("treg").exception("sandbox gc failed; minting anyway")
         out = await landing_sandbox.mint(db)
@@ -142,8 +141,8 @@ async def accept_stripe_event(
         raise SandboxError("bad_signature")
     try:
         event = json.loads(payload)
-    except ValueError:
-        raise SandboxError("bad_payload")
+    except ValueError as exc:
+        raise SandboxError("bad_payload") from exc
     if event.get("type") == "charge.succeeded":
         pubfeed.push_charge(event.get("data", {}).get("object", {}) or {})
     return {"received": True}

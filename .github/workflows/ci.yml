@@ -67,6 +67,9 @@ jobs:
       - name: Enforce import boundaries
         if: steps.docs.outputs.only != 'true'
         run: uv run --locked lint-imports
+      - name: Lint
+        if: steps.docs.outputs.only != 'true'
+        run: uv run --locked ruff check
       - name: Validate the catalog
         if: steps.docs.outputs.only != 'true'
         # The whole catalog, not the slices the tests exercise: a catalog data PR is gated here.

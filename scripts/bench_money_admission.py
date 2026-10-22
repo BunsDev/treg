@@ -86,7 +86,7 @@ async def _main(args):
                     work = []
                     orgs = []
                     async with session_maker() as db:
-                        for i in range(org_count):
+                        for _ in range(org_count):
                             org = Org(id=int(uuid4().hex[:7], 16) + 1,
                                       name="admission-bench", slug=uuid4().hex)
                             db.add(org)
@@ -106,7 +106,7 @@ async def _main(args):
                     # distort the off/on comparison. All actual settlement work remains timed.
                     ready = asyncio.Barrier(args.pool_size)
 
-                    async def warm():
+                    async def warm(sessions=sessions, ready=ready):
                         async with sessions() as db:
                             await db.execute(text("SELECT 1"))
                             await ready.wait()
@@ -115,7 +115,7 @@ async def _main(args):
                     peak = 0
                     connection_ms = 0.0
 
-                    def checkout(connection, record, proxy):
+                    def checkout(connection, record, proxy, engine=engine):
                         nonlocal peak
                         peak = max(peak, engine.pool.checkedout())
                         record.info["benchmark_checked_out"] = time.perf_counter()
@@ -132,7 +132,8 @@ async def _main(args):
                     latencies = []
                     money_admission.snapshot()
 
-                    async def settle(index, org_id, call_id):
+                    async def settle(index, org_id, call_id, *, semaphore=semaphore, org_count=org_count,
+                                     sessions=sessions, latencies=latencies):
                         async with semaphore:
                             token = selected.set((index // org_count) % len(stores))
                             start = time.perf_counter()

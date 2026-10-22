@@ -38,7 +38,7 @@ ROUTED = "treg.people.email.find"
 
 
 @pytest.fixture
-def enrichment_on(monkeypatch, platform_on):  # noqa: F811
+def enrichment_on(monkeypatch, platform_on):
     for p in ("HUNTER", "TOMBA", "LEADMAGIC", "LEADSFORGE", "FINDYMAIL", "AVIATO", "FIBER_AI"):
         monkeypatch.setenv(f"TREG_PLATFORM_KEY_{p}", f"PLATFORM-{p}-KEY")
     monkeypatch.setenv("TREG_PLATFORM_KEY_TOMBA_SECRET", "PLATFORM-TOMBA-SECRET")
@@ -62,7 +62,7 @@ def enrichment_with_miss_declarers_on(monkeypatch, enrichment_on):
 
 
 @pytest.fixture
-def enrichment_with_quickenrich_on(monkeypatch, platform_on):  # noqa: F811
+def enrichment_with_quickenrich_on(monkeypatch, platform_on):
     """Like enrichment_on but includes QuickEnrich - the cheapest provider for phone/email lookups."""
     for p in ("HUNTER", "TOMBA", "LEADMAGIC", "LEADSFORGE", "FINDYMAIL", "AVIATO", "FIBER_AI", "QUICKENRICH"):
         monkeypatch.setenv(f"TREG_PLATFORM_KEY_{p}", f"PLATFORM-{p}-KEY")
@@ -271,7 +271,7 @@ def test_search_adapter_does_not_treat_an_answer_without_results_as_a_miss():
     ),
 ])
 async def test_firecrawl_web_routed_calls_serve_and_settle(
-    clients, monkeypatch, firecrawl_platform_on,  # noqa: F811
+    clients, monkeypatch, firecrawl_platform_on,
     parent, child, routed_input, upstream_body, expected_body, expected_cost,
 ):
     seen = []
@@ -505,7 +505,7 @@ async def test_routed_plan_keeps_an_exhausted_provider_when_its_overflow_route_i
 
 
 async def test_routed_call_reaches_an_enabled_overflow_before_the_next_provider(
-    clients: AsyncClient, platform_on, monkeypatch,  # noqa: F811
+    clients: AsyncClient, platform_on, monkeypatch,
 ):
     monkeypatch.setenv("TREG_PLATFORM_PROVIDERS", "akta,predictleads")
     monkeypatch.setenv("TREG_PLATFORM_KEY_AKTA", "AKTA-KEY")
@@ -1819,7 +1819,7 @@ def test_arena_and_router_read_the_miss_block_the_same_way():
     assert arena.classify(contract, ad, ep, 400, {"error": True, "error_code": "INVALID_DATAPOINTS"})[0] == "error"
 
 
-async def test_company_blind_search_provider_is_dropped_not_billed(clients: AsyncClient, platform_on, monkeypatch):  # noqa: F811
+async def test_company_blind_search_provider_is_dropped_not_billed(clients: AsyncClient, platform_on, monkeypatch):
     """`people.search` declares `scoping: [company_domain]`. A title-only provider asked for
     `{company_domain, title}` answers with the same strangers for every company and bills them as
     a hit, so it leaves the plan instead of ranking last — and still serves a title-only search."""

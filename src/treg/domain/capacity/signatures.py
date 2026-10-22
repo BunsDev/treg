@@ -13,7 +13,7 @@ one thing everywhere. Pure functions over (provider, status, headers, body).
              exhausted, only recorded (so a chart can attribute it to a UA family)
   unrecorded - a 4xx no row matched whose body still names credits/quota/balance → NEVER exhausted,
              only logged/counted: the tripwire for a vendor whose out-of-credit answer is not in
-             the table yet (how Apollo's 422 went unseen for eleven hours, 2026-09-01)
+             the table yet
   None     — not a capacity signal at all (caller-caused 4xx, 5xx, success)
 """
 
@@ -73,21 +73,20 @@ _TABLE: list[Signature] = [
     Signature("hunter", 403, r"too_many_requests", "burst"),
     Signature("apollo", 429, r"per (day|month)|daily|monthly", "quota"),
     # Apollo: an empty credit pool is a 422 {"error": "Insufficient credits. Please upgrade your
-    # plan."} (ops/capacity.md, 2026-09-01). A 422 without the phrase is the caller's validation error.
+    # plan."}. A 422 without the phrase is the caller's validation error.
     Signature("apollo", 422, r"insufficient credits", "balance"),
     # Moz: a spent row quota is a 403 {"error": "The account does not have enough quota remaining for
-    # current period.", "data": {"issue": "insufficient-quota"}} — 115 of one org's calls hit it
-    # unrecognised on 2026-09-04 (nothing here matched a 403, and "quota" alone is not a tripwire
+    # current period.", "data": {"issue": "insufficient-quota"}} ("quota" alone is not a tripwire
     # word). The period resets on Moz's billing day, which the answer does not name.
     Signature("moz", 403, r"insufficient-quota", "quota", tripwire=True),
-    # Documented 2026-09-08: discovery's allowance is distinct from the shared credit pool.
+    # Discovery's allowance is distinct from the shared credit pool.
     # https://docs.influencers.club/guides/error-handling — ordinary burst 429s have Retry-After.
     Signature("influencersclub", 429, r"Discovery API credit limit reached", "quota", tripwire=True),
     # reAPI: an empty prepaid balance is a 402 {"error": {"code": 30001, "message": "Insufficient
-    # credits. Required: 13856", ...}} (observed 2026-09-14 with a request larger than the balance).
+    # credits. Required: 13856", ...}} (seen with a request larger than the balance).
     Signature("reapi", 402, r"insufficient credits", "balance"),
-    # AnyAPI: a spent wallet or per-key spend cap is a 402. Observed 2026-09-19 on a trial key
-    # driven past its cap: {"error": "trial_cap_reached"}. The funded-wallet body is documented as
+    # AnyAPI: a spent wallet or per-key spend cap is a 402. A trial key
+    # driven past its cap answers {"error": "trial_cap_reached"}. The funded-wallet body is documented as
     # "insufficient wallet balance" (openapi.json, 402) and not yet observed.
     Signature("anyapi", 402, r"trial_cap_reached|insufficient|spend cap|balance", "balance"),
     Signature("trykitt", 418, r"temporarily throttled", "burst"),
@@ -96,13 +95,12 @@ _TABLE: list[Signature] = [
     Signature("trykitt", 402, r"", "unknown"),
     # ContactOut documents this 403 separately from "No access to endpoint".
     # Independent pools: lock only the failed endpoint, never the entire provider.
-    # https://api.contactout.com/#errors (checked 2026-09-08).
+    # https://api.contactout.com/#errors
     Signature("contactout", 403, r"you're out of credits", "quota", tripwire=True),
     # cloro: a spent credit allowance is a 403 ForbiddenError with `error.code: "INSUFFICIENT_CREDITS"`
-    # (OpenAPI 3.1 spec, 2026-09-07 — documented, not yet observed: the review account had 37,500
-    # credits). Its 429s are CONCURRENT_LIMIT_EXCEEDED / RATE_LIMIT_EXCEEDED bursts with
-    # X-RateLimit-* headers, never a period quota; the plan allowance resets monthly at
-    # `cycleResetsAt` from GET /v1/credits.
+    # (OpenAPI 3.1 spec; documented, not yet observed). Its 429s are CONCURRENT_LIMIT_EXCEEDED /
+    # RATE_LIMIT_EXCEEDED bursts with X-RateLimit-* headers, never a period quota; the plan
+    # allowance resets monthly at `cycleResetsAt` from GET /v1/credits.
     Signature("cloro", 403, r"insufficient_credits", "balance"),
     Signature("crawl4ai", 402, r"no_credit", "balance", tripwire=True),
     Signature("crawl4ai", 402, r"spend_cap|plan_cap", "quota"),
@@ -114,7 +112,7 @@ _TABLE: list[Signature] = [
     Signature("tavily", 433, r"exceeds the pay-as-you-go limit", "quota", tripwire=True),
     # Icypeas answers an empty credit pool with a 200: {"validationErrors": [{"message":
     # "insufficient_credits", "type": "InsufficientCredits", ...}], "success": false}, on every paid
-    # route (read from archived answers, 2026-09-27). The only 2xx row: callers of `classify` that
+    # route. The only 2xx row: callers of `classify` that
     # gate on >= 400 would never see it.
     Signature("icypeas", 200, r'"message"\s*:\s*"insufficient_credits"', "balance"),
     # HLR Lookup answers an empty account with a 200 whose `results[0].error` is

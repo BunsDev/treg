@@ -51,7 +51,7 @@ async def _pool_saturated(request: Request, exc: PoolTimeoutError) -> JSONRespon
         status_code=503, headers={"Retry-After": "2"})
     # A saturation 503 is answered HERE, not through `_mark_treg_own_errors`, so it needs its own
     # join key, row and label release. Without them the one failure mode a burst actually produces
-    # (#181) is the one a caller cannot report and `/calls` cannot show. `X-Treg-Error` stays off:
+    # is the one a caller cannot report and `/calls` cannot show. `X-Treg-Error` stays off:
     # the typed `treg_saturated` flag above is this exit's signal, and the header is documented as
     # the HTTPException handler's (interface/api.md).
     if call_path := split_call_path(request.url.path):
@@ -74,14 +74,12 @@ async def _mark_treg_own_errors(request: Request, exc: StarletteHTTPException):
     if split_call_path(request.url.path):
         resp.headers["X-Treg-Error"] = "1"
         # Refusals that raised before the handler's own audit ran (bad token, unknown tool, ACL,
-        # deny rule, daily cap) would otherwise leave NO row, and no id to report — the funnel's
-        # early friction was invisible until this. Here because this is the ONE place every refusal
+        # deny rule, daily cap) would otherwise leave NO row, and no id to report. Here because this is the ONE place every refusal
         # passes through; the handler has a dozen raise points and stamping at each would be a dozen
         # chances to miss one.
         await _stamp_call_exit(request, resp, exc.status_code)
     return resp
 
 
-# Preserve the frozen composition snapshot until the Stage 4 close-out refreshes module paths.
 _pool_saturated.__module__ = "treg.api"
 _mark_treg_own_errors.__module__ = "treg.api"

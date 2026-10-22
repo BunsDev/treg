@@ -337,7 +337,7 @@ async def _write_last_used(key_id: int, seen_at: datetime) -> bool:
     try:
         async with _writer_gate():
             async with background_session_maker() as db:
-                result = await db.execute(
+                await db.execute(
                     update(ApiKey).where(
                         ApiKey.id == key_id,
                         or_(

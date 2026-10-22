@@ -118,7 +118,7 @@ async def strike(provider: str, *, endpoint_id: str | None, kind: str,
                         opened_at=now if until is not None else None, opened=until is not None)
             await ratestore.kv_put(db, LOCK_NS, key, lock.to_json(), ttl_s=LOCK_TTL_S)
             await db.commit()
-    except Exception:  # noqa: BLE001 - a lock is a hint for the next call, never this call's fate
+    except Exception:
         log.warning("capacity lock %s not written", key, exc_info=True)
         return None
     if until is not None:
@@ -139,7 +139,7 @@ async def clear(key: str, *, lock_id: str | None = None) -> bool:
                 return False
             await ratestore.kv_pop(db, LOCK_NS, key)
             await db.commit()
-    except Exception:  # noqa: BLE001
+    except Exception:
         log.warning("capacity lock %s not cleared", key, exc_info=True)
         return False
     return True
@@ -186,7 +186,7 @@ async def clear_sweep_state(provider: str, *, probe_id: str) -> bool:
             state.note = f"a probe's 2xx lifted this exhausted reading; {state.note}"[:200]
             await ratestore.kv_put(db, STATE_NS, provider, state.to_json(), ttl_s=STATE_TTL_S)
             await db.commit()
-    except Exception:  # noqa: BLE001
+    except Exception:
         log.warning("capacity state %s not cleared", provider, exc_info=True)
         return False
     return True

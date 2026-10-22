@@ -288,7 +288,6 @@ def _log(query: str, *, source: str, baseline_total: int, cands: list[tuple[dict
                                  reason=JUDGE_OFF if judged.verdict == KEYWORD else None)
 
 
-# ==== v2: recall by job, one judge request, nine rules ============================================
 # Why a `none` has nothing to show: the catalog lacks it (a gap, worth recording), or the text is
 # not a task the page can read; `judge_off` is the keyword fallback that found nothing. A shelf's
 # find reads that shelf only, so its `none` is `scope`: it cannot say the catalog lacks anything.
@@ -705,7 +704,7 @@ async def _shadow_v2(query: str, provider_display, platform: str | None, evidenc
             pass
     except asyncio.CancelledError:
         raise
-    except Exception:  # noqa: BLE001 - the shadow is a measurement; it never touches the answer
+    except Exception:
         log.warning("find shadow failed", exc_info=True)
 
 

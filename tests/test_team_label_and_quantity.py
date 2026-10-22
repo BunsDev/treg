@@ -200,7 +200,7 @@ async def test_a_purchase_cancelled_after_it_was_sent_is_charged_and_its_retry_i
     monkeypatch.setattr(call_service, "relay", cancelled)
     org_id, before = await _team(clients)
     label = call_resolution.team_label(org_id)
-    with pytest.raises(BaseException):
+    with pytest.raises(asyncio.CancelledError):
         await clients.post(f"/call/{EP}?label={label}", json={"credits": 100, "ref": "p9"})
     cv = catalog_store.load().cost_view(COST, "crawl4ai")
     expected = ledger.with_margin(call_resolution._platform_estimate_micro(
@@ -226,7 +226,7 @@ async def test_an_ordinary_call_cancelled_mid_relay_is_still_refunded(clients: A
     monkeypatch.setitem(cat.by_id, EP, plain)
     monkeypatch.setattr(call_service, "relay", cancelled)
     org_id, before = await _team(clients)
-    with pytest.raises(BaseException):
+    with pytest.raises(asyncio.CancelledError):
         await clients.post(f"/call/{EP}?label={call_resolution.team_label(org_id)}", json={"credits": 1000, "ref": "p8"})
     assert (await _team(clients))[1] == before
 async def test_tool_details_tell_a_signed_in_team_its_own_values(clients: AsyncClient, budget_row, monkeypatch):

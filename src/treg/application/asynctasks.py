@@ -309,8 +309,7 @@ async def _poll(row: AsyncTaskRecord, client: httpx.AsyncClient) -> tuple[int, b
     method, url, query = _poll_target(row)
     # The query travels as `query_items`: the relay composes the upstream URL from those (it
     # forwards a URL's own query string nowhere), so a query-parameter poll (MiniMax v1
-    # `?task_id=`) appended to the URL reached the provider empty - "invalid params" until the
-    # 24-hour deadline. Path-parameter polls never showed it. Live 2026-09-02.
+    # `?task_id=`) appended to the URL would reach the provider empty.
     # The task exists only on the account that accepted it (`keyslots`); a retired account
     # raises here and the row fails like any other unreachable poll.
     account = keyslots.pinned(row.provider, owners=(row.key_slot,))
@@ -481,7 +480,7 @@ async def _answers_allowed(db, org_id: int | None) -> bool:
         return False
     try:
         org = await db.get(Org, org_id)
-    except Exception:  # noqa: BLE001 - an optional event column never stops a settle or release
+    except Exception:
         log.warning("could not read the archive opt-out of org %s; event sent without answers",
                     org_id, exc_info=True)
         return False
@@ -538,7 +537,7 @@ async def _finish_terminal(snapshot: AsyncTaskRecord, outcome: str, document: ob
         try:
             await archive.store_terminal_response(
                 snapshot.call_id, snapshot.provider, snapshot.endpoint_id, status_code, body)
-        except Exception:  # noqa: BLE001 - archive is best effort, settlement is durable
+        except Exception:
             log.exception("could not archive terminal evidence for %s", snapshot.call_id)
     return result
 
@@ -598,7 +597,7 @@ async def _process(call_id: str, client: httpx.AsyncClient, attempt: int) -> str
         return result
     except money_admission.AdmissionRefused:
         raise
-    except Exception:  # noqa: BLE001 - the row stays pending; the next tick or the deadline ends it
+    except Exception:
         log.exception("could not release async task %s on a retired account", call_id)
         return "backed_off"
 
@@ -610,10 +609,9 @@ async def settle_due(*, limit: int = DEFAULT_LIMIT, client: httpx.AsyncClient | 
     if not candidates:
         return TickResult()
     # Load the catalog before any poll starts, in a thread: `_poll_target` reads it, and the first
-    # read in a fresh worker process parses every provider file. Inside a poll that parse froze the
-    # event loop past POLL_TIMEOUT_S, so polls already in flight timed out without the provider
-    # being slow. After this the polls read the cached catalog and their timeout measures the
-    # provider alone.
+    # read in a fresh worker process parses every provider file. Inside a poll that parse would
+    # block the event loop past POLL_TIMEOUT_S; after this the polls read the cached catalog and
+    # their timeout measures the provider alone.
     await asyncio.to_thread(catalog_store.load)
     global_sem = asyncio.Semaphore(GLOBAL_CONCURRENCY)
     provider_sems: dict[str, asyncio.Semaphore] = {}

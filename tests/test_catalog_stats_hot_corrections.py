@@ -104,7 +104,7 @@ async def test_continuously_remarked_day_stays_readable_while_full_repairs_succe
             await db.commit()
         assert (await _marker(day)).queued_at == old_marker.queued_at, "writes alone cannot renew age"
 
-        def newer_revision(connection):
+        def newer_revision(connection, scan_started=scan_started):
             connection.execute(update(EndpointStatDirty).where(
                 EndpointStatDirty.endpoint_id == ENDPOINT, EndpointStatDirty.day == day
             ).values(revision=EndpointStatDirty.revision + 1))

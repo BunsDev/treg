@@ -7,15 +7,14 @@
 // The signed-in dashboard includes this file with `data-conversion-only`: no `page_view` event is
 // configured there, only the `treg Signup (web)` conversion after the first team is created. Google
 // still sends its own cookieless consent-mode ping (`ccm/collect`, en=page_view) on every load,
-// `send_page_view: false` or not (observed 2026-10-09); that ping is the input modeling needs and is
-// not an Ads conversion. That
-// action is SECONDARY in the Ads account (excluded from the Conversions column), so it can never
+// `send_page_view: false` or not; that ping is the input modeling needs and is not an Ads
+// conversion. That action is SECONDARY in the Ads account (excluded from the Conversions column), so it can never
 // double count against the server-side upload in adsconv.py, which remains the bidding signal.
 //
 // A future consent UI grants cookies by calling window.tregAdsConsent('granted'); nothing here
 // needs to change for that, and nothing here depends on it.
 //
-// Conversion ID: AW-18392771132. See docs/context/architecture/ads-conversions.md.
+// See docs/context/architecture/ads-conversions.md.
 (function () {
   try {
     var TAG_ID = 'AW-18392771132';

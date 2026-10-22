@@ -17,7 +17,7 @@ from sqlmodel import select
 
 from . import crypto, oauth, oauth_providers
 from .infra.upstream import injectors
-from .infra.upstream.ssrf import host_is_public, safe_webhook_url
+from .infra.upstream.ssrf import host_is_public as host_is_public, safe_webhook_url
 from .models import Invite, Membership, PendingOAuth, Secret, Tool, User
 from .timeutil import utcnow_naive
 
@@ -136,8 +136,6 @@ async def run_all(db: AsyncSession, client: httpx.AsyncClient, org_id: int | Non
     def apply(s: Secret, sid: int, status: str, detail: str) -> None:
         if s.kind == "param":  # a param (project id, org id…) is config, not a credential — no verdicts
             return
-        # Worst-status-wins WITHIN a run: a secret shared by several tools must never be downgraded
-        # by a later tool (e.g. a no-probe tool marking a probe-failed oauth secret back to "ok").
         if sid in evaluated and _RANK[status] <= _RANK.get(s.health_status, 1):
             return
         _mark(s, status, detail, now)

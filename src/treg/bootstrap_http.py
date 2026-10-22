@@ -10,7 +10,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.datastructures import MutableHeaders
 
-from .config import LEGACY_PUBLIC_HOSTS, PUBLIC_HOST_ALIASES, get_settings
+from .config import LEGACY_PUBLIC_HOSTS, get_settings
 from .domain.identity import session as sess
 
 
@@ -211,8 +211,6 @@ class _BodyDecodeMiddleware:
         return await self.app(new_scope, receive_decoded, send)
 
 
-# The qualified names are a frozen composition-snapshot and import compatibility surface. Retire
-# when the Stage 4 close-out deliberately refreshes the composition snapshot to the truthful module paths.
 for _middleware in (
     _LegacyHostRedirectMiddleware,
     _SecurityHeadersMiddleware,

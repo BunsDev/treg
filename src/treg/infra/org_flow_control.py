@@ -27,7 +27,12 @@ _MAX_BYTES = 32768
 _MAX_INT = 2147483647
 _LOG_INTERVAL_S = 5
 _clock = time.monotonic
-_utcnow = lambda: datetime.now(timezone.utc)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 log = get_logger("treg.org_flow_control")
 
 
@@ -118,7 +123,7 @@ def _emit(event: str, org_id: int, call_ref: str | None, *,
             {"worker_pid": os.getpid(), "org_id": org_id, "call_ref": call_ref,
              "capability": "pause", "capabilities": ["pause", "rate", "concurrency"], **fields},
             separators=(",", ":")))
-    except Exception:
+    except Exception:  # noqa: BLE001 - observability cannot change an admission decision
         pass  # Observability cannot change an admission decision.
 
 
@@ -187,7 +192,7 @@ class Reader:
                     raw = await kv.store().read_org_flow_control(org_id)
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001 - any read fault reads as unavailable
             raw = kv.FlowControlReadFailure.UNAVAILABLE
         entry.next_refresh = _clock() + refresh_s
         if raw is kv.FlowControlReadFailure.UNAVAILABLE:

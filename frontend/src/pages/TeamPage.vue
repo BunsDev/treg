@@ -282,7 +282,6 @@ export default {
               <p v-if="!keyBusy && !apiKeys.length" class="sub">No keys are available.</p>
             </template>
 
-            <!-- PROJECTS tab -->
             <!-- BILLING. Balance + top-ups + auto top-up for the ACTIVE team. Admin-gated like the
                  rest of the team tabs. Hidden entirely when the deployment has no Stripe key
                  (self-hosters don't sell balance) - `billing.configured` says so. -->
