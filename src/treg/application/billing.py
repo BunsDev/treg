@@ -32,7 +32,10 @@ burst of concurrent calls that all notice the low balance produces exactly ONE c
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import hashlib
+import json
 import logging
 import time
 from uuid import uuid4
@@ -40,7 +43,7 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import delete, func, update
+from sqlalchemy import and_, delete, func, or_, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlmodel import select
 
@@ -577,6 +580,7 @@ async def create_portal_session(db: AsyncSession, org: Org, *, return_base: str 
 # trip in `_payment_documents`: a pooled connection must never sit open across an upstream call.
 async def _load_payment_rows(
     db: AsyncSession, org: Org, *, limit: int = 24,
+    before: tuple[datetime, str] | None = None,
 ) -> tuple[list[CreditBlock], set[str], dict[str, int]]:
     """The org's completed top-ups, newest first: DB rows, their auto-topup flags, bonus amounts.
 
@@ -585,13 +589,15 @@ async def _load_payment_rows(
     it needs no network call to render amounts and dates. Read-only: nothing here moves money or
     writes to the ledger.
     """
-    blocks = (await db.execute(
-        select(CreditBlock)
-        .where(CreditBlock.org_id == org.id, CreditBlock.kind == "purchased",
-               CreditBlock.stripe_payment_intent.is_not(None))
-        .order_by(CreditBlock.created_at.desc())
-        .limit(max(1, min(int(limit), 100)))
-    )).scalars().all()
+    query = select(CreditBlock).where(
+        CreditBlock.org_id == org.id, CreditBlock.kind == "purchased",
+        CreditBlock.stripe_payment_intent.is_not(None),
+    )
+    if before:
+        query = query.where(or_(CreditBlock.created_at < before[0],
+                                and_(CreditBlock.created_at == before[0], CreditBlock.id < before[1])))
+    blocks = (await db.execute(query.order_by(CreditBlock.created_at.desc(), CreditBlock.id.desc())
+                               .limit(max(1, min(int(limit), 100))))).scalars().all()
 
     # Which of these top-ups were automatic. The flag lives in the ledger entry's JSON meta, and JSON
     # containment isn't portable across SQLite and Postgres — so the rows are narrowed by block id
@@ -688,6 +694,57 @@ async def _payment_documents(org: Org, wanted: int) -> tuple[dict[str, dict], bo
         out[pi] = {"receipt_url": ch.get("receipt_url") or "",
                    **(by_pi.get(pi) or by_invoice.get(inv or "", {}))}
     return out, True
+
+
+async def _subscription_invoices(
+    customer_id: str, org_id: int, subscription_id: str, limit: int, after: str = "",
+) -> tuple[list[dict], bool, bool]:
+    """SSO invoices across renewals and later re-purchases, excluding prepaid invoices.
+
+    Subscription metadata is copied onto invoice subscription details at creation. The current
+    subscription ID also covers an invoice that has not yet received that metadata snapshot.
+    """
+    rows = []
+    scan_after = after
+    more = False
+    try:
+        while len(rows) < limit:
+            kw = {"customer": customer_id, "limit": 100}
+            if scan_after:
+                kw["starting_after"] = scan_after
+            page = await _sdk(stripe_adapter.INVOICE_LIST, **kw)
+            invoices = page.get("data") or []
+            for inv in invoices:
+                if not inv.get("id"):
+                    continue
+                details = (inv.get("parent") or {}).get("subscription_details") or inv.get("subscription_details") or {}
+                metadata = details.get("metadata") or {}
+                sub = details.get("subscription") or inv.get("subscription")
+                if (metadata.get("treg_kind") != "enterprise_sso" or metadata.get("treg_org_id") != str(org_id)) and sub != subscription_id:
+                    continue
+                created = inv.get("created")
+                rows.append({
+                    "id": inv["id"],
+                    "number": inv.get("number") or "",
+                    "created_at": datetime.fromtimestamp(created, timezone.utc).isoformat() if isinstance(created, int) else None,
+                    "amount_micro": cents_to_micro(int(inv.get("total") or 0)),
+                    "currency": inv.get("currency") or "usd",
+                    "status": inv.get("status") or "",
+                    "invoice_pdf": inv.get("invoice_pdf") or "",
+                    "hosted_invoice_url": inv.get("hosted_invoice_url") or "",
+                })
+                if len(rows) == limit:
+                    break
+            if len(rows) == limit:
+                more = True
+                break
+            if not page.get("has_more") or not invoices or not invoices[-1].get("id") or invoices[-1]["id"] == scan_after:
+                break
+            scan_after = invoices[-1]["id"]
+    except Exception as e:  # noqa: BLE001 — keep the billing page usable during a Stripe outage
+        log.warning("billing: could not load SSO invoices for org %s: %s", org_id, e)
+        return [], False, False
+    return rows, True, more
 
 
 # Per-org in-process lock. Cheap first line of defence against a burst of concurrent calls all
@@ -1795,14 +1852,111 @@ async def configure_autotopup(
         return state
 
 
-async def get_payment_history(org_id: int, *, limit: int) -> dict:
-    # The DB session closes before `_payment_documents` calls Stripe below - a pooled connection must
-    # never sit open across an upstream round trip.
+def _history_cursor(data: dict) -> str:
+    return base64.urlsafe_b64encode(json.dumps(data, separators=(",", ":")).encode()).decode().rstrip("=")
+
+
+def _read_history_cursor(value: str) -> dict:
+    if not value:
+        return {}
+    try:
+        data = json.loads(base64.urlsafe_b64decode(value + "=" * (-len(value) % 4)))
+        if not isinstance(data, dict) or set(data) - {"t", "i", "o"}:
+            raise ValueError("invalid cursor")
+        if data.get("t"):
+            dt, block_id = data["t"]
+            datetime.fromisoformat(dt)
+            if not isinstance(block_id, str):
+                raise ValueError("invalid cursor")
+        if data.get("i") and not isinstance(data["i"], str):
+            raise ValueError("invalid cursor")
+        if data.get("o") and not isinstance(data["o"], int):
+            raise ValueError("invalid cursor")
+        return data
+    except (ValueError, TypeError, KeyError, IndexError, binascii.Error) as e:
+        raise ValueError("invalid billing history cursor") from e
+
+
+async def get_payment_history(org_id: int, *, limit: int, kind: str = "all", cursor: str = "") -> dict:
+    """One newest-first timeline; cursors advance only the source rows actually displayed."""
+    if kind not in {"all", "manual", "auto", "subscription"}:
+        raise ValueError("invalid billing history filter")
+    position = _read_history_cursor(cursor)
+    topup_pos = position.get("t")
+    topup_before = (datetime.fromisoformat(topup_pos[0]), topup_pos[1]) if topup_pos else None
+    stripe_after = position.get("i") or ""
+    page_size = max(1, min(limit, 100))
+    blocks: list[CreditBlock] = []
+    auto: set[str] = set()
+    bonus_by_pi: dict[str, int] = {}
+    # The database connection closes before any Stripe call. Filtered top-up pages scan in bounded
+    # chunks because the auto flag is ledger JSON and must behave identically on SQLite/Postgres.
     async with _db.session_maker() as db:
         org = await _journey_org(db, org_id)
-        blocks, auto, bonus_by_pi = await _load_payment_rows(db, org, limit=limit)
-    docs, stripe_ok = await _payment_documents(org, len(blocks))
-    return _assemble_payments(blocks, auto, bonus_by_pi, docs, stripe_ok)
+        sso = await db.get(EnterpriseSSO, org_id)
+        subscription_id = sso.stripe_subscription_id if sso else None
+        if kind != "subscription":
+            scan_before = topup_before
+            while len(blocks) <= page_size:
+                batch, batch_auto, batch_bonus = await _load_payment_rows(
+                    db, org, limit=100, before=scan_before)
+                if not batch:
+                    break
+                for block in batch:
+                    is_auto = block.id in batch_auto
+                    if kind == "all" or (kind == "auto") == is_auto:
+                        blocks.append(block)
+                        if is_auto:
+                            auto.add(block.id)
+                        if block.stripe_payment_intent in batch_bonus:
+                            bonus_by_pi[block.stripe_payment_intent] = batch_bonus[block.stripe_payment_intent]
+                    if len(blocks) > page_size:
+                        break
+                if len(blocks) > page_size or len(batch) < 100:
+                    break
+                scan_before = (batch[-1].created_at, batch[-1].id)
+
+    invoices: list[dict] = []
+    invoices_ok = True
+    invoices_more = False
+    if kind in {"all", "subscription"} and subscription_id:
+        if org.stripe_customer_id and configured():
+            invoices, invoices_ok, invoices_more = await _subscription_invoices(
+                org.stripe_customer_id, org_id, subscription_id, page_size + 1, stripe_after)
+        else:
+            invoices_ok = False
+    # Document lookup needs only the top-ups that can appear on this page.
+    candidate_blocks = blocks[:page_size]
+    docs, stripe_ok = await _payment_documents(org, len(candidate_blocks))
+    topups = _assemble_payments(candidate_blocks, auto, bonus_by_pi, docs, stripe_ok)["items"]
+    for item, block in zip(topups, candidate_blocks, strict=True):
+        item["kind"] = "auto" if block.id in auto else "manual"
+        item["_position"] = [block.created_at.isoformat(), block.id]
+        item["id"] = block.id
+        item["status"] = "paid"
+    for item in invoices:
+        item["kind"] = "subscription"
+    combined = topups + invoices
+    combined.sort(key=lambda row: (row.get("created_at") or "", row["id"]), reverse=True)
+    shown = combined[:page_size]
+    next_pos = dict(position)
+    for item in shown:
+        if item["kind"] == "subscription":
+            next_pos["i"] = item["id"]
+        else:
+            next_pos["t"] = item["_position"]
+    more = len(combined) > page_size or len(blocks) > page_size or invoices_more
+    # Stripe errors make the mixed ordering unknowable; offer retry, not a misleading next page.
+    if not invoices_ok:
+        more = False
+    for item in shown:
+        item.pop("_position", None)
+    return {
+        "items": shown,
+        "stripe_ok": stripe_ok,
+        "subscription_invoices_ok": invoices_ok,
+        "next_cursor": _history_cursor(next_pos) if more else None,
+    }
 
 
 async def open_billing_portal(org_id: int, *, return_base: str) -> dict:

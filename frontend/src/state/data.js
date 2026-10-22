@@ -50,7 +50,8 @@ export default function data(){
       archiveBusy:false, archiveErr:'',
       renameName:'', renameSlug:'', renameBusy:false, renameErr:'',
       budgets:[], budDims:[], budDim:'', budVal:'', budDaily:'', budBusy:false, budErr:'',
-      bhist:{items:[],loading:false,ok:true},   // past top-ups + their invoice/receipt links; ok=false means Stripe was unreachable, amounts are still right
+      bhist:{items:[],loading:false,ok:true,invoicesOk:true,nextCursor:null,error:false},
+      bhistFilter:'all', bhistPage:0, bhistCursors:[''], bhistOrgId:null,
       // Referral program. Seeded with the same SHAPE the API returns (terms/totals/cap present and
       // zeroed) so the template can read ref.terms.hold_days on the very first paint. `loaded` keeps
       // the subtitle invisible until the real terms arrive.

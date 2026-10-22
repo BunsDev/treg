@@ -429,11 +429,17 @@ export default {
 
                     <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
                       <div class="lbl">Payment history</div>
+                      <p class="sub" style="margin:8px 0 0">Top-ups add to your tool balance. SSO subscriptions are billed separately.</p>
+                      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px" role="group" aria-label="Filter payments">
+                        <button v-for="filter in [{id:'all',label:'All'},{id:'manual',label:'Manual top-ups'},{id:'auto',label:'Auto top-ups'},{id:'subscription',label:'Subscriptions'}]"
+                                :key="filter.id" class="btn sm" :class="{primary:bhistFilter===filter.id}"
+                                :aria-pressed="bhistFilter===filter.id" @click="setBillingHistoryFilter(filter.id)">{{filter.label}}</button>
+                      </div>
                       <p v-if="bhist.loading" class="sub" style="margin:8px 0 0">Loading…</p>
-                      <p v-else-if="!bhist.items.length" class="sub" style="margin:8px 0 0">No top-ups yet. Once you add funds, every payment shows up here with its documents.</p>
+                      <p v-else-if="bhist.error" class="sub" style="margin:8px 0 0">Could not load payment history. <button class="btn sm" @click="loadBillingHistory()">Try again</button></p>
+                      <p v-else-if="!bhist.items.length" class="sub" style="margin:8px 0 0">No payments in this category yet.</p>
                       <template v-else>
-                        <!-- Amounts come from our own ledger, so this list always agrees with the
-                             balance above. Only the links come from Stripe — hence the notice below. -->
+                        <!-- Top-up amounts come from our ledger; subscription invoices come from Stripe. -->
                         <div style="overflow-x:auto">
                         <table style="width:100%;min-width:440px;max-width:700px;margin-top:8px;border-collapse:collapse">
                           <thead><tr class="sub" style="text-align:left">
@@ -443,11 +449,13 @@ export default {
                             <th scope="col" style="padding:8px 0;text-align:right;font-weight:500">Documents</th>
                           </tr></thead>
                           <tbody>
-                          <tr v-for="i in bhist.items" :key="i.payment_intent" style="border-top:1px solid var(--line)">
+                          <tr v-for="i in bhist.items" :key="i.id" style="border-top:1px solid var(--line)">
                             <td style="padding:8px 10px 8px 0;white-space:nowrap">{{bhistDate(i.created_at)}}</td>
                             <td style="padding:8px 10px 8px 0;font-family:var(--mono);white-space:nowrap">{{money(i.amount_micro)}}</td>
                             <td style="padding:8px 10px 8px 0;white-space:nowrap" class="sub">
-                              {{i.auto?'Auto':'Manual'}} · <span style="color:var(--green)">Paid</span>
+                              {{i.kind==='subscription'?'SSO subscription':i.kind==='auto'?'Auto top-up':'Manual top-up'}} ·
+                              <span :style="i.status==='paid'?'color:var(--green)':''">{{i.status==='paid'?'Paid':i.status==='open'?'Payment due':i.status||'Pending'}}</span>
+                              <span v-if="i.kind==='subscription'&&i.number" class="muted"> · {{i.number}}</span>
                               <span v-if="i.bonus_micro" style="color:var(--green)"> +{{money(i.bonus_micro)}} bonus</span>
                             </td>
                             <td style="padding:8px 0;text-align:right;white-space:nowrap">
@@ -460,8 +468,14 @@ export default {
                           </tbody>
                         </table>
                         </div>
-                        <p v-if="!bhist.ok" class="sub" style="margin:8px 0 0">Document links are temporarily unavailable — the amounts above are correct. Try again shortly, or use <b>Manage billing</b> for the full archive.</p>
                       </template>
+                      <p v-if="!bhist.ok && bhist.items.length" class="sub" style="margin:8px 0 0">Some top-up document links are temporarily unavailable; the top-up amounts are correct. Try again or use <b>Manage billing</b>.</p>
+                      <p v-if="!bhist.invoicesOk" class="sub" style="margin:8px 0 0">Subscription invoices are temporarily unavailable. <button class="btn sm" @click="loadBillingHistory()">Try again</button></p>
+                      <div v-if="!bhist.error && (bhistPage>0 || bhist.nextCursor)" style="display:flex;justify-content:flex-end;gap:8px;align-items:center;margin-top:14px">
+                        <button class="btn sm" :disabled="bhistPage===0||bhist.loading" @click="previousBillingHistoryPage()">Previous</button>
+                        <span class="sub" style="margin:0">Page {{bhistPage+1}}</span>
+                        <button class="btn sm" :disabled="!bhist.nextCursor||bhist.loading" @click="nextBillingHistoryPage()">Next</button>
+                      </div>
                     </div>
                   </template>
 
