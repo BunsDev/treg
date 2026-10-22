@@ -101,6 +101,9 @@ closed maintenance loop. Calling `maintenance.upgrade()` directly does not dispo
   and a hash-only backfill for existing membership credentials. It is marked `contract = True`
   because old code cannot enforce newly stored disable or revoke state. The migration is additive
   and uses SQL that works on SQLite and Postgres.
+- **First-run lookup removal floor:** revision `0078` drops `onboardingprofile`. Code older than it
+  reads or writes that table only while a `TREG_ONBOARDING_V2*` setting is on, so turn those off
+  before upgrading, and keep them off on any rollback past it.
 - **Alembic is authoritative:** migration scripts ship inside `src/treg/alembic/` in the wheel.
   `maintenance._alembic_config()` resolves that installed package resource, supplies the escaped
   configured URL, and runs Alembic in a worker thread.
@@ -617,11 +620,6 @@ without importing the heavy database stack into the light `treg` CLI.
   with `TREG_JEV_TREG_TOKEN` (a member token of the demo team, so the spend is an ordinary bill) and jev
   through the Vercel AI Gateway (`TREG_AI_GATEWAY_API_KEY`), and stores the run under Ephemeral for the page.
   Both variables also belong on the web service, which needs them for the visitor judge endpoint.
-  The first-run onboarding (`TREG_ONBOARDING_V2`, or `TREG_ONBOARDING_V2_EMAILS` for a list, or
-  `TREG_ONBOARDING_V2_EXPERIMENT` for addresses on a domain of their own, in the PostHog experiment `onboarding-v2`) runs
-  on the web service and reads `TREG_ONBOARDING_TREG_TOKEN` (a member token of the team its setup
-  lookups bill), `TREG_ONBOARDING_GITHUB_TOKEN` and `TREG_AI_GATEWAY_API_KEY`; each is optional, and a
-  missing one skips its step.
 - `treg-worker admin purge-evidence` blanks failed-call evidence past the 14-day retention window
   (`--batch-size`, default 5000, rows per transaction; schedule it daily). `GET /admin/errors` is
   read-only and already withholds evidence past the window, so an unscheduled purge keeps the old

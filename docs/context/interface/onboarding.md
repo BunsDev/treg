@@ -6,20 +6,11 @@ sources:
   - src/treg/application/onboard/__init__.py
   - src/treg/application/onboard/demo.py
   - src/treg/application/onboard/first_run.py
-  - src/treg/application/onboard/lookup.py
-  - src/treg/application/onboard/page.py
-  - src/treg/application/onboard/tasks.py
-  - src/treg/application/house_calls.py
-  - src/treg/infra/llm.py
   - src/treg/web/sitetrack.js
   - src/treg/cli.py
   - src/treg/routers/auth.py
   - src/treg/routers/onboard.py
   - frontend/src/state/onboarding.js
-  - frontend/src/dialogs/WelcomeDialog.vue
-  - frontend/src/onboarding/OnboardingFlow.vue
-  - frontend/src/onboarding/calls.ts
-  - frontend/src/onboarding/extract.ts
   - frontend/src/pages/GettingStartedPage.vue
 related:
   - interface/api.md
@@ -126,9 +117,8 @@ tool seeding, and teammate acceptance run in short use-case-owned sessions.
   `application.onboard.accept_teammate` — auto-joins the teammate the user just invited.
 - `POST /onboard/skip` → sets `onboarded=True` without seeding (dismiss, don't re-offer).
 - `POST /onboard/reset` → `demo.reset`.
-- `POST /onboarding/start` and `GET /onboarding` (`require_identity`, 404 unless the flow is on for
-  the caller) → `application.onboard.first_run`; see the first-run flow below. `GET /auth/me` adds
-  `onboarding_v2: true` when it is.
+- `POST /onboard/team` (`require_identity`) → `application.onboard.first_run.first_team`: a new
+  account's first team, made for it; see the dashboard face below.
 - `GET /auth/me` returns `onboarded`; `GET /orgs` rows carry `demo`. `create_invite` **skips the Resend
   email** for `@demo.treg.local` invitees.
 - **Guards:** `auth_email_start` refuses any `@demo.treg.local` email (400) — fake teammates are never
@@ -155,93 +145,32 @@ callable tool exists → `_demo_call_log`), then `_demo_next_steps`.
 After a first **human** `treg login`, `_maybe_offer_onboarding` prompts `[Y/n]` then `_pick_path` +
 `_dispatch_onboard` — **TTY-only / CI-safe**; a decline posts `/onboard/skip` so it never re-asks.
 
-## Dashboard face (`frontend/src/dialogs/WelcomeDialog.vue`)
+## Dashboard face (`frontend/src/state/onboarding.js`, `GettingStartedPage.vue`)
 
-The old docked "Getting started" stepper (`onb.*` state, `.onb-panel`/`.onb-push`/`.onb-shift`) is
-**removed** — its content had drifted from the product and it kept re-appearing after signup. First-run
-now is a **four-step welcome modal**: boot reads `onboarded` from `/auth/me`; `maybeOnboard()` opens it
-only for a non-onboarded session with **no team yet**. Step 0 names the team (`welcomeCreate` → `POST /orgs`,
-marks onboarded via `/onboard/skip`); step 1 asks **which agent you're using** (picker with LobeHub icons,
-skippable; **Grok Bot** is a card too, with a bundled mark at `/logos/agents/grokbot.png` — `agentIcon`
-uses an absolute path verbatim); step 2 shows the per-agent **setup block** — for an agent whose entry
-carries a `plugin` URL (Grok Bot → the x.ai plugin page) an **"1. Install the treg plugin"** link comes
-first and the setup line is step 2 — the setup line and the team+token as ONE
-copyable unit (`welcomeSetupFull` copies the real token; `welcomeSetupMasked` renders it masked with a
-Show/Hide-key toggle, `startTokenShow`); step 3 is **"Try it out"** — a "waiting for your agent" status (pulsing `.wc-waitdot`, no 🎉), the
-same `tryExamples` copy cards AND the `tryOauth` connect chips as the Getting-started page, footer
-**"Skip"** (`welcomeFinish`) + **"Browse all catalog →"** (`go('connections')`). A use-case landing's CTA
-(`/app?ref=grokbot` from `/grokbot`'s "Setup treg") **preselects that agent**: the `ref` param is stashed in
-`localStorage` (`treg-ref`) because sign-in reloads the page, and `_welcomeAgentFromRef` consumes it when the
-welcome opens (unknown refs are ignored). The picked agent itself persists as `treg-agent` (a `welcome.agent`
-watcher; `_restoreAgent` at boot) so Getting started keeps showing the same steps after a reload. Finishing (or skipping) lands on **`#start`** (Getting started) — also the default
-view for ANY signed-in arrival at `/app` with no deep link or hash — **except** when the welcome
-modal opened over a platform detail page (arrival via `/search`): `welcomeFinish` leaves the view
-alone so someone mid-signup from a platform page stays on it. `/onboard/seed-tool` and
+A new account is never asked to name a team. Boot reads `onboarded` from `/auth/me`; for a
+non-onboarded session with **no team yet** and no pending invite, `maybeOnboard()` calls `autoTeam`,
+which posts `POST /onboard/team`. The server (`first_run.first_team`) claims the account's one first
+run by flipping `User.onboarded` (a second tab gets `created: false` and makes nothing), then makes
+the team through `signup.create_org` under the first of `first_run.team_names` the registry accepts:
+a work address's company (the domain's main label: mail.acme.com and acme.co.uk are Acme), else the
+address's first name when it reads as one (john.doe@ is "John's team"), else "My team". Signup
+credit, utm stamping, ads attribution and referral therefore behave as for a team the user named; a
+refused create hands the claim back so a retry can make it. The dashboard then fires
+`onboarding_team_created` (`auto: true`) and the browser-side Google Ads conversion, and the user
+stays on the view they landed on: Getting started (`#start`, the default for a signed-in arrival
+with no deep link or hash) or the platform, provider or run page a deep link opened. Getting started
+says "We made your team <name>. Rename it any time." once, linking to Team. Declining an invite on
+first run goes through `autoTeam` too.
+
+Getting started carries what the old four-step welcome modal did: the agent picker, the per-agent
+setup line with the team's key, and the Try it out cards. A use-case landing's CTA (`/app?ref=grokbot`
+from `/grokbot`'s "Setup treg") **preselects that agent**: the `ref` param is stashed in
+`localStorage` (`treg-ref`) because sign-in reloads the page, and `_welcomeAgentFromRef` consumes it
+when `autoTeam` runs (unknown refs are ignored). The picked agent itself persists as `treg-agent` (a
+`welcome.agent` watcher; `_restoreAgent` at boot) so Getting started keeps showing the same steps
+after a reload. `/onboard/seed-tool` and
 `/onboard/accept-teammate` no longer have a dashboard caller (the CLI/demo paths don't use them either);
 **"Remove demo"** (`resetDemo` → `/onboard/reset`) remains in Help. A clay **`demo` chip** marks a demo org.
-
-## The first-run flow (`onboarding_v2`)
-
-Behind `onboarding_v2` (everyone) or `onboarding_v2_emails` (addresses and `@domain`s; the browser
-tests use `@onboarding.test`), a new account skips the team-name modal for three sheets
-(`frontend/src/onboarding/OnboardingFlow.vue`); every sheet after the first can go back one.
-
-**The experiment** (`onboarding_v2_experiment`) compares this flow with the team-name modal for
-addresses on a domain of their own: `first_run.in_experiment` admits any domain that is not on the
-catalog's list of mail anyone can get (`paths.email_domain`: free, ISP, disposable and alias mail)
-and not a school's. A personal domain gets in too; both arms take it alike, and a lookup that finds
-nothing asks what the agent will do first. The rule is a list, so `/auth/me` answers at once.
-`GET /auth/me` then says `onboarding_v2_experiment: true`, and only then does the dashboard read the
-PostHog flag `onboarding-v2`: `test` gets this flow, anything else (unanswered included) the modal,
-so only offered users record an exposure. The server lets such an address start and read the flow;
-which arm it is in is PostHog's.
-
-1. **What we found.** `POST /onboarding/start` makes the first team through `signup.create_org` (so
-   signup credit, utm stamping, ads attribution and referral behave as for a named team) and starts
-   the lookup. The team is named after the work domain, else the person, else "My team", moving on
-   when a name is reserved; a claim on the profile row lets one start make it (a second tab waits),
-   and a personal team from the legacy door does not count as one. A start that fails anyway hands
-   the user to the team-name modal. The sheet polls `GET /onboarding` and shows one card per fact (`first_run._facts`):
-   a welcome by first name, never by the company; GitHub; the company record; the site, and the tools
-   and ad pixels its HTML loads (`page.TOOLS`, `page.PIXELS`); the checked search term, competitor
-   and TikTok topic. Where the user arrived from is never shown. Every step's buttons sit in the dock under the sheet, so a sheet taller than the screen never hides them; here the button reads Skip until `ready`, then Continue. When
-   nothing public grounded a task (`ask`), the sheet asks what the agent will do first; the answer
-   (`POST /onboarding/answer`, a key of `tasks.USE_CASES`) is kept as `here_for` and its tasks lead.
-2. **A task.** Five of the tasks in `application/onboard/tasks.py` (the rest behind "Show more"),
-   each a sentence with one editable blank. Tasks with the user's own input lead, then the examples,
-   each in the judge's order; a judge score of 0.6 or more is "Highly recommended" and pre-selected.
-   The order is fixed when the sheet opens. The library's `parse` and `calls` turn the blank into
-   catalog calls, and the dashboard applies the same rule (`calls.ts`).
-3. **The first call.** The task runs as the team's own `/call/` from the browser
-   (`X-Treg-Client: onboarding`, `X-Treg-Route-Max-Cost: 0.05`): an ordinary metered call that sets
-   `first_call_at`. `extract.ts` draws each answer. A failed call shows no error; it goes to PostHog
-   as an exception. The connect block hands the same task to the agent. "Open the dashboard" marks
-   the user onboarded.
-
-**The lookup** (`application/onboard/lookup.py`) never raises and never spends the user's credit;
-each step is optional and skipped when its setting is empty or it fails, and the whole lookup has a
-deadline. GitHub (the GitHub door's login, else a commit search with `onboarding_github_token`), the
-company record (`treg.companies.enrich`, short timeout) and the homepage (read directly through the
-SSRF check; a script-only page also through `treg.web.extract`) run side by side for a work address;
-without one, GitHub goes first and names the company. The LLM (`infra/llm.py`, the
-Vercel AI Gateway, `onboarding_llm_model`) proposes inputs from that evidence only; Jev
-(`openrouter.ai-judge.decide`) ranks the tasks, with the landing path and referrer as evidence, and
-keeps a proposed term, competitor or topic only when its real results fit. The bento waits on the
-slowest check, so the search check prefers the routed SERP's steadily fast child
-(`lookup.SERP_PROVIDER`) and drops an answer later than `SERP_TIMEOUT_S`. A slot nothing grounds
-keeps its labelled example.
-
-Every catalog call of the lookup is a house call (`application/house_calls.py`): an ordinary metered
-call with the house team's `onboarding_treg_token` at `onboarding_treg_url` (empty: this registry),
-capped per signup by `onboarding_max_house_micro`. `OnboardingProfile` (one row per user, payload
-encrypted; `first_run.py` its only writer) holds the rows, evidence, ranking, fills and `here_for`.
-`GET /onboarding` never returns the evidence.
-
-**Preview** (`/app#onboarding-preview`, super-admins and `onboarding_v2_emails`; `/auth/me` says
-`onboarding_preview`): the same sheets for any email. The state lives an hour in `Ephemeral`
-(namespace `onboarding_preview`), readable only by its starter; no team is made and analytics hears
-nothing. Its first calls go through `POST /onboarding/preview/{id}/call` as house calls, only for
-the task library's endpoints and at most `first_run.PREVIEW_CALLS` per preview.
 
 Getting Started's key is the active team's signed Default key. It is intentionally revealable again:
 the server derives it from signed identity, team, and Default generation, while additional and agent

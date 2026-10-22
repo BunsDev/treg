@@ -48,10 +48,9 @@ read-side Ads catalog calls (`oauth_providers.GOOGLE_ADS`), a separate credentia
    `ccm/collect` consent ping still goes out on every load regardless) and fires exactly one event,
    `treg Signup (web)` (`AW-18392771132/0usqCIeQrO0cELzUrcJE`, action `7745505287`, SECONDARY
    and excluded from the Conversions column, so it never double counts against the outbox below),
-   right after the first team exists: from `welcomeCreate()` (`frontend/src/state/onboarding.js`)
-   after `POST /orgs`, and from the `onboarding_v2` flow (`frontend/src/onboarding/OnboardingFlow.vue`)
-   after `POST /onboarding/start`, with `transaction_id = treg-web-signup-<org id>` (the v2 response
-   carries only the slug, so it keys by slug) so a retry cannot count a team twice. A future consent UI grants
+   right after the first team exists: from `autoTeam()` (`frontend/src/state/onboarding.js`)
+   after `POST /onboard/team` made it, with `transaction_id = treg-web-signup-<org id>` so a retry
+   cannot count a team twice. A future consent UI grants
    cookies via `window.tregAdsConsent('granted')`; nothing else depends on it.
    Every public landing surface must load `adtrack.js`. Tests cover named destinations in
    `test_every_public_landing_surface_loads_the_capture_script`, and

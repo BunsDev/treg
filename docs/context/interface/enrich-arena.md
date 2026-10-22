@@ -327,8 +327,8 @@ message, grouped OAuth provider links, a secondary Browse all catalog action, an
 button that closes setup and keeps the user in Arena. Copying an example
 only writes its prompt to the clipboard; provider links open the main app’s provider page without
 starting OAuth. The example definitions and `TryItOut` component are shared with dashboard onboarding.
-Signed-in visitors without a team first name and create their team inside the setup modal, matching
-the dashboard welcome flow. The agent step then fetches a token for that team; authenticated users
+Signed-in visitors without a team first name and create their team inside the setup modal (the
+dashboard instead makes a new account's team for it; see interface/onboarding.md). The agent step then fetches a token for that team; authenticated users
 never silently fall back to guest instructions. Anonymous visitors still receive the setup line and
 agent-guided login instructions. Opening setup does not start an Arena run or change its inputs/history.
 

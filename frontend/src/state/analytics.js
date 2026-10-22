@@ -22,24 +22,6 @@ analyticsForget(){ try{ window.posthog?.unregister?.('catalog_arm'); }catch(e){}
 analyticsIdentify(){ if(!this.me)return; if(window.TregTracking){window.TregTracking.identify(this.me,this.activeSlugNow);return;} if(!window.posthog || !window.posthog.identify || !this.me) return;
       try{ window.posthog.identify(this.me, {email:this.me}); if(this.activeSlugNow) window.posthog.group('team', this.activeSlugNow); }catch(e){} },
 track(name, props){ try{ if(window.posthog && window.posthog.capture) window.posthog.capture(name, props||{}); }catch(e){} },
-// An experiment's variant for this person, or null when PostHog is absent, fails, or has not
-// answered within `wait` ms. Only a returned variant records an exposure: reading the flag is what
-// sends it, and a caller that got null shows its default without ever reading it.
-featureVariant(key, wait=800){
-      return new Promise(resolve=>{
-        if(!window.__phInit || !window.posthog || !window.posthog.onFeatureFlags) return resolve(null);
-        let done=false;
-        const timer=setTimeout(()=>{ done=true; resolve(null); }, wait);
-        try{
-          window.posthog.onFeatureFlags((_flags, _variants, ctx)=>{
-            if(done || (ctx && ctx.errorsLoading)) return;
-            done=true; clearTimeout(timer);
-            // The loaded library replaces the queueing stub, so read through window, not a saved reference.
-            try{ const v=window.posthog.getFeatureFlag(key); resolve(typeof v==='string' ? v : null); }catch(e){ resolve(null); }
-          });
-        }catch(e){ done=true; clearTimeout(timer); resolve(null); }
-      });
-    },
 // Support chat (Intercom) — only when this deployment opted in (meta.intercom_app_id present);
     // self-hosters load nothing. Booted AFTER /auth/me resolves (not at the /meta fetch, like
     // analytics) so the common case boots identified once instead of anonymous→identified.

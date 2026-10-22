@@ -48,6 +48,7 @@ sources:
   - src/treg/web/showcase.html
   - src/treg/web/media/showcase/wall.json
   - src/treg/application/jev_xboost.py
+  - src/treg/application/house_calls.py
   - src/treg/web/media/jev/xboost-seed.json
   - src/treg/web/media/jev/triage.json
   - src/treg/web/media/jev/signals.json

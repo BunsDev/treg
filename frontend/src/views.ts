@@ -76,7 +76,6 @@ export const pages = {
 type View = keyof typeof pages
 
 export const dialogs = {
-  OnboardingFlow: lazy(() => import('./onboarding/OnboardingFlow.vue')),
   FishVoiceDialog: lazy(() => import('./dialogs/FishVoiceDialog.vue')),
   ConnectTokenDialog: lazy(() => import('./dialogs/ConnectTokenDialog.vue')),
   TopUpDialog: lazy(() => import('./dialogs/TopUpDialog.vue')),
@@ -86,7 +85,6 @@ export const dialogs = {
   ExtraCredentialDialog: lazy(() => import('./dialogs/ExtraCredentialDialog.vue')),
   EditToolDialog: lazy(() => import('./dialogs/EditToolDialog.vue')),
   AcceptInvitesDialog: lazy(() => import('./dialogs/AcceptInvitesDialog.vue')),
-  WelcomeDialog: lazy(() => import('./dialogs/WelcomeDialog.vue')),
   CopyToolDialog: lazy(() => import('./dialogs/CopyToolDialog.vue')),
   ImportSkillDialog: lazy(() => import('./dialogs/ImportSkillDialog.vue')),
   RequestToolDialog: lazy(() => import('./dialogs/RequestToolDialog.vue')),

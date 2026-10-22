@@ -42,11 +42,7 @@ Regenerate via `scripts/build-map.py`.
 | `frontend/src/dialogs/TikTokPostForm.vue` | interface/dashboard.md |
 | `frontend/src/dialogs/TryEndpointDialog.vue` | interface/dashboard.md |
 | `frontend/src/dialogs/UserAvatarDialog.vue` | interface/dashboard.md |
-| `frontend/src/dialogs/WelcomeDialog.vue` | interface/onboarding.md |
 | `frontend/src/images.ts` | interface/dashboard.md |
-| `frontend/src/onboarding/OnboardingFlow.vue` | interface/onboarding.md |
-| `frontend/src/onboarding/calls.ts` | interface/onboarding.md |
-| `frontend/src/onboarding/extract.ts` | interface/onboarding.md |
 | `frontend/src/pages/GettingStartedPage.vue` | interface/onboarding.md |
 | `frontend/src/pages/HubPage.vue` | architecture/hub.md |
 | `frontend/src/pages/HubRunPage.vue` | architecture/hub.md |
@@ -212,7 +208,7 @@ Regenerate via `scripts/build-map.py`.
 | `src/treg/application/evidence_retention.py` | architecture/data-model.md, architecture/super-admin.md |
 | `src/treg/application/feedback.py` | architecture/feedback.md |
 | `src/treg/application/find_index.py` | architecture/find.md |
-| `src/treg/application/house_calls.py` | interface/onboarding.md |
+| `src/treg/application/house_calls.py` | interface/seo.md |
 | `src/treg/application/hub/__init__.py` | architecture/hub.md |
 | `src/treg/application/hub/health.py` | architecture/hub.md |
 | `src/treg/application/hub/limits.py` | architecture/hub.md, architecture/proxy-model.md |
@@ -226,11 +222,8 @@ Regenerate via `scripts/build-map.py`.
 | `src/treg/application/onboard/__init__.py` | interface/api.md, interface/landing-sandbox.md, interface/onboarding.md |
 | `src/treg/application/onboard/demo.py` | interface/onboarding.md |
 | `src/treg/application/onboard/first_run.py` | interface/onboarding.md |
-| `src/treg/application/onboard/lookup.py` | interface/onboarding.md |
-| `src/treg/application/onboard/page.py` | interface/onboarding.md |
 | `src/treg/application/onboard/pubfeed.py` | interface/landing-sandbox.md |
 | `src/treg/application/onboard/sandbox.py` | interface/landing-sandbox.md |
-| `src/treg/application/onboard/tasks.py` | interface/onboarding.md |
 | `src/treg/application/provider_resources.py` | architecture/catalog.md, architecture/multi-tenancy.md, interface/api.md |
 | `src/treg/application/referrals.py` | architecture/money.md, interface/api.md |
 | `src/treg/application/search_experiment.py` | architecture/search-experiment.md |
@@ -472,7 +465,6 @@ Regenerate via `scripts/build-map.py`.
 | `src/treg/infra/imaging.py` | architecture/showcase.md |
 | `src/treg/infra/judge.py` | architecture/search-experiment.md |
 | `src/treg/infra/kv.py` | architecture/data-model.md, architecture/feedback.md, architecture/org-concurrency.md, architecture/org-flow-control.md |
-| `src/treg/infra/llm.py` | interface/onboarding.md |
 | `src/treg/infra/media_store.py` | architecture/showcase.md |
 | `src/treg/infra/money_admission.py` | architecture/data-model.md, architecture/money.md, ops/deploy.md |
 | `src/treg/infra/money_admission_reporting.py` | architecture/composition.md, architecture/data-model.md |
@@ -792,8 +784,8 @@ Regenerate via `scripts/build-map.py`.
 | `interface/enrich-arena.md` | `arena.py`, `arena.py`, `arena.py`, `models.py`, `0027_enrich_arena.py`, `teams.py`, `auth.py`, `bootstrap.py`, `enrich-arena.html`, `arena.js`, `bench.js`, `arena.css`, `index.ts`, `arena_verification_insights.py`, `0029_arena_verification_snapshot.py`, `import_arena_verification.py`, `test_arena_verification_insights.py`, `arena_insights.py`, `arena_insights.py`, `0028_arena_insights.py`, `test_arena_insights.py`, `apollo.svg`, `branddev.svg`, `companyenrich.svg`, `findymail.svg`, `hunter.svg`, `icypeas.svg`, `leadmagic.svg`, `leadsforge.svg`, `lusha.svg`, `pdl.svg`, `predictleads.svg`, `thecompaniesapi.svg`, `tomba.svg`, `sitetrack.js`, `test_enrich_arena.py` |
 | `interface/env-import.md` | `providers.py`, `skills.py` |
 | `interface/landing-sandbox.md` | `sandbox.py`, `sandbox_identity.py`, `pubfeed.py`, `sandbox.py`, `__init__.py`, `sandbox.py`, `api.py`, `onboard.py`, `web.py`, `boot.js`, `SignedOutPage.vue`, `install.sh` |
-| `interface/onboarding.md` | `auth.py`, `__init__.py`, `demo.py`, `first_run.py`, `lookup.py`, `page.py`, `tasks.py`, `house_calls.py`, `llm.py`, `sitetrack.js`, `cli.py`, `auth.py`, `onboard.py`, `onboarding.js`, `WelcomeDialog.vue`, `OnboardingFlow.vue`, `calls.ts`, `extract.ts`, `GettingStartedPage.vue` |
-| `interface/seo.md` | `api.py`, `web.py`, `agent_pages.py`, `robots.txt`, `catalog.css`, `usecase.css`, `index.html`, `App.vue`, `PublicNavigation.vue`, `boot.js`, `landing.html`, `product-theme.css`, `refinement.css`, `gateway.css`, `hero-opening.js`, `refinement.js`, `catalog-drum.js`, `gateway.js`, `gateway-loader.js`, `gateway-3d.js`, `gateway-model.js`, `gateway-intro.js`, `hero-particles.js`, `command-beam.js`, `SOURCES.md`, `landing.spec.ts`, `terms.html`, `usecase-seo.html`, `usecase-company.html`, `usecase-enrichment.html`, `usecase-social.html`, `usecase-ads.html`, `people-search.html`, `leads-signals.html`, `recruit.html`, `web-access.html`, `gtm-engineering.html`, `grokbot.html`, `fable-gtm.html`, `ugc.html`, `aeo.html`, `start.html`, `jev.html`, `showcase.html`, `wall.json`, `jev_xboost.py`, `xboost-seed.json`, `triage.json`, `signals.json`, `astra.html`, `page.css`, `page.js`, `llms.txt`, `indexnow_submit.py`, `support.html`, `og-card.html` |
+| `interface/onboarding.md` | `auth.py`, `__init__.py`, `demo.py`, `first_run.py`, `sitetrack.js`, `cli.py`, `auth.py`, `onboard.py`, `onboarding.js`, `GettingStartedPage.vue` |
+| `interface/seo.md` | `api.py`, `web.py`, `agent_pages.py`, `robots.txt`, `catalog.css`, `usecase.css`, `index.html`, `App.vue`, `PublicNavigation.vue`, `boot.js`, `landing.html`, `product-theme.css`, `refinement.css`, `gateway.css`, `hero-opening.js`, `refinement.js`, `catalog-drum.js`, `gateway.js`, `gateway-loader.js`, `gateway-3d.js`, `gateway-model.js`, `gateway-intro.js`, `hero-particles.js`, `command-beam.js`, `SOURCES.md`, `landing.spec.ts`, `terms.html`, `usecase-seo.html`, `usecase-company.html`, `usecase-enrichment.html`, `usecase-social.html`, `usecase-ads.html`, `people-search.html`, `leads-signals.html`, `recruit.html`, `web-access.html`, `gtm-engineering.html`, `grokbot.html`, `fable-gtm.html`, `ugc.html`, `aeo.html`, `start.html`, `jev.html`, `showcase.html`, `wall.json`, `jev_xboost.py`, `house_calls.py`, `xboost-seed.json`, `triage.json`, `signals.json`, `astra.html`, `page.css`, `page.js`, `llms.txt`, `indexnow_submit.py`, `support.html`, `og-card.html` |
 | `interface/shell.md` | `shell.py`, `cli.py` |
 | `interface/skill-openai-test-cases.md` | _(no source files — narrative/reference)_ |
 | `interface/skill-openai-tool-justifications.md` | _(no source files — narrative/reference)_ |

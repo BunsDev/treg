@@ -13,10 +13,15 @@ export async function signIn(page: Page, who = 'browser', team = 'Browser test t
   const code = await page.getByText(/dev code \d{6}/).innerText()
   await page.getByPlaceholder('6-digit code').fill(code.match(/\d{6}/)![0])
   await page.getByRole('dialog', { name: 'Sign in' }).getByRole('button', { name: 'Sign in', exact: true }).click()
-  await page.getByPlaceholder('Team name, e.g. Superdesign').fill(team)
-  await page.getByRole('button', { name: 'Create team →', exact: true }).click()
-  await expect(page.getByRole('dialog', { name: 'Set up your team' }).getByText('Which agent are you using?', { exact: true })).toBeVisible()
-  await page.getByRole('link', { name: 'Skip', exact: true }).click()
+  // The first team is made for a new account; rename it so specs can find it by name.
+  await expect(page.getByText(/^We made your team/)).toBeVisible()
+  const [org] = await page.evaluate(() => fetch('/orgs', { credentials: 'include' }).then(r => r.json()))
+  const renamed = await page.evaluate(([id, slug, name]) => fetch(`/orgs/${id}`, {
+    method: 'PATCH', credentials: 'include', headers: { 'content-type': 'application/json', 'x-treg-org': slug },
+    body: JSON.stringify({ name }),
+  }).then(r => r.ok), [org.org_id, org.slug, team] as const)
+  expect(renamed).toBe(true)
+  await page.reload()
   await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeVisible()
 }
 

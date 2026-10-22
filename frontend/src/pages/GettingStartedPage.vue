@@ -20,6 +20,8 @@ export default {
               <div class="rd-welcome-title"><span><img src="/media/redesign/welcome-mark.svg" alt=""></span><h1>Welcome! Getting started</h1></div>
               <button v-if="canRegister" class="rd-search" @click="go('catalog'); $nextTick(()=>elements.search?.focus())"><img src="/media/redesign/search.svg" alt="">Search tools…</button>
             </div>
+            <p v-if="firstTeam.name" class="rd-welcome-note">We made your team <b>{{firstTeam.name}}</b>. <a href="#orgs" @click.prevent="go('orgs')">Rename it</a> any time.</p>
+            <p v-else-if="firstTeam.err" class="rd-welcome-note" role="alert">{{firstTeam.err}} <a href="#start" @click.prevent="autoTeam()">Try again</a></p>
             <div class="start-card rd-setup">
               <div class="rd-setup-side">
                 <div class="start-hd">
