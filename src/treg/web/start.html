@@ -613,7 +613,7 @@ Then: </span><span class="ask">Look at what we are working on and propose three 
       a.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2h6v6M10 2 3 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>');
       a.addEventListener('click', function () { track('start_connect_clicked', { agent: agent.id, job: cur }); });
       step.appendChild(a); if (c.after) step.appendChild(el('span', 'then', c.after));
-      after.appendChild(document.createTextNode('Already connected? Skip to step 3. No agent yet? '));
+      after.appendChild(document.createTextNode('No agent yet? '));
     }
     /* bound here only: a data-cta attribute would also catch the generic listener below and fire twice */
     var noagent = el('button', null, 'Start free'); noagent.type = 'button';
