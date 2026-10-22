@@ -1853,15 +1853,30 @@ def catalog() -> list[dict]:
     return [
         {"id": plan, "usd_monthly": base + settings.enterprise_sso_markup_usd,
          "directory_sync": plan == "sso_directory"}
-        for plan, base in PLANS.items() if plan not in names
+        for plan, base in PLANS.items()
+        if plan not in names and _enterprise_price_id(plan, settings)
     ]
+
+
+def _enterprise_price_id(plan: str, settings) -> str:
+    return (settings.enterprise_sso_bundle_price_id if plan == "sso_directory"
+            else settings.enterprise_sso_only_price_id if plan == "sso" else "")
+
+
+def _validate_enterprise_price(price: dict, *, price_id: str, amount_usd: int) -> None:
+    recurring = price.get("recurring") or {}
+    if (price.get("id") != price_id or price.get("active") is not True
+            or price.get("currency") != "usd" or price.get("unit_amount") != amount_usd * 100
+            or recurring.get("interval") != "month" or recurring.get("interval_count", 1) != 1):
+        raise EnterpriseBillingError("SSO Stripe price does not match the configured monthly plan")
 
 
 async def status(org_id: int) -> dict:
     async with session_maker() as db:
         row = await db.get(EnterpriseSSO, org_id)
         return {"configured": bool(get_settings().workos_api_key and get_settings().workos_client_id),
-                "billing_configured": bool(get_settings().stripe_secret_key and get_settings().stripe_webhook_secret),
+                "billing_configured": bool(get_settings().stripe_secret_key and get_settings().stripe_webhook_secret
+                                           and catalog()),
                 "plans": catalog(), "plan": row.plan if row else None,
                 "subscription_status": row.subscription_status if row else None,
                 "sso_ready": bool(row and row.connection_id),
@@ -1880,6 +1895,7 @@ async def start_checkout(org_id: int, plan: str, *, base: str, email: str) -> di
         raise EnterpriseBillingError("WorkOS is not configured")
     if plan not in {item["id"] for item in catalog()}:
         raise EnterpriseBillingError("plan is not available")
+    price_id = _enterprise_price_id(plan, settings)
     now = int(time.time())
     checkout_token = uuid4().hex
     async with session_maker() as db:
@@ -1915,6 +1931,13 @@ async def start_checkout(org_id: int, plan: str, *, base: str, email: str) -> di
             await db.rollback()
             raise EnterpriseBillingError("checkout is being prepared; retry in a moment") from exc
     try:
+        try:
+            price = await stripe_adapter.call(stripe_adapter.PRICE_RETRIEVE,
+                api_key=settings.stripe_secret_key, id=price_id)
+        except stripe_adapter.InvalidRequestError as exc:
+            raise EnterpriseBillingError("SSO Stripe price is unavailable") from exc
+        _validate_enterprise_price(price, price_id=price_id,
+            amount_usd=PLANS[plan] + settings.enterprise_sso_markup_usd)
         if not customer_id:
             customer = await stripe_adapter.call(stripe_adapter.CUSTOMER_CREATE,
                 api_key=settings.stripe_secret_key, name=name or slug, email=email,
@@ -1936,10 +1959,7 @@ async def start_checkout(org_id: int, plan: str, *, base: str, email: str) -> di
         session = await stripe_adapter.call(stripe_adapter.CHECKOUT_SESSION_CREATE,
             api_key=settings.stripe_secret_key, mode="subscription", customer=customer_id,
             idempotency_key=f"enterprise-checkout-{checkout_token}", expires_at=now + 1800,
-            line_items=[{"quantity": 1, "price_data": {"currency": "usd",
-                "unit_amount": (PLANS[plan] + settings.enterprise_sso_markup_usd) * 100,
-                "recurring": {"interval": "month"},
-                "product_data": {"name": "treg SSO + Directory Sync" if plan == "sso_directory" else "treg SSO"}}}],
+            line_items=[{"quantity": 1, "price": price_id}],
             metadata=metadata, subscription_data={"metadata": metadata},
             success_url=f"{base}/app?sso=success#billing",
             cancel_url=f"{base}/app?sso=cancelled#billing")

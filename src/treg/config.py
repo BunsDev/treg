@@ -521,6 +521,10 @@ class Settings(BaseSettings):
     workos_webhook_secret: str = ""
     enterprise_sso_bundle_only: bool = True
     enterprise_sso_markup_usd: int = Field(default=0, ge=0)
+    # Reusable recurring Stripe Prices, created in the matching test/live account. An unset
+    # Price keeps that plan out of Checkout; no per-checkout products are created.
+    enterprise_sso_only_price_id: str = ""
+    enterprise_sso_bundle_price_id: str = ""
     # Top-up amounts, in whole USD (the ONLY place dollars appear — billing.py converts to micro-USD
     # for the ledger and to integer cents for Stripe at the boundaries, and nothing in between sees a
     # float). The $10 minimum is fee math, not policy: at 2.9% + $0.30 a $5 top-up loses 9% to fees,

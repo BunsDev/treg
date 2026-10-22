@@ -10,6 +10,7 @@ import stripe as stripe_sdk
 CUSTOMER_CREATE = "Customer.create"
 PAYMENT_INTENT_RETRIEVE = "PaymentIntent.retrieve"
 CHECKOUT_SESSION_CREATE = "checkout.Session.create"
+PRICE_RETRIEVE = "Price.retrieve"
 PORTAL_SESSION_CREATE = "billing_portal.Session.create"
 CHARGE_LIST = "Charge.list"
 INVOICE_LIST = "Invoice.list"
@@ -33,6 +34,7 @@ def _operation(name: str) -> Callable:
         CUSTOMER_CREATE: stripe_sdk.Customer.create,
         PAYMENT_INTENT_RETRIEVE: stripe_sdk.PaymentIntent.retrieve,
         CHECKOUT_SESSION_CREATE: stripe_sdk.checkout.Session.create,
+        PRICE_RETRIEVE: stripe_sdk.Price.retrieve,
         PORTAL_SESSION_CREATE: stripe_sdk.billing_portal.Session.create,
         CHARGE_LIST: stripe_sdk.Charge.list,
         INVOICE_LIST: stripe_sdk.Invoice.list,

@@ -28,7 +28,14 @@ link if email discovery returns no match or several teams. Email is a routing hi
    Also run `treg-worker enterprise cleanup` periodically after subscriptions end. It removes
    WorkOS SSO connections and directories; monitor its nonzero exit status and retry failures.
    It reads the complete WorkOS roster before changing access; monitor failures.
-5. Configure Stripe's existing `TREG_STRIPE_SECRET_KEY` and `TREG_STRIPE_WEBHOOK_SECRET`. Send
+5. Configure Stripe's existing `TREG_STRIPE_SECRET_KEY` and `TREG_STRIPE_WEBHOOK_SECRET`. Create
+   one reusable USD monthly Stripe Product/Price per offered plan in the same test or live
+   account as the secret key. Set `TREG_ENTERPRISE_SSO_BUNDLE_PRICE_ID` for the bundle and,
+   only if SSO-only is offered, `TREG_ENTERPRISE_SSO_ONLY_PRICE_ID`. An unset Price hides that
+   plan. Before opening Checkout, treg reads the Price and refuses an inactive Price or one
+   whose amount, currency, or monthly interval differs from the displayed plan. A new price
+   requires a new Price ID and matching markup setting; existing subscriptions keep their old
+   Price until explicitly migrated. Send
    `checkout.session.completed`, `customer.subscription.created`,
    `customer.subscription.updated`, and `customer.subscription.deleted` to the existing
    `/billing/stripe/webhook` endpoint. The same Stripe account can handle tool balance top-ups and
@@ -49,6 +56,8 @@ The team owner chooses **SSO** ($125/month) or **SSO + Directory Sync** ($250/mo
 whole-dollar `TREG_ENTERPRISE_SSO_MARKUP_USD` (zero by default; 49 makes the bundle $299/month).
 The default
 `TREG_ENTERPRISE_SSO_BUNDLE_ONLY=true` displays only the bundle; set it to `false` to offer both.
+Each checkout uses the configured reusable Stripe Price rather than creating a new Product and
+Price for every team.
 After Stripe reports an active subscription, the owner opens **Set up or manage SSO**. On the
 bundle, they can also open **Set up Directory Sync**. The owner should complete a real test sign-in
 before clicking **Require SSO for team**. That control only becomes available after a successful

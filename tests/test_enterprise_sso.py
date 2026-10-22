@@ -561,10 +561,14 @@ async def test_workos_code_exchange_uses_documented_profile_shape():
 def test_catalog_can_offer_bundle_only(monkeypatch):
     from treg.config import get_settings
     settings = get_settings()
+    monkeypatch.setattr(settings, "enterprise_sso_only_price_id", "price_sso")
+    monkeypatch.setattr(settings, "enterprise_sso_bundle_price_id", "price_bundle")
     monkeypatch.setattr(settings, "enterprise_sso_bundle_only", False)
     assert {item["id"] for item in enterprise_billing.catalog()} == {"sso", "sso_directory"}
     monkeypatch.setattr(settings, "enterprise_sso_bundle_only", True)
     assert [item["id"] for item in enterprise_billing.catalog()] == ["sso_directory"]
+    monkeypatch.setattr(settings, "enterprise_sso_bundle_price_id", "")
+    assert enterprise_billing.catalog() == []
 
 
 def test_markup_49_prices_bundle_at_299(monkeypatch):
@@ -577,6 +581,7 @@ def test_markup_49_prices_bundle_at_299(monkeypatch):
     from treg.config import get_settings
     monkeypatch.setattr(get_settings(), "enterprise_sso_bundle_only", True)
     monkeypatch.setattr(get_settings(), "enterprise_sso_markup_usd", 49)
+    monkeypatch.setattr(get_settings(), "enterprise_sso_bundle_price_id", "price_bundle")
     assert enterprise_billing.catalog() == [
         {"id": "sso_directory", "usd_monthly": 299, "directory_sync": True}]
 
@@ -730,6 +735,8 @@ async def test_canceled_workos_setup_is_removed_and_retried(clients, monkeypatch
     monkeypatch.setattr(settings, "workos_client_id", "client_test")
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_stripe_test")
     monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_test")
+    monkeypatch.setattr(settings, "enterprise_sso_bundle_price_id", "price_bundle")
+    monkeypatch.setattr(settings, "enterprise_sso_markup_usd", 49)
     org_id = await team(clients, plan="sso_directory")
     signed_in = await signin(org_id, profile())
     assert (await clients.delete(f"/orgs/{org_id}/members/{signed_in.user_id}")).status_code == 200
@@ -787,6 +794,9 @@ async def test_canceled_workos_setup_is_removed_and_retried(clients, monkeypatch
     assert (await billing.cleanup_canceled_workos(org_id))["skipped"] == "already cleaned"
     assert not (await billing.status(org_id))["cleanup_pending"]
     async def fake_stripe(operation, *, api_key, **kwargs):
+        if operation == billing.stripe_adapter.PRICE_RETRIEVE:
+            return {"id": "price_bundle", "active": True, "currency": "usd",
+                    "unit_amount": 29900, "recurring": {"interval": "month", "interval_count": 1}}
         return {"id": "cus_new"} if operation == billing.stripe_adapter.CUSTOMER_CREATE else {
             "url": "https://checkout.stripe.com/c/pay/renewal"}
     monkeypatch.setattr(billing.stripe_adapter, "call", fake_stripe)
@@ -965,11 +975,16 @@ async def test_checkout_uses_monthly_team_subscription_without_touching_balance(
     monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_test")
     monkeypatch.setattr(settings, "enterprise_sso_bundle_only", True)
     monkeypatch.setattr(settings, "enterprise_sso_markup_usd", 49)
+    monkeypatch.setattr(settings, "enterprise_sso_bundle_price_id", "price_bundle")
     org_id = (await clients.get("/orgs")).json()[0]["org_id"]
     calls = []
     async def fake_call(operation, *, api_key, **kwargs):
         assert api_key == "sk_stripe_test"
         calls.append((operation, kwargs))
+        if operation == enterprise_billing.stripe_adapter.PRICE_RETRIEVE:
+            assert kwargs == {"id": "price_bundle"}
+            return {"id": "price_bundle", "active": True, "currency": "usd",
+                    "unit_amount": 29900, "recurring": {"interval": "month", "interval_count": 1}}
         if operation == enterprise_billing.stripe_adapter.CUSTOMER_CREATE:
             return {"id": "cus_test"}
         return {"url": "https://checkout.stripe.com/c/pay/test"}
@@ -979,9 +994,39 @@ async def test_checkout_uses_monthly_team_subscription_without_touching_balance(
     assert result["url"].startswith("https://checkout.stripe.com/")
     checkout = calls[-1][1]
     assert checkout["mode"] == "subscription"
-    assert checkout["line_items"][0]["price_data"]["unit_amount"] == 29900
-    assert checkout["line_items"][0]["price_data"]["recurring"] == {"interval": "month"}
+    assert checkout["line_items"] == [{"quantity": 1, "price": "price_bundle"}]
+    assert [operation for operation, _ in calls] == [
+        enterprise_billing.stripe_adapter.PRICE_RETRIEVE,
+        enterprise_billing.stripe_adapter.CUSTOMER_CREATE,
+        enterprise_billing.stripe_adapter.CHECKOUT_SESSION_CREATE]
     assert checkout["subscription_data"]["metadata"]["treg_org_id"] == str(org_id)
+
+
+async def test_checkout_refuses_price_that_disagrees_with_displayed_amount(clients, monkeypatch):
+    from treg.config import get_settings
+    settings = get_settings()
+    monkeypatch.setattr(settings, "workos_api_key", "sk_workos_test")
+    monkeypatch.setattr(settings, "workos_client_id", "client_test")
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_stripe_test")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_test")
+    monkeypatch.setattr(settings, "enterprise_sso_bundle_only", True)
+    monkeypatch.setattr(settings, "enterprise_sso_markup_usd", 49)
+    monkeypatch.setattr(settings, "enterprise_sso_bundle_price_id", "price_wrong")
+    org_id = (await clients.get("/orgs")).json()[0]["org_id"]
+    calls = []
+
+    async def fake_call(operation, *, api_key, **kwargs):
+        calls.append(operation)
+        return {"id": "price_wrong", "active": True, "currency": "usd",
+                "unit_amount": 25000, "recurring": {"interval": "month", "interval_count": 1}}
+
+    monkeypatch.setattr(enterprise_billing.stripe_adapter, "call", fake_call)
+    with pytest.raises(enterprise_billing.EnterpriseBillingError, match="does not match"):
+        await enterprise_billing.start_checkout(org_id, "sso_directory",
+            base="https://treg.example", email="owner@example.com")
+    assert calls == [enterprise_billing.stripe_adapter.PRICE_RETRIEVE]
+    async with session_maker() as db:
+        assert (await db.get(EnterpriseSSO, org_id)).checkout_pending_until == 0
 
 
 async def test_two_checkout_clicks_create_only_one_stripe_session(clients, monkeypatch):
@@ -991,6 +1036,8 @@ async def test_two_checkout_clicks_create_only_one_stripe_session(clients, monke
     monkeypatch.setattr(settings, "workos_client_id", "client_test")
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_stripe_test")
     monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_test")
+    monkeypatch.setattr(settings, "enterprise_sso_bundle_price_id", "price_bundle")
+    monkeypatch.setattr(settings, "enterprise_sso_markup_usd", 49)
     org_id = (await clients.get("/orgs")).json()[0]["org_id"]
     async with session_maker() as db:
         org = await db.get(Org, org_id)
@@ -1001,6 +1048,10 @@ async def test_two_checkout_clicks_create_only_one_stripe_session(clients, monke
     async def fake_call(operation, *, api_key, **kwargs):
         calls.append(operation)
         await asyncio.sleep(0.02)
+        if operation == enterprise_billing.stripe_adapter.PRICE_RETRIEVE:
+            assert kwargs == {"id": "price_bundle"}
+            return {"id": "price_bundle", "active": True, "currency": "usd",
+                    "unit_amount": 29900, "recurring": {"interval": "month", "interval_count": 1}}
         return {"url": "https://checkout.stripe.com/c/pay/test"}
     monkeypatch.setattr(enterprise_billing.stripe_adapter, "call", fake_call)
     results = await asyncio.gather(*(
@@ -1008,7 +1059,8 @@ async def test_two_checkout_clicks_create_only_one_stripe_session(clients, monke
             base="https://treg.example", email="owner@example.com")
         for _ in range(2)), return_exceptions=True)
     assert sum(isinstance(item, dict) for item in results) == 1
-    assert calls == [enterprise_billing.stripe_adapter.CHECKOUT_SESSION_CREATE]
+    assert calls == [enterprise_billing.stripe_adapter.PRICE_RETRIEVE,
+                     enterprise_billing.stripe_adapter.CHECKOUT_SESSION_CREATE]
     successful = next(item for item in results if isinstance(item, dict))
     assert (await enterprise_billing.start_checkout(org_id, "sso_directory",
         base="https://treg.example", email="owner@example.com"))["url"] == successful["url"]
