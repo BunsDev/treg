@@ -195,7 +195,8 @@ def authorization_server_metadata() -> dict:
 
 
 def make_access_token(*, user_id: int, org_id: int, audience: str, scope: str = "",
-                      ttl: int = ACCESS_TTL_SECONDS, token_version: int = 0) -> str:
+                      ttl: int = ACCESS_TTL_SECONDS, token_version: int = 0,
+                      sso_org_id: int | None = None) -> str:
     """Mint an access token bound to a user, ONE team, and one audience.
 
     `org_id` is on the token rather than resolved per call on purpose. A person can belong to several
@@ -210,6 +211,7 @@ def make_access_token(*, user_id: int, org_id: int, audience: str, scope: str = 
         "aud": audience,
         "scope": scope,
         "tv": int(token_version),
+        "sso_org_id": sso_org_id,
         "exp": int(time.time()) + int(ttl),
     }, separators=(",", ":")).encode()
     sig = hmac.new(_key(), raw, hashlib.sha256).digest()
@@ -257,7 +259,8 @@ def read_access_token(token: str, *, expected_audience: str) -> dict | None:
             return None
         return {"sub": int(data["sub"]), "org": int(data["org"]), "aud": data["aud"],
                 "scope": data.get("scope", ""), "tv": int(data.get("tv", 0)),
-                "exp": int(data["exp"])}
+                "exp": int(data["exp"]),
+                "sso_org_id": int(data["sso_org_id"]) if data.get("sso_org_id") is not None else None}
     except Exception:  # noqa: BLE001 — a malformed token is simply not a token
         return None
 
@@ -446,12 +449,14 @@ def _refresh_is_live(row: OAuthRefresh, *, now: datetime | None = None) -> bool:
 
 
 async def _issue_refresh(*, family_id: str, client_id: str, user_id: int, org_id: int,
-                         resource: str, scope: str, db: AsyncSession) -> str:
+                         resource: str, scope: str, db: AsyncSession,
+                         sso_org_id: int | None = None) -> str:
     """Mint a refresh token and store only its hash — a database copy is a database leak."""
     import secrets as _s
 
     if await db.get(OAuthGrant, family_id) is None:
-        db.add(OAuthGrant(family_id=family_id, current_org_id=org_id))
+        db.add(OAuthGrant(family_id=family_id, current_org_id=org_id,
+                          sso_org_id=sso_org_id))
     token = _s.token_urlsafe(40)
     db.add(OAuthRefresh(
         token_hash=crypto.hash_token(token), family_id=family_id, client_id=client_id,

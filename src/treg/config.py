@@ -514,6 +514,20 @@ class Settings(BaseSettings):
     # so an unconfigured deploy exposes no unauthenticated POST surface (same posture as the demo).
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
+    # Enterprise SSO uses WorkOS only as a federation bridge; treg remains the account,
+    # membership, session, and authorization authority. Empty keys disable setup and login.
+    workos_api_key: str = ""
+    workos_client_id: str = ""
+    workos_webhook_secret: str = ""
+    enterprise_sso_bundle_only: bool = True
+    # Reusable recurring Stripe Prices, created in the matching test/live account. An unset
+    # Price keeps that plan out of Checkout; no per-checkout products are created.
+    enterprise_sso_only_price_id: str = ""
+    enterprise_sso_bundle_price_id: str = ""
+    # Optional deployment-specific checkout floors. Keep vendor costs and commercial policy out
+    # of the portable defaults; hosted deployments set these alongside their Stripe Prices.
+    enterprise_sso_only_min_price_usd: int = 0
+    enterprise_sso_bundle_min_price_usd: int = 0
     # Top-up amounts, in whole USD (the ONLY place dollars appear — billing.py converts to micro-USD
     # for the ledger and to integer cents for Stripe at the boundaries, and nothing in between sees a
     # float). The $10 minimum is fee math, not policy: at 2.9% + $0.30 a $5 top-up loses 9% to fees,

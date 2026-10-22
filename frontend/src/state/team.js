@@ -14,7 +14,7 @@ async createOrg(){ const name=(this.newOrgName||'').trim(); if(!name){ this.orgE
         this.newOrg=false; this.newOrgName=''; await this.loadAll(); this.switchOrg({slug:o.org}); }
       catch(e){ this.orgErr='Could not create: '+(e.detail||e.status); } finally{ this.orgBusy=false; } },
 async loadOrgAdmin(){ this.orgMembers=[]; this.orgMembersLoaded=false; this.orgInvites=[]; this.lastInvite=null;
-      if(!this.canAdmin && !['keys','danger'].includes(this.orgTab)) this.orgTab='keys';
+      if(!this.canAdmin && !['keys','danger','sso'].includes(this.orgTab)) this.orgTab='keys';
       this.orgErr=''; this.confirmDel=''; this.confirmLeave=false; this.confirmRemove=null;
       if(!this.activeOrgId) return; const id=this.activeOrgId, live=this.ticket('orgAdmin');
       const keys=this.loadApiKeys(); this.loadApiKeySpend();

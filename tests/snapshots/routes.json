@@ -1814,6 +1814,115 @@
   {
     "kind": "APIRoute",
     "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "sso_status",
+    "path": "/orgs/{org_id}/sso"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "sso_blocked_members",
+    "path": "/orgs/{org_id}/sso/blocked"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_restore_member",
+    "path": "/orgs/{org_id}/sso/blocked/{user_id}/restore"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_checkout",
+    "path": "/orgs/{org_id}/sso/checkout"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_setup",
+    "path": "/orgs/{org_id}/sso/setup/{intent}"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_invite_it",
+    "path": "/orgs/{org_id}/sso/invite-it"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "sso_idp_start",
+    "path": "/auth/sso/idp/start"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "sso_start",
+    "path": "/auth/sso/{org_slug}/start"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_discover",
+    "path": "/auth/sso/discover"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "sso_callback",
+    "path": "/auth/sso/callback"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_enforce",
+    "path": "/orgs/{org_id}/sso/enforce"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_cancel",
+    "path": "/orgs/{org_id}/sso/cancel"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "POST"
+    ],
+    "name": "sso_workos_webhook",
+    "path": "/auth/sso/workos/webhook"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
       "PATCH"
     ],
     "name": "set_member_cap",

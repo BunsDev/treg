@@ -24,6 +24,18 @@ sources:
   - src/treg/domain/identity/access.py
   - src/treg/domain/identity/api_keys.py
   - src/treg/domain/identity/session.py
+  - src/treg/application/enterprise_sso.py
+  - src/treg/alembic/versions/0079_enterprise_sso.py
+  - src/treg/alembic/versions/0080_enterprise_sso_audit.py
+  - src/treg/alembic/versions/0081_sso_manual_block.py
+  - src/treg/alembic/versions/0082_oauth_sso_provenance.py
+  - src/treg/alembic/versions/0083_enterprise_sso_safety.py
+  - src/treg/alembic/versions/0084_enterprise_workos_cleanup.py
+  - src/treg/alembic/versions/0085_enterprise_sso_blocks.py
+  - src/treg/worker.py
+  - src/treg/routers/enterprise_sso.py
+  - src/treg/infra/workos.py
+  - tests/test_enterprise_sso.py
   - src/treg/domain/identity/promotions.py
   - tests/test_team_limit.py
   - tests/test_auth.py
@@ -49,6 +61,55 @@ related:
 ---
 
 # Multi-tenancy (orgs)
+
+## Enterprise SSO
+
+A team owner may purchase an enterprise SSO subscription, then open a short-lived WorkOS Admin
+Portal link from the team dashboard. WorkOS handles the customer's SAML or OIDC connection; treg
+keeps its own `User`, `Membership`, roles, sessions, and API keys. A successful WorkOS code exchange
+is accepted only when the returned organization matches this team's stored WorkOS organization and
+its connection is the same one previously used. A new human joins the existing team as `member`;
+an owner changes roles through the normal Members controls. Email domain alone never grants access.
+
+The owner may require SSO after one successful test sign-in. `require_member` then requires a signed
+browser session carrying this team ID for non-owners. An SSO browser session or derived CLI identity
+token can access only that team, even when the user belongs to several. Regular email or social login still identifies
+the global user but does not open that team. The owner retains a regular-login recovery path. API
+keys are separate credentials, and a regular browser session cannot mint a new Default key for an
+enforced team. A WorkOS profile is linked by stable profile and IdP IDs, with account email checked
+on later sign-ins; email changes need explicit review rather than silent account reassignment. New
+accounts require an email matching a verified WorkOS organization domain and the organization's
+external ID must match the treg team. Outside-organization profiles are refused. An existing global
+account requires a concurrent normal treg session for the same verified user before first linking.
+CLI pairing and OAuth consent check SSO scope and enforcement at issuance. OAuth codes, refresh
+families, and access tokens retain the SSO team; exchange, refresh, and use recheck policy. An OAuth
+grant made before SSO enforcement cannot continue into the enforced team. Earlier non-owner
+bearer keys, including agent keys, stop authorizing this team after enforcement. New human or
+agent keys issued through an authorized team session carry issuance provenance and work until
+their membership or key is revoked. Employees can also issue an SSO-scoped CLI key after company
+sign-in; the owner retains recovery access.
+
+On the Directory Sync plan, signed WorkOS events maintain a roster of active directory users,
+including people who have not yet signed in. Once a directory is connected, SSO sign-in requires a
+matching active IdP user in that roster. Inactive/deleted users lose their team membership and keys;
+deleting the directory removes all linked non-owner memberships. Owner recovery remains available.
+WorkOS event IDs make redelivery harmless. The SSO-only plan does not promise automatic offboarding.
+Provisioning never maps external groups into treg roles. A worker can reconcile the complete
+WorkOS roster to repair missed webhook deliveries. A manual team removal takes precedence over
+active directory records until the owner restores access. Durable, minimal `EnterpriseSSOAudit`
+rows record SSO sign-ins and failures, setup actions, role changes, enforcement switches, directory
+removals, manual team removals, and owner restores. Access changes and their audit rows commit together; setup actions are recorded after
+WorkOS responds. A retention worker deletes expired rows under the deployment's chosen policy.
+Full-roster repair also discovers an active directory if its activation webhook was missed, and
+removes pre-sync SSO identities absent from the roster. Only `active` directory users count as
+provisioned. SSO and Directory Sync stay active while Stripe retries a `past_due` subscription.
+When the subscription ends, enforcement is lifted so existing members can use normal sign-in.
+Cancellation removes only SSO-created memberships; pre-existing members remain.
+The cleanup worker then deletes the canceled team's WorkOS directory and connection, clears
+obsolete SSO identity links, and records completion before a new checkout can start.
+`EnterpriseSSOBlock` retains only team and treg user IDs plus a timestamp for an explicit admin
+removal. `finish_signin` checks it across replacement WorkOS connections; restoration, team
+deletion, and global user erasure remove it.
 
 The registry is **tenant-isolated**: an **Org** owns resources, a **User** is a global identity, and a
 **Membership** links them with a role and IS where the caller's token lives. A token = a `(user, org)`

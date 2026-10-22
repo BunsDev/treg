@@ -7,6 +7,7 @@ test('only Activity and Team addresses carry a tab, and Activity a key id', () =
   expect(parseTabHash('#activity/usage?key=12')).toEqual({ view: 'activity', tab: 'usage', key: '12' })
   expect(parseTabHash('#orgs/settings')).toEqual({ view: 'orgs', tab: 'danger', key: '' })
   expect(parseTabHash('#orgs/showcase')).toEqual({ view: 'orgs', tab: 'showcase', key: '' })
+  expect(parseTabHash('#orgs/sso')).toEqual({ view: 'orgs', tab: 'sso', key: '' })
   expect(parseTabHash('#activity')).toEqual({ view: 'activity', tab: undefined, key: '' })
   // an unknown tab or a key that is not an id is ignored, not trusted
   expect(parseTabHash('#activity/nonsense?key=1;drop')).toEqual({ view: 'activity', tab: undefined, key: '' })
@@ -21,5 +22,6 @@ test('the address names the tab, and on Calls its key; the spend chart\'s key st
   expect(at({ actTab: 'usage', activityKey: '', spendFilter: { key: '9' } })('activity')).toBe('/app#activity/usage')
   expect(at({ orgTab: 'danger' })('orgs')).toBe('/app#orgs/settings')
   expect(at({ orgTab: 'showcase' })('orgs')).toBe('/app#orgs/showcase')
+  expect(at({ orgTab: 'sso' })('orgs')).toBe('/app#orgs/sso')
   expect(at({})('hub')).toBe('/app#hub')
 })

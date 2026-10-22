@@ -417,6 +417,7 @@ _CLI_HTTP_ERRORS = {
     "too_many_wrong_codes": (400, "too many wrong codes — run `treg login` again"),
     "wrong_code": (400, "that code doesn't match the one in your terminal"),
     "not_member": (403, "not a member of that team"),
+    "sign_in_through_sso": (403, "sign in through this team's SSO"),
     "unavailable": (503, "login storage unavailable — please try again"),
 }
 
@@ -1202,9 +1203,11 @@ token_router = app
 @app.get("/auth/cli-token")
 async def auth_cli_token(
     response: Response,
+    request: Request,
     user: User = Depends(require_identity),
     x_treg_org: str = Header(default=""),
     x_treg_token: str = Header(default=""),
+    treg_session: str = Cookie(default=""),
 ) -> dict:
     """Mint a fresh CLI/bearer token for the authenticated caller (session cookie OR token). Identity
     tokens are signed (`sess.make_identity`); minting the current generation invalidates nothing — it lets
@@ -1223,12 +1226,14 @@ async def auth_cli_token(
     if (claims or {}).get("scope") == sess.BOOTSTRAP_SCOPE:
         raise HTTPException(status_code=403, detail=(
             "complete team selection in the browser — a bootstrap token cannot mint a Default key"))
-    result = await auth_use_cases.issue_cli_token(
-        user_id=user.id,
-        email=user.email,
-        token_version=user.token_version,
-        org_ref=x_treg_org,
-    )
+    try:
+        result = await auth_use_cases.issue_cli_token(
+            user_id=user.id, email=user.email, token_version=user.token_version,
+            org_ref=x_treg_org,
+            sso_org_id=getattr(request.state, "sso_org_id", None),
+        )
+    except auth_use_cases.IdentityLookupError as exc:
+        raise HTTPException(403, str(exc)) from exc
     response.headers["Cache-Control"] = "no-store"
     return result
 
@@ -1245,7 +1250,8 @@ async def auth_revoke_tokens(
     a fresh session cookie + token for the caller, so the device that pressed the button stays signed in
     while every other device is signed out. (Org membership tokens from accept-invite are a separate token
     type and are unaffected — those are revoked by removing the membership.)"""
-    revoked = await auth_use_cases.revoke_identity_tokens(user.id)
+    revoked = await auth_use_cases.revoke_identity_tokens(
+        user.id, sso_org_id=getattr(request.state, "sso_org_id", None))
     resp = JSONResponse({"token": revoked.token, "email": revoked.email, "revoked": True})
     resp.headers["Cache-Control"] = "no-store"
     resp.set_cookie(sess.COOKIE, revoked.session_cookie, httponly=True,

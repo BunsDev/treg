@@ -34,11 +34,14 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import time
+from uuid import uuid4
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, update
+from sqlalchemy import delete, func, update
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlmodel import select
 
 from .. import adsconv
@@ -49,7 +52,9 @@ from ..domain import money as ledger
 from ..domain import referrals
 from ..config import get_settings
 from ..infra import stripe as stripe_adapter
-from ..models import CreditBlock, LedgerEntry, Membership, Org, User
+from ..models import CreditBlock, EnterpriseSSO, EnterpriseSSOIdentity, EnterpriseDirectoryUser, LedgerEntry, Membership, Org, User
+from ..infra.db import session_maker
+from . import enterprise_sso
 
 
 
@@ -1331,6 +1336,8 @@ async def handle_webhook_event(db: AsyncSession, event: dict) -> dict:
     """
     kind = event.get("type") or ""
     obj = ((event.get("data") or {}).get("object") or {})
+    if (obj.get("metadata") or {}).get("treg_kind") == "enterprise_sso":
+        return await handle_event(db, event)
     if kind == "checkout.session.completed":
         return await _on_checkout_completed(db, obj)
     if kind == "payment_intent.succeeded":
@@ -1828,3 +1835,338 @@ async def process_webhook(
             # loudly: an event that never succeeds is money someone paid and didn't get.
             log.exception("webhook %s failed: %s", event.get("type"), e)
             raise BillingJourneyError("webhook_failed", "webhook handling failed") from e
+
+
+# Enterprise subscription billing lives alongside the existing Stripe use cases.
+PLANS = {"sso", "sso_directory"}
+ACTIVE = {"active", "trialing"}
+ENTITLED = ACTIVE | {"past_due"}
+
+
+class EnterpriseBillingError(Exception):
+    pass
+
+
+async def catalog() -> list[dict]:
+    settings = get_settings()
+    if not settings.stripe_secret_key:
+        return []
+    plans = []
+    for plan in ("sso", "sso_directory"):
+        if plan == "sso" and settings.enterprise_sso_bundle_only:
+            continue
+        price_id = _enterprise_price_id(plan, settings)
+        if not price_id:
+            continue
+        try:
+            price = await stripe_adapter.call(stripe_adapter.PRICE_RETRIEVE,
+                api_key=settings.stripe_secret_key, id=price_id)
+            amount_cents = _validate_enterprise_price(price, price_id=price_id,
+                minimum_cents=_enterprise_min_price_cents(plan, settings))
+        except (stripe_adapter.StripeError, EnterpriseBillingError):
+            log.warning("SSO plan %s has no usable Stripe Price", plan, exc_info=True)
+            continue
+        plans.append({"id": plan, "price_id": price_id, "usd_monthly_cents": amount_cents,
+                      "directory_sync": plan == "sso_directory"})
+    return plans
+
+
+def _enterprise_price_id(plan: str, settings) -> str:
+    return (settings.enterprise_sso_bundle_price_id if plan == "sso_directory"
+            else settings.enterprise_sso_only_price_id if plan == "sso" else "")
+
+
+def _enterprise_min_price_cents(plan: str, settings) -> int:
+    minimum_usd = (settings.enterprise_sso_bundle_min_price_usd if plan == "sso_directory"
+                   else settings.enterprise_sso_only_min_price_usd)
+    return max(0, minimum_usd) * 100
+
+
+def _validate_enterprise_price(price: dict, *, price_id: str, minimum_cents: int = 0) -> int:
+    recurring = price.get("recurring") or {}
+    amount_cents = price.get("unit_amount")
+    if (price.get("id") != price_id or price.get("active") is not True
+            or price.get("currency") != "usd" or price.get("billing_scheme") != "per_unit"
+            or not isinstance(amount_cents, int) or isinstance(amount_cents, bool) or amount_cents <= 0
+            or recurring.get("interval") != "month" or recurring.get("interval_count", 1) != 1
+            or recurring.get("usage_type") != "licensed"):
+        raise EnterpriseBillingError("SSO Stripe price must be an active flat monthly USD price")
+    if amount_cents < minimum_cents:
+        raise EnterpriseBillingError("SSO Stripe price is below the configured minimum")
+    return amount_cents
+
+
+async def status(org_id: int, *, include_plans: bool = True) -> dict:
+    settings = get_settings()
+    async with session_maker() as db:
+        row = await db.get(EnterpriseSSO, org_id)
+        result = {"configured": bool(settings.workos_api_key and settings.workos_client_id),
+                "billing_configured": bool(settings.stripe_secret_key and settings.stripe_webhook_secret),
+                "plan": row.plan if row else None,
+                "subscription_status": row.subscription_status if row else None,
+                "sso_ready": bool(row and row.connection_id),
+                "directory_ready": bool(row and row.directory_id and row.directory_active),
+                "enforced": bool(row and row.enforced),
+                "cleanup_pending": bool(row and row.subscription_status in {"canceled", "incomplete_expired"}
+                                        and row.workos_org_id and row.workos_cleanup_completed_at is None),
+                "cancel_at_period_end": bool(row and row.cancel_at_period_end)}
+    # Existing subscribers need management even when Stripe's Price API is unavailable. Only
+    # teams shopping for a plan need live sale prices, and no DB connection spans that call.
+    result["plans"] = (await catalog() if include_plans and result["subscription_status"] not in ENTITLED
+                       else [])
+    return result
+
+
+async def start_checkout(org_id: int, plan: str, *, price_id: str, base: str, email: str) -> dict:
+    settings = get_settings()
+    if not settings.stripe_secret_key or not settings.stripe_webhook_secret:
+        raise EnterpriseBillingError("Stripe billing is not configured")
+    if not settings.workos_api_key or not settings.workos_client_id:
+        raise EnterpriseBillingError("WorkOS is not configured")
+    if (plan not in PLANS or (plan == "sso" and settings.enterprise_sso_bundle_only)
+            or not _enterprise_price_id(plan, settings)):
+        raise EnterpriseBillingError("plan is not available")
+    if price_id != _enterprise_price_id(plan, settings):
+        raise EnterpriseBillingError("SSO price changed; refresh the page before checkout")
+    now = int(time.time())
+    checkout_token = uuid4().hex
+    async with session_maker() as db:
+        org = await db.get(Org, org_id)
+        row = await db.get(EnterpriseSSO, org_id)
+        if org is None or org.suspended:
+            raise EnterpriseBillingError("team is unavailable")
+        if row is not None and row.stripe_subscription_id and row.subscription_status not in {"canceled", "incomplete_expired"}:
+            raise EnterpriseBillingError("manage the existing subscription in Billing")
+        if (row is not None and row.subscription_status in {"canceled", "incomplete_expired"}
+                and row.workos_org_id and row.workos_cleanup_completed_at is None):
+            raise EnterpriseBillingError("previous SSO setup is being removed; retry shortly")
+        if row is not None and row.checkout_pending_until > now:
+            if row.checkout_url:
+                return {"url": row.checkout_url}
+            raise EnterpriseBillingError("checkout is being prepared; retry in a moment")
+        customer_id, name, slug = org.stripe_customer_id, org.name, org.slug
+        try:
+            if row is None:
+                db.add(EnterpriseSSO(org_id=org_id, checkout_token=checkout_token,
+                                     checkout_pending_until=now + 1800))
+                await db.commit()
+            else:
+                claimed = await db.execute(update(EnterpriseSSO).where(
+                    EnterpriseSSO.org_id == org_id,
+                    EnterpriseSSO.checkout_pending_until <= now,
+                ).values(checkout_token=checkout_token, checkout_pending_until=now + 1800,
+                         checkout_url=None))
+                if claimed.rowcount != 1:
+                    raise EnterpriseBillingError("checkout is being prepared; retry in a moment")
+                await db.commit()
+        except (IntegrityError, OperationalError) as exc:
+            await db.rollback()
+            raise EnterpriseBillingError("checkout is being prepared; retry in a moment") from exc
+    try:
+        try:
+            price = await stripe_adapter.call(stripe_adapter.PRICE_RETRIEVE,
+                api_key=settings.stripe_secret_key, id=price_id)
+        except stripe_adapter.StripeError as exc:
+            raise EnterpriseBillingError("SSO Stripe price is unavailable") from exc
+        _validate_enterprise_price(price, price_id=price_id,
+            minimum_cents=_enterprise_min_price_cents(plan, settings))
+        if not customer_id:
+            customer = await stripe_adapter.call(stripe_adapter.CUSTOMER_CREATE,
+                api_key=settings.stripe_secret_key, name=name or slug, email=email,
+                metadata={"treg_org_id": str(org_id), "treg_org_slug": slug},
+                idempotency_key=f"enterprise-customer-{org_id}")
+            customer_id = customer["id"]
+            async with session_maker() as db:
+                org = await db.get(Org, org_id)
+                if org is None:
+                    raise EnterpriseBillingError("team is unavailable")
+                if not org.stripe_customer_id:
+                    org.stripe_customer_id = customer_id
+                    db.add(org)
+                    await db.commit()
+                else:
+                    customer_id = org.stripe_customer_id
+        metadata = {"treg_kind": "enterprise_sso", "treg_org_id": str(org_id), "treg_plan": plan}
+        base = base.rstrip("/")
+        session = await stripe_adapter.call(stripe_adapter.CHECKOUT_SESSION_CREATE,
+            api_key=settings.stripe_secret_key, mode="subscription", customer=customer_id,
+            idempotency_key=f"enterprise-checkout-{checkout_token}", expires_at=now + 1800,
+            line_items=[{"quantity": 1, "price": price_id}],
+            metadata=metadata, subscription_data={"metadata": metadata},
+            success_url=f"{base}/app?sso=success#billing",
+            cancel_url=f"{base}/app?sso=cancelled#billing")
+        async with session_maker() as db:
+            row = await db.get(EnterpriseSSO, org_id)
+            if row is None or row.checkout_token != checkout_token:
+                raise EnterpriseBillingError("checkout reservation changed; retry")
+            row.checkout_url = session["url"]
+            db.add(row)
+            await db.commit()
+        return {"url": session["url"]}
+    except Exception:
+        async with session_maker() as db:
+            row = await db.get(EnterpriseSSO, org_id)
+            if row is not None and row.checkout_token == checkout_token:
+                row.checkout_pending_until = 0
+                row.checkout_token = None
+                row.checkout_url = None
+                db.add(row)
+                await db.commit()
+        raise
+
+
+async def cancel_at_period_end(org_id: int) -> dict:
+    settings = get_settings()
+    async with session_maker() as db:
+        row = await db.get(EnterpriseSSO, org_id)
+        if row is None or not row.stripe_subscription_id or row.subscription_status not in ACTIVE:
+            raise EnterpriseBillingError("there is no active SSO subscription")
+        subscription_id = row.stripe_subscription_id
+    if not settings.stripe_secret_key:
+        raise EnterpriseBillingError("Stripe billing is not configured")
+    result = await stripe_adapter.schedule_subscription_cancel(
+        subscription_id, api_key=settings.stripe_secret_key)
+    if result.get("id") != subscription_id or not result.get("cancel_at_period_end"):
+        raise EnterpriseBillingError("Stripe did not schedule cancellation")
+    async with session_maker() as db:
+        row = await db.get(EnterpriseSSO, org_id)
+        if row is not None and row.stripe_subscription_id == subscription_id:
+            row.cancel_at_period_end = True
+            db.add(row)
+            await db.commit()
+    return {"cancel_at_period_end": True}
+
+
+async def handle_event(db, event: dict) -> dict:
+    """Called only after the shared Stripe webhook verifies its signature."""
+    kind = event.get("type")
+    obj = (event.get("data") or {}).get("object") or {}
+    if not isinstance(obj, dict):
+        return {"handled": False, "type": kind}
+    meta = obj.get("metadata") or {}
+    if meta.get("treg_kind") != "enterprise_sso":
+        return {"handled": False, "type": kind}
+    try:
+        org_id = int(meta["treg_org_id"])
+    except (KeyError, ValueError, TypeError):
+        return {"handled": False, "type": kind}
+    org = await db.get(Org, org_id)
+    if org is None or (obj.get("customer") and obj["customer"] != org.stripe_customer_id):
+        return {"handled": False, "type": kind}
+    row = await db.get(EnterpriseSSO, org_id)
+    try:
+        created = int(event.get("created") or 0)
+    except (TypeError, ValueError):
+        created = 0
+    if row and created and row.stripe_event_created and created < row.stripe_event_created:
+        return {"handled": True, "type": kind, "stale": True}
+    if kind == "checkout.session.completed":
+        subscription_id = obj.get("subscription")
+        plan = meta.get("treg_plan")
+        if obj.get("mode") != "subscription" or not subscription_id or plan not in PLANS:
+            return {"handled": False, "type": kind}
+        if obj.get("payment_status") not in {"paid", "no_payment_required"}:
+            return {"handled": False, "type": kind}
+        if (row and row.stripe_subscription_id and row.stripe_subscription_id != subscription_id
+                and row.subscription_status not in {"canceled", "incomplete_expired"}):
+            raise EnterpriseBillingError("multiple SSO subscriptions for one team")
+        if row and row.stripe_subscription_id == subscription_id and row.subscription_status == "canceled":
+            return {"handled": True, "type": kind, "stale": True}
+        row = row or EnterpriseSSO(org_id=org_id)
+        row.plan = plan
+        row.stripe_subscription_id = subscription_id
+        row.subscription_status = "active"
+        row.cancel_at_period_end = False
+    elif kind in {"customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"}:
+        subscription_id = obj.get("id")
+        plan = meta.get("treg_plan")
+        if not subscription_id or plan not in PLANS:
+            return {"handled": False, "type": kind}
+        if (row and row.stripe_subscription_id and row.stripe_subscription_id != subscription_id
+                and row.subscription_status not in {"canceled", "incomplete_expired"}):
+            return {"handled": False, "type": kind}
+        if row and row.stripe_subscription_id == subscription_id and row.subscription_status == "canceled":
+            return {"handled": True, "type": kind, "stale": True}
+        row = row or EnterpriseSSO(org_id=org_id)
+        row.plan = plan
+        row.stripe_subscription_id = subscription_id
+        row.subscription_status = "canceled" if kind.endswith(".deleted") else str(obj.get("status") or "incomplete")
+        row.cancel_at_period_end = bool(obj.get("cancel_at_period_end"))
+    else:
+        return {"handled": False, "type": kind}
+    row.stripe_event_created = created
+    if row.stripe_subscription_id and row.subscription_status in ENTITLED:
+        row.workos_cleanup_completed_at = None
+        row.checkout_token = None
+        row.checkout_pending_until = 0
+        row.checkout_url = None
+    if row.subscription_status not in ENTITLED and row.enforced:
+        row.enforced = False
+        enterprise_sso._audit(db, org_id, "sso.enforcement_disabled")
+    db.add(row)
+    if row.subscription_status in {"canceled", "incomplete_expired"}:
+        await enterprise_sso.remove_sso_created_memberships(db, org_id)
+    await db.commit()
+    return {"handled": True, "type": kind}
+
+
+async def cleanup_canceled_workos(org_id: int) -> dict:
+    """Remove billable WorkOS resources after entitlement ends, outside any DB transaction.
+
+    A canceled team's WorkOS organization is dedicated to that treg team. Keep the organization
+    for a later purchase, but remove every connection and directory it owns, including resources
+    made in Admin Portal before a first sign-in or activation webhook recorded their IDs here.
+    """
+    import httpx
+    from ..infra import workos
+
+    async with session_maker() as db:
+        row = await db.get(EnterpriseSSO, org_id)
+        if row is None or row.subscription_status not in {"canceled", "incomplete_expired"}:
+            return {"org_id": org_id, "skipped": "subscription is not ended"}
+        if row.workos_cleanup_completed_at is not None:
+            return {"org_id": org_id, "skipped": "already cleaned"}
+        organization = row.workos_org_id
+        subscription_id = row.stripe_subscription_id
+    if organization:
+        key = get_settings().workos_api_key
+        if not key:
+            raise EnterpriseBillingError("WorkOS API key is not configured")
+        async with httpx.AsyncClient() as client:
+            details = await workos.get_organization(client, key=key, organization=organization)
+            if details.get("external_id") != str(org_id):
+                raise EnterpriseBillingError("WorkOS organization does not belong to this team")
+            directories = await workos.directories_for_organization(client, key=key,
+                organization=organization)
+            connections = await workos.connections_for_organization(client, key=key,
+                organization=organization)
+            for kind, rows in (("directory", directories), ("connection", connections)):
+                for resource in rows:
+                    expected = "directory_" if kind == "directory" else "conn_"
+                    if (resource.get("organization_id") != organization or
+                            not isinstance(resource.get("id"), str) or
+                            not resource["id"].startswith(expected)):
+                        raise EnterpriseBillingError("WorkOS resource does not belong to this team")
+            for resource in directories:
+                await workos.delete_directory(client, key=key, directory=resource["id"])
+            for resource in connections:
+                await workos.delete_connection(client, key=key, connection=resource["id"])
+            if (await workos.directories_for_organization(client, key=key, organization=organization)
+                    or await workos.connections_for_organization(client, key=key, organization=organization)):
+                raise EnterpriseBillingError("WorkOS resources remain; retry cleanup")
+    async with session_maker() as db:
+        row = await db.get(EnterpriseSSO, org_id, with_for_update=True)
+        if (row is None or row.subscription_status not in {"canceled", "incomplete_expired"}
+                or row.stripe_subscription_id != subscription_id or row.workos_org_id != organization):
+            raise EnterpriseBillingError("SSO subscription changed during cleanup")
+        row.connection_id = None
+        row.directory_id = None
+        row.directory_active = False
+        row.workos_cleanup_completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        await db.execute(delete(EnterpriseSSOIdentity).where(EnterpriseSSOIdentity.org_id == org_id))
+        await db.execute(delete(EnterpriseDirectoryUser).where(EnterpriseDirectoryUser.org_id == org_id))
+        enterprise_sso._audit(db, org_id, "sso.workos_cleanup_completed")
+        db.add(row)
+        await db.commit()
+    return {"org_id": org_id, "directories_deleted": len(directories) if organization else 0,
+            "connections_deleted": len(connections) if organization else 0}

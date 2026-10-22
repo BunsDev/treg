@@ -232,14 +232,18 @@ async def preview(tool_ref: str, *, org_id: int, org_slug: str, email: str) -> d
     return {"shape": "flat", "columns": fields, "column_source": "hub"}
 
 
-async def account_teams(db, *, user_id: int, only_org_id: int | None) -> list[dict[str, Any]]:
-    """A person's teams with their role and balance (micro-USD), oldest membership first."""
+async def account_teams(db, *, user_id: int, only_org_id: int | None,
+                        oauth_sso_org_id: int | None = None, oauth: bool = False) -> list[dict[str, Any]]:
+    """Teams this credential may use, with role and balance, oldest membership first."""
     from sqlmodel import select
+    from ..domain.identity.access import sso_team_allowed
     from ..models import Membership, Org
     q = select(Membership, Org).join(Org, Org.id == Membership.org_id).where(Membership.user_id == user_id)
     if only_org_id is not None:
         q = q.where(Membership.org_id == only_org_id)
     rows = (await db.execute(q.order_by(Membership.id))).all()
+    if oauth:
+        rows = [(m, org) for m, org in rows if await sso_team_allowed(db, m, oauth_sso_org_id)]
     return [{"org_id": org.id, "slug": org.slug, "name": org.name, "role": m.role,
              "balance_micro": int(org.balance_micro or 0)}
             for m, org in rows if not org.suspended]

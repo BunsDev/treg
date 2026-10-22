@@ -62,6 +62,7 @@ from .routers import billing as billing_routes
 from .routers import call as call_routes
 from .routers import catalog as catalog_routes
 from .routers import connections as connection_routes
+from .routers import enterprise_sso as enterprise_sso_routes
 from .routers import feedback as feedback_routes
 from .routers import hub as hub_routes
 from .routers import media as media_routes
@@ -348,6 +349,7 @@ router.routes.extend(org_routes.tag_controls_router.routes)
 router.routes.extend(billing_routes.billing_router.routes)
 router.routes.extend(referral_routes.router.routes)
 router.routes.extend(billing_routes.webhook_router.routes)
+router.routes.extend(enterprise_sso_routes.router.routes)
 router.routes.extend(org_routes.member_management_router.routes)
 router.routes.extend(org_routes.machine_identity_router.routes)
 router.routes.extend(api_key_routes.router.routes)

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 from httpx import AsyncClient
+from sqlmodel import select
 
 from test_mcp import _call_tool, mcp_session
 from test_mcp_oauth import _grant, _pkce, _register, _signed_in
@@ -17,6 +18,8 @@ from tests.test_marketplace_call import _fake_relay, platform_on  # noqa: F401 -
 from treg.application.call import service as call_service
 from treg.config import get_settings
 from treg.domain.identity import mcp_oauth
+from treg.infra.db import session_maker
+from treg.models import EnterpriseSSO, Membership, Org
 
 REDIRECT = "https://script.google.com/macros/d/TESTSCRIPT/usercallback"
 EP = "tikhub.tiktok.video.comments"
@@ -116,6 +119,40 @@ async def test_one_sign_in_reaches_every_team_of_the_person(clients: AsyncClient
     assert r.status_code == 200, r.text
     assert r.json()["rows"] == [[1]]
     assert seen and b"authorization" not in seen[0]                    # treg's token never reaches the provider
+
+
+async def test_sheets_account_hides_team_that_now_requires_sso(clients: AsyncClient, sheets_on):
+    tok, first_org = await _sheets_grant(clients, "sheets-sso@superdesign.dev")
+    restricted_slug = await _make_team(clients, "sheets-sso-required")
+    async with session_maker() as db:
+        restricted = (await db.execute(select(Org).where(Org.slug == restricted_slug))).scalar_one()
+        member = (await db.execute(select(Membership).where(Membership.org_id == restricted.id))).scalar_one()
+        member.role = "member"
+        db.add(EnterpriseSSO(org_id=restricted.id, plan="sso", subscription_status="active",
+                             workos_org_id="org_sheets_test", enforced=True))
+        await db.commit()
+    await _no_cookie(clients)
+    access = tok["access_token"]
+    account = await clients.get("/table-account", headers=_bearer(access))
+    assert account.status_code == 200
+    assert [team["org_id"] for team in account.json()["teams"]] == [first_org]
+    assert (await clients.get("/table-account", headers=_bearer(access, restricted_slug))).status_code == 403
+
+
+async def test_sheets_sso_token_lists_only_its_company(clients: AsyncClient, sheets_on):
+    tok, company_id = await _sheets_grant(clients, "sheets-scoped@superdesign.dev")
+    other_slug = await _make_team(clients, "sheets-other-team")
+    claims = mcp_oauth.read_access_token(tok["access_token"],
+                                          expected_audience=mcp_oauth.sheets_resource_url())
+    scoped_access = mcp_oauth.make_access_token(
+        user_id=claims["sub"], org_id=company_id, scope=mcp_oauth.SHEETS_SCOPE,
+        audience=mcp_oauth.sheets_resource_url(), token_version=claims["tv"],
+        sso_org_id=company_id)
+    await _no_cookie(clients)
+    account = await clients.get("/table-account", headers=_bearer(scoped_access))
+    assert account.status_code == 200
+    assert [team["org_id"] for team in account.json()["teams"]] == [company_id]
+    assert (await clients.get("/table-account", headers=_bearer(scoped_access, other_slug))).status_code == 403
 
 
 async def test_a_team_the_person_is_not_in_is_refused(clients: AsyncClient, sheets_on):

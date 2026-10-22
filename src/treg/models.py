@@ -291,6 +291,97 @@ class Membership(SQLModel, table=True):
     created_at: NaiveUTC = Field(default_factory=_now)
 
 
+class EnterpriseSSO(SQLModel, table=True):
+    """One team's enterprise sign-in entitlement and its external organization."""
+
+    org_id: int = Field(primary_key=True, foreign_key="org.id")
+    plan: str = Field(default="sso")  # sso | sso_directory
+    subscription_status: str = Field(default="pending")
+    stripe_subscription_id: str | None = Field(default=None, index=True, unique=True)
+    stripe_event_created: int = Field(default=0)
+    checkout_token: str | None = Field(default=None)
+    checkout_pending_until: int = Field(default=0)
+    checkout_url: str | None = Field(default=None)
+    cancel_at_period_end: bool = Field(default=False)
+    workos_org_id: str | None = Field(default=None, index=True, unique=True)
+    connection_id: str | None = Field(default=None)
+    directory_id: str | None = Field(default=None)
+    directory_active: bool = Field(default=False)
+    directory_event_ms: int = Field(default=0, sa_type=BigInteger)
+    workos_cleanup_completed_at: NaiveUTC | None = Field(default=None)
+    # Switched on only after a successful test sign-in; then other login doors cannot enter this team.
+    enforced: bool = Field(default=False)
+    created_at: NaiveUTC = Field(default_factory=_now)
+
+
+class EnterpriseSSOIdentity(SQLModel, table=True):
+    """Stable IdP subject for one human in one customer connection."""
+
+    __table_args__ = (
+        UniqueConstraint("org_id", "profile_id", name="uq_enterprise_sso_profile"),
+        UniqueConstraint("org_id", "user_id", name="uq_enterprise_sso_user"),
+        UniqueConstraint("org_id", "idp_id", name="uq_enterprise_sso_idp"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    org_id: int = Field(foreign_key="org.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    profile_id: str
+    idp_id: str
+    connection_id: str
+    directory_user_id: str | None = Field(default=None, index=True)
+    active: bool = Field(default=True)
+    manually_blocked: bool = Field(default=False)
+    membership_created_by_sso: bool = Field(default=False)
+    created_at: NaiveUTC = Field(default_factory=_now)
+
+
+class EnterpriseSSOBlock(SQLModel, table=True):
+    """Minimal team access decision, independent of a replaceable WorkOS connection."""
+
+    __table_args__ = (UniqueConstraint("org_id", "user_id", name="uq_enterprise_sso_block_user"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    org_id: int = Field(foreign_key="org.id", index=True)
+    user_id: int = Field(foreign_key="user.id", ondelete="CASCADE", index=True)
+    created_at: NaiveUTC = Field(default_factory=_now)
+
+
+class EnterpriseSSOEvent(SQLModel, table=True):
+    """Processed WorkOS event id; webhook redelivery must be harmless."""
+
+    id: str = Field(primary_key=True)
+    created_at: NaiveUTC = Field(default_factory=_now)
+
+
+class EnterpriseSSOAudit(SQLModel, table=True):
+    """Durable team access evidence without emails or IdP profile data."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    org_id: int = Field(foreign_key="org.id", index=True)
+    event: str
+    actor_user_id: int | None = None
+    subject_user_id: int | None = None
+    from_role: str | None = None
+    to_role: str | None = None
+    created_at: NaiveUTC = Field(default_factory=_now, index=True)
+
+
+class EnterpriseDirectoryUser(SQLModel, table=True):
+    """Directory roster and deactivation state, including people who have never signed in."""
+
+    __table_args__ = (UniqueConstraint("org_id", "directory_user_id", name="uq_enterprise_directory_user"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    org_id: int = Field(foreign_key="org.id", index=True)
+    directory_user_id: str
+    directory_id: str
+    idp_id: str
+    email: str
+    active: bool = Field(default=True)
+    last_event_ms: int = Field(default=0, sa_type=BigInteger)
+
+
 class ApiKey(SQLModel, table=True):
     """One credential control record for a human or scoped-agent membership.
 
@@ -324,6 +415,8 @@ class ApiKey(SQLModel, table=True):
     name: str
     safe_prefix: str | None = Field(default=None)
     key_hash: str | None = Field(default=None, index=True, unique=True)
+    # Corporate SSO proof at issuance for long-lived team credentials.
+    sso_org_id: int | None = Field(default=None)
     state: str = Field(default="active", index=True)  # active | disabled | revoked
     # Signed Default keys carry this per-team generation. Rotating increments it so only that
     # membership's previously issued Default token stops working; no replacement row is needed.
@@ -1235,6 +1328,7 @@ class OAuthCode(SQLModel, table=True):
     client_id: str = Field(index=True)
     user_id: int = Field(foreign_key="user.id", index=True)
     org_id: int = Field(foreign_key="org.id", index=True)
+    sso_org_id: int | None = Field(default=None)
     redirect_uri: str
     code_challenge: str = Field(default="")
     resource: str = Field(default="")
@@ -1257,6 +1351,7 @@ class OAuthGrant(SQLModel, table=True):
 
     family_id: str = Field(primary_key=True)
     current_org_id: int = Field(foreign_key="org.id", index=True)
+    sso_org_id: int | None = Field(default=None)
     granted_at: NaiveUTC = Field(default_factory=_now)
 
 

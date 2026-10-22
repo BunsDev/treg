@@ -90,7 +90,8 @@ Two owner decisions (2026-09-26) shape it:
   a team with `X-Treg-Org`, checked by `require_member` (membership, role, suspension) every time. A
   refresh whose default team the person left moves the default to another of their teams; only
   leaving every team ends the grant. `GET /table-account` lists `{email, active_team, teams: [{org_id,
-  slug, name, role, balance_micro}]}`: every team with this token, the key's one team with a team key.
+  slug, name, role, balance_micro}]}`: every team the OAuth sign-in may use (respecting SSO scope
+  and required SSO), or the key's one team with a team key.
 
 Lifetimes are the MCP ones: access `ACCESS_TTL_SECONDS` (1 hour), refresh `REFRESH_TTL_S` (30 days,
 renewed at each refresh, rotated, replay revokes the family). Sign-out is `POST /oauth/revoke`.

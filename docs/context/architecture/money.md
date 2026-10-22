@@ -11,6 +11,8 @@ sources:
   - src/treg/domain/asynctasks/__init__.py
   - src/treg/models.py
   - src/treg/application/billing.py
+  - src/treg/application/enterprise_billing.py
+  - src/treg/routers/enterprise_sso.py
   - src/treg/application/call/idempotency.py
   - src/treg/application/call/intake.py
   - src/treg/application/call/resolve.py
@@ -64,6 +66,39 @@ related:
 ---
 
 # Money
+
+## Enterprise SSO subscription
+
+The team dashboard displays the amount of each active flat monthly USD Stripe Price.
+`TREG_ENTERPRISE_SSO_BUNDLE_ONLY=false` exposes both plans; the default exposes only the bundle.
+Each offered plan needs a reusable Stripe Price ID
+(`TREG_ENTERPRISE_SSO_BUNDLE_PRICE_ID`, or `TREG_ENTERPRISE_SSO_ONLY_PRICE_ID` when enabled).
+`billing.catalog` reads Prices outside a database session and hides unusable or unconfigured plans;
+the API returns integer cents and the Price ID for display. A deployment may set separate minimum
+monthly USD prices for the two plans; a cheaper Price is hidden and rejected at checkout.
+`billing.status` reads existing subscription state without Stripe I/O for entitled teams, and
+never fetches Prices for non-owner callers, so a Price API failure cannot hide setup or cancellation
+controls or delay a member's team page. `billing.start_checkout` rejects a
+stale Price ID from an older page, then retrieves the configured Price again
+outside a database session and verifies its active state, flat fee, USD currency, and monthly interval
+before sending that Price ID to Checkout. This avoids creating a new Stripe
+Product and Price for every team. A pricing change creates a new Price ID for future checkouts;
+existing subscriptions retain their original Price unless explicitly migrated.
+The existing signed billing webhook records subscription status and gates WorkOS setup/sign-in on
+`active` or `trialing`; a redirect from Checkout grants nothing. Subscription metadata binds the
+event to a team and plan, and the Stripe customer must match that team. Older Stripe events cannot
+restore an entitlement after a later cancellation. Owners can schedule cancellation at period end;
+Checkout uses one pending reservation per team and an idempotent Stripe session request, so
+concurrent clicks cannot create parallel subscriptions. When paid entitlement ends, enforcement
+is lifted; `past_due` retains SSO and Directory Sync while Stripe retries payment. Cancellation
+removes only SSO-created memberships and their keys. Pre-existing members
+keep their memberships. Team deletion
+waits until the subscription has ended. This subscription never credits or debits the
+prepaid tool-call balance, so the five ledger entry kinds remain unchanged.
+After the paid period ends, the enterprise cleanup worker deletes every WorkOS connection and
+directory belonging to the team's verified WorkOS organization. It retries failures and prevents
+a new checkout or team deletion until cleanup finishes, without holding a database connection
+across WorkOS I/O.
 
 TrestleIQ charges USD 0.015 for Phone Validation, USD 0.03 for Real Contact, and USD 0.01 for
 Address Validation. Every HTTP 200 response is billable, including a negative verdict; 4xx and 5xx
