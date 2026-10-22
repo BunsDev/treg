@@ -58,8 +58,8 @@ test('public catalog and shared deep links remain available without a session', 
 
 test('company sign-in finds a team from email without blocking other methods', async ({ page }) => {
   await page.route('**/auth/sso/discover', route => route.fulfill(json({ teams: [] })))
-  await page.goto('/')
-  await page.getByRole('button', { name: 'Start free', exact: true }).first().click()
+  await page.goto('/aeo')
+  await page.getByRole('link', { name: 'Set up treg' }).first().click()
   const dialog = page.getByRole('dialog', { name: 'Sign in' })
   await dialog.getByRole('textbox', { name: 'Email' }).fill('person@example.com')
   await dialog.getByRole('button', { name: 'Continue with company SSO' }).click()
