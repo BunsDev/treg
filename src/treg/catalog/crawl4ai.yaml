@@ -2501,8 +2501,8 @@ endpoints:
     name: Posts of an Instagram account
     summary: 'The latest posts of one Instagram account, newest first, one row per post: code, URL, caption (first
       500 characters), likes, comments, time posted, kind (photo, video, reel, carousel), image, video URL, owner.
-      `username` is the account (@name or an instagram.com URL is fine); `limit` up to 48, 12 per page. Without `session`
-      a public account is read in 1 to 3 s; when Instagram refuses, a slower second source answers (about 100 s, billed
+      `username` is the account (@name or an instagram.com URL is fine). Without `session` a call returns the 12
+      latest posts (a larger `limit` returns those 12 with meta.partial true) and a public account is read in 1 to 3 s; when Instagram refuses, a slower second source answers (about 100 s, billed
       per record). With `session` (your `sessionid` and `csrftoken` cookies from the Crawl4AI Session extension, used
       once, never stored) it is read as you. Columns: code, url, caption, likes, comments, taken_at, kind, image,
       video_url, owner.'
@@ -2595,7 +2595,8 @@ endpoints:
     name: Reels of an Instagram account
     summary: 'The latest reels of one Instagram account, newest first, one row per reel: id, code, URL, plays, likes,
       comments, thumbnail. `username` is the account (@name or an instagram.com URL), or `user_id` its numeric id
-      (one lookup fewer); `limit` up to 48, 12 per page. Without `session` a public account is read in 2 to 8 s; when
+      (one lookup fewer). Without `session` a call returns the 12 latest reels (a larger `limit` returns those 12 with
+      meta.partial true) and a public account is read in 2 to 8 s; when
       Instagram refuses, a slower second source answers when `username` is given (about 100 s, billed per record,
       plays often empty). With `session` (your `sessionid` and `csrftoken` cookies, used once, never stored) it is
       read as you. Columns: id, code, url, plays, likes, comments, thumbnail.'
