@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 import httpx
 from cryptography.fernet import InvalidToken
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlmodel import select
 

@@ -1,7 +1,5 @@
 """Recurring enterprise SSO entitlement; never changes the prepaid call balance."""
 
-from sqlmodel import select
-
 from ..config import get_settings
 from ..infra import stripe as stripe_adapter
 from ..infra.db import session_maker

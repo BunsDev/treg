@@ -102,7 +102,7 @@ async def find_or_create_user(
             await db.rollback()  # another worker just created this same new user — reuse theirs
             user = (await db.execute(select(User).where(User.email == email))).scalar_one()
             if reject_unverified_existing and user.email_verified_at is None:
-                raise UnverifiedExistingUserError
+                raise UnverifiedExistingUserError from None
         else:
             if created is not None:
                 created.add(user.id)
