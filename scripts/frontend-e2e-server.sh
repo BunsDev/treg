@@ -18,7 +18,6 @@ export TREG_INTERCOM_APP_ID=
 export TREG_PLATFORM_PROVIDERS=
 # The first-run flow for these addresses only (e2e/onboarding.spec.ts); everyone else, and so every
 # other spec's signIn, keeps the team-name dialog.
-export TREG_ONBOARDING_V2_EMAILS=@onboarding.test
 export PORT="$TREG_E2E_PORT"
 export TREG_SECRET_KEY="$(uv run --project "$ROOT" python -m treg keygen)"
 export TREG_SESSION_SECRET=local-disposable-browser-tests

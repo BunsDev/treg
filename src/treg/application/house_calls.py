@@ -1,9 +1,9 @@
 """treg as a client of itself: catalog calls on one of treg's own teams, through the public `/call/`.
 
-Some features make catalog calls nobody asked for yet: the /jev demo judges launch posts, the
-onboarding looks a new user up before they have done anything. Those calls go out exactly as a
-visitor's agent would make them, with an ordinary member token of a house team, so every one is a
-real metered call on that team (a real hold, a real bill) and none is ever on the visitor's credit.
+Some features make catalog calls nobody asked for yet: the /jev demo judges launch posts. Those
+calls go out exactly as a visitor's agent would make them, with an ordinary member token of a house
+team, so every one is a real metered call on that team (a real hold, a real bill) and none is ever on
+the visitor's credit.
 Nothing here touches money directly.
 """
 from __future__ import annotations

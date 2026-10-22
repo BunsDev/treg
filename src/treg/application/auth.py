@@ -22,7 +22,6 @@ from sqlmodel import select
 
 from .. import audit, crypto, email as email_sender, ratestore
 from ..application.onboard import demo as demo_seed
-from ..application.onboard import first_run
 from ..infra import db as database
 from ..infra import turnstile
 from ..config import get_settings
@@ -614,8 +613,6 @@ async def _provision_social_user(email: str, state: str, door: str, entry_surfac
         if proven:
             await signup.grant_signup_promo_on_proof(user.id)
         signup.track_signup(user, created, door, entry_surface)
-        if user.id in created:  # what the door knew, for the first-run lookup (onboard.first_run)
-            await first_run.remember_hints(user.id, user.email, door=door, github_login=github_login, name=name)
         # Browser session OR `treg login` handshake — both go through the /login team picker now.
         return SocialLoginProof(user=user, cli_state=await _consume_cli_state(state))
 

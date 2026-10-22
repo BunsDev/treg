@@ -66,16 +66,6 @@
         (window.location.protocol === 'https:' ? ';secure' : '');
     }
   } catch (e) { /* never break the page for an attribution cookie */ }
-  // 3. A first-party `treg_landing` cookie: the first page this browser landed on, always (a direct
-  //    visit has no utm or referrer, but the page it chose says what it came for). First touch
-  //    wins, 90 days, path only. The first-run onboarding reads it as a ranking signal; it is never
-  //    shown and never stored on the team.
-  try {
-    if (!/(^|;\s*)treg_landing=/.test(document.cookie)) {
-      document.cookie = 'treg_landing=' + encodeURIComponent(window.location.pathname.slice(0, 200)) +
-        ';path=/;max-age=7776000;samesite=lax' + (window.location.protocol === 'https:' ? ';secure' : '');
-    }
-  } catch (e) { /* never break the page for an attribution cookie */ }
 
   try {
     var key = '{POSTHOG_KEY}', host = '{POSTHOG_HOST}' || 'https://eu.i.posthog.com';

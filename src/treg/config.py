@@ -466,30 +466,6 @@ class Settings(BaseSettings):
     # the wait, so the timeout is looser than an agent's search. Rate limits bound anonymous use.
     find_candidates: int = 60
     find_timeout_s: float = 6.0
-    # The first-run onboarding (application/onboarding/, docs/context/interface/onboarding.md). Off
-    # = the dashboard keeps the team-name welcome dialog. On, a new user's setup looks them up
-    # (GitHub, their company, their homepage), asks the LLM for task inputs grounded in what it
-    # found and the judge (Jev, a catalog endpoint) to rank and check them. Every key below is
-    # optional: a missing one skips its step and the task falls back to its labelled example.
-    onboarding_v2: bool = False
-    # Off for everyone else, on for these: comma-separated addresses or `@domain`s.
-    onboarding_v2_emails: str = ""
-    # The experiment: a new user whose address is not free, ISP, alias or school mail is offered to the
-    # dashboard's PostHog flag `onboarding-v2`, whose `test` arm gets this flow and `control` the
-    # team-name modal. Off = nobody outside the two settings above sees the flow.
-    onboarding_v2_experiment: bool = False
-    # A member token of treg's own house team: the lookup's catalog calls (company record, homepage,
-    # input checks) are ordinary metered calls on that team, never on the new user's credit.
-    onboarding_treg_token: str = ""
-    # The registry that token belongs to; empty = this one (`public_url`).
-    onboarding_treg_url: str = ""
-    # Any GitHub token; only the public commit-search and user APIs are read with it.
-    onboarding_github_token: str = ""
-    # Through the Vercel AI Gateway's OpenAI-compatible API, keyed by `ai_gateway_api_key`.
-    onboarding_llm_model: str = "anthropic/claude-haiku-4-5-20251001"
-    # What one signup's lookup may spend on the house team, in micro-USD; past it the remaining
-    # checks are skipped.
-    onboarding_max_house_micro: int = 50_000
     # Which find answers: `v1` (endpoint recall, above), `v2` (recall by job: a unit per capability,
     # every vendor listed once the job fits; docs/context/architecture/find.md), or `shadow` (v1 is
     # served, v2 runs beside it and is only logged). One setting is the rollout and the rollback.

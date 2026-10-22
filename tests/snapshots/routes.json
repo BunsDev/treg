@@ -1527,66 +1527,8 @@
     "methods": [
       "POST"
     ],
-    "name": "onboarding_start",
-    "path": "/onboarding/start"
-  },
-  {
-    "kind": "APIRoute",
-    "methods": [
-      "POST"
-    ],
     "name": "onboard_team",
     "path": "/onboard/team"
-  },
-  {
-    "kind": "APIRoute",
-    "methods": [
-      "GET",
-      "HEAD"
-    ],
-    "name": "onboarding_view",
-    "path": "/onboarding"
-  },
-  {
-    "kind": "APIRoute",
-    "methods": [
-      "POST"
-    ],
-    "name": "onboarding_answer",
-    "path": "/onboarding/answer"
-  },
-  {
-    "kind": "APIRoute",
-    "methods": [
-      "POST"
-    ],
-    "name": "onboarding_preview_start",
-    "path": "/onboarding/preview"
-  },
-  {
-    "kind": "APIRoute",
-    "methods": [
-      "GET",
-      "HEAD"
-    ],
-    "name": "onboarding_preview_view",
-    "path": "/onboarding/preview/{preview_id}"
-  },
-  {
-    "kind": "APIRoute",
-    "methods": [
-      "POST"
-    ],
-    "name": "onboarding_preview_answer",
-    "path": "/onboarding/preview/{preview_id}/answer"
-  },
-  {
-    "kind": "APIRoute",
-    "methods": [
-      "POST"
-    ],
-    "name": "onboarding_preview_call",
-    "path": "/onboarding/preview/{preview_id}/call"
   },
   {
     "kind": "APIRoute",

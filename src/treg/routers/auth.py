@@ -17,7 +17,6 @@ from .. import client_ip, crypto
 from ..application import auth as auth_use_cases
 from ..application import signup
 from ..application import images
-from ..application.onboard import first_run
 from ..application.auth import (
     CLI_APPROVE_MAX_TRIES,
     EMAIL_CODE_TTL,
@@ -673,12 +672,6 @@ async def auth_me(
     out = {"email": identity.email, "is_superadmin": identity.is_superadmin, "onboarded": identity.onboarded,
            "github": identity.github, "avatar_url": images.public_url(identity.avatar_key),
            "uploads": images.enabled()}
-    if first_run.enabled(identity.email):
-        out["onboarding_v2"] = True
-    elif not identity.onboarded and first_run.in_experiment(identity.email):
-        out["onboarding_v2_experiment"] = True     # the dashboard reads the flag `onboarding-v2`
-    if first_run.may_preview(identity.email, identity.is_superadmin):
-        out["onboarding_preview"] = True
     if (ich := _intercom_user_hash(identity.email)):
         out["intercom_user_hash"] = ich
     if identity.org_id is not None:

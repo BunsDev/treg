@@ -1,7 +1,6 @@
 """HTTP routes for first-run team onboarding."""
 
 import re
-from collections.abc import Awaitable
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import PlainTextResponse, StreamingResponse
@@ -34,16 +33,6 @@ _ONBOARD_HTTP_ERRORS = {
     "org_not_found": (404, "org not found"),
     "not_demo_email": (400, "onboarding auto-accept is for demo teammates only"),
     "invite_not_found": (404, "no pending invite for that email"),
-    "not_enabled": (404, "Not Found"),
-    "already_onboarded": (409, "this account already has a team"),
-    "bad_email": (400, "enter an email address"),
-    "preview_not_found": (404, "no such preview"),
-    "bad_call": (400, "a preview makes only the calls of its tasks"),
-    "preview_spent": (429, "this preview has made its calls; start another"),
-    "no_house_token": (503, "preview calls need TREG_ONBOARDING_TREG_TOKEN on this server"),
-    "unknown_use_case": (400, "pick one of the listed use cases"),
-    "not_started": (409, "start onboarding first"),
-    "starting": (503, "your team is still being set up; try again"),
 }
 
 
@@ -103,44 +92,6 @@ async def onboard_reset(
     return await onboard_use_cases.reset(user_id=user.id)
 
 
-async def _first_run(answer: Awaitable[dict], response: Response | None = None) -> dict:
-    """A first-run route's answer: an `OnboardError` as its HTTP error, and never cached."""
-    try:
-        result = await answer
-    except onboard_use_cases.OnboardError as exc:
-        raise _onboard_http_error(exc) from exc
-    if response is not None:
-        response.headers["Cache-Control"] = "no-store"
-    return result
-
-
-@app.post("/onboarding/start")
-async def onboarding_start(
-    request: Request, response: Response,
-    user: User = Depends(require_identity),
-) -> dict:
-    """Behind `onboarding_v2`: make the new user's first team and start their setup lookup.
-    Idempotent per user; answers what `GET /onboarding` answers."""
-    require_managed_cli(request, team_change=True)
-    try:
-        result = await first_run.start(
-            user,
-            ad_cookie=request.cookies.get("treg_ad") or "",
-            utm_cookie=request.cookies.get("treg_utm") or "",
-            referral_cookie=request.cookies.get(REFERRAL_COOKIE) or "",
-            landing_cookie=request.cookies.get("treg_landing") or "",
-            http=request.app.state.http,
-        )
-    except onboard_use_cases.OnboardError as exc:
-        raise _onboard_http_error(exc) from exc
-    except signup_use_cases.SignupError as exc:
-        raise _signup_http_error(exc) from exc
-    except OwnedTeamLimitReached as exc:
-        raise _owned_team_limit_error() from exc
-    response.headers["Cache-Control"] = "no-store"
-    return result
-
-
 @app.post("/onboard/team")
 async def onboard_team(
     request: Request, response: Response,
@@ -162,76 +113,6 @@ async def onboard_team(
         raise _owned_team_limit_error() from exc
     response.headers["Cache-Control"] = "no-store"
     return result
-
-
-@app.get("/onboarding")
-async def onboarding_view(
-    response: Response,
-    user: User = Depends(require_identity),
-) -> dict:
-    """Behind `onboarding_v2`: the setup rows so far and, once the lookup is done, the ranked first
-    tasks with their filled-in inputs. The dashboard polls it."""
-    return await _first_run(first_run.view(user), response)
-
-
-class AnswerIn(BaseModel):
-    here_for: str
-
-
-@app.post("/onboarding/answer")
-async def onboarding_answer(
-    body: AnswerIn, response: Response,
-    user: User = Depends(require_identity),
-) -> dict:
-    """Behind `onboarding_v2`: what the new user says their agent is for, asked when nothing public
-    grounded a task. Kept on their profile; it leads their tasks. Answers what `GET /onboarding` does."""
-    return await _first_run(first_run.answer(user, body.here_for), response)
-
-
-class PreviewIn(BaseModel):
-    email: str
-
-
-class PreviewCallIn(BaseModel):
-    endpoint: str
-    method: str = "POST"
-    body: dict = {}
-    query: dict = {}
-
-
-@app.post("/onboarding/preview")
-async def onboarding_preview_start(
-    body: PreviewIn, request: Request, response: Response,
-    user: User = Depends(require_identity),
-) -> dict:
-    """Run the first-run flow for any email without making a team (super-admins and the people
-    `onboarding_v2_emails` lists; the house team pays)."""
-    return await _first_run(first_run.preview_start(user, body.email, request.app.state.http), response)
-
-
-@app.get("/onboarding/preview/{preview_id}")
-async def onboarding_preview_view(
-    preview_id: str, response: Response,
-    user: User = Depends(require_identity),
-) -> dict:
-    return await _first_run(first_run.preview_view(user, preview_id), response)
-
-
-@app.post("/onboarding/preview/{preview_id}/answer")
-async def onboarding_preview_answer(
-    preview_id: str, body: AnswerIn, response: Response,
-    user: User = Depends(require_identity),
-) -> dict:
-    return await _first_run(first_run.preview_answer(user, preview_id, body.here_for), response)
-
-
-@app.post("/onboarding/preview/{preview_id}/call")
-async def onboarding_preview_call(
-    preview_id: str, body: PreviewCallIn, request: Request,
-    user: User = Depends(require_identity),
-) -> dict:
-    """A preview's first call, made as a house call: only calls the task library makes."""
-    return await _first_run(first_run.preview_call(user, preview_id, body.model_dump(), request.app.state.http))
 
 
 onboard_entry_router = app

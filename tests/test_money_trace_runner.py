@@ -443,7 +443,6 @@ async def test_each_web_role_owns_diagnostics_without_analytics(trace, monkeypat
     monkeypatch.setattr(bootstrap.find_index, "enabled", lambda: False)
     monkeypatch.setattr(bootstrap.httpx, "AsyncClient", lambda **kw: SimpleNamespace(aclose=nothing))
     monkeypatch.setattr(bootstrap.arena, "shutdown", nothing)
-    monkeypatch.setattr(bootstrap.first_run, "shutdown", nothing)
     monkeypatch.setattr(bootstrap.audit, "drain", nothing)
     monkeypatch.setattr(bootstrap.archive, "drain", nothing)
     monkeypatch.setattr(analytics, "drain", analytics_drain)

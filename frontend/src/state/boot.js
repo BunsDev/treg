@@ -90,9 +90,7 @@ export default async function boot(){
     this._restoreAgent();
     const me = await meReq.catch(()=>null);
     this.sessionChecked=true;
-    if(me){ this.sessionMode=true; this.me=me.email; this.isAdmin=!!me.is_superadmin; this.onboarded=!!me.onboarded; this.onboardingV2=!!me.onboarding_v2; this.onboardingV2Exp=!!me.onboarding_v2_experiment; this.icHash=me.intercom_user_hash||''; this.meAvatar=me.avatar_url||null; this.uploadsOn=!!me.uploads; await this.loadAll(); this.analyticsIdentify(); this.initIntercom();
-      // /app#onboarding-preview: the first-run flow for any email, for the people allowed to run it.
-      if(me.onboarding_preview){ const pv=()=>{ if(location.hash==='#onboarding-preview') this.onboardingPreviewOn=true; }; pv(); listen(window, 'hashchange', pv); }
+    if(me){ this.sessionMode=true; this.me=me.email; this.isAdmin=!!me.is_superadmin; this.onboarded=!!me.onboarded; this.icHash=me.intercom_user_hash||''; this.meAvatar=me.avatar_url||null; this.uploadsOn=!!me.uploads; await this.loadAll(); this.analyticsIdentify(); this.initIntercom();
       // Share-born arrival (/app/skills/x?invite_org=N from the invite email): accept silently and
       // enter that team — the emailed "Sign in & accept" click was the consent. Otherwise the normal
       // first-run / invite-banner flow.

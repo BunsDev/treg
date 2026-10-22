@@ -8,24 +8,6 @@ maybeOnboard(){  // first-run: a brand-new user with no team yet gets one made f
       if(this.inviteLinkOrg!==null && !this.pendingInvites.length && this.sessionMode){
         this.orgMsg='That invite was already used or revoked — ask your teammate to re-invite you if you still need access.'; }
       if(this.onboarded || !this.sessionMode) return;
-      // The server's first-run flow: a new account gets its team, a lookup and a first call there.
-      // One that already has a team only resumes a flow it started (a reload mid-way).
-      if(this.onboardingV2 && !this.pendingInvites.length){
-        if(!this.myOrgs.some(o=>!this.isPersonal(o))){ this.onboardingV2On=true; return; }
-        this.api('/onboarding').then(v=>{ if(v && v.status!=='none' && !this.onboarded) this.onboardingV2On=true; }).catch(()=>{});
-        return; }
-      // The experiment (a work address, so the server offers it): PostHog's `onboarding-v2` flag picks
-      // the arm, `test` the first-run flow and anything else, unanswered included, the made-for-you team.
-      // A reload mid-way resumes a flow already started, without reading the flag again.
-      if(this.onboardingV2Exp && !this.pendingInvites.length){
-        if(this.myOrgs.some(o=>!this.isPersonal(o))){
-          this.api('/onboarding').then(v=>{ if(v && v.status!=='none' && !this.onboarded) this.onboardingV2On=true; }).catch(()=>{});
-          return; }
-        this.featureVariant('onboarding-v2', 1500).then(v=>{
-          if(this.onboarded) return;
-          if(v==='test'){ this.onboardingV2On=true; return; }
-          this.autoTeam(); });
-        return; }
       if(this.myOrgs.some(o=>!this.isPersonal(o))) return;
       // Invited here? Show an ACCEPT-INVITE page (join those teams) instead of forcing them to create a
       // throwaway team of their own (confusing: they'd end up with two). Decline → their own team.

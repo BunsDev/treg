@@ -118,7 +118,6 @@ export default function data(){
       me:'', icHash:'', myOrgs:[], isAdmin:false,
       meAvatar:null, uploadsOn:false, avatarDialog:false,  // /auth/me: your avatar, whether this registry takes uploads; the Your avatar dialog
       onboarded:true,  // first-run onboarding done (server flag; gates autoTeam)
-      onboardingV2:false, onboardingV2Exp:false, onboardingV2On:false, onboardingPreviewOn:false,  // the server's first-run flow (/onboarding) replaces autoTeam
       welcome:{agent:'claude-code'},  // the agent Getting started shows setup steps for
       firstTeam:{busy:false, name:'', err:''},  // first-run: the team the server made (named on Getting started) or why it could not
       emptyTab:'agent',
