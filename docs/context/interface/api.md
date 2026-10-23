@@ -708,8 +708,10 @@ shared HTTP client. `/auth/logout` remains an HTTP-only cookie action.
   "List as vendor" modal hands vendors a prompt naming this URL; the repo-side counterpart is
   `docs/VENDORS.md`).
   Browser-facing auth pages (GitHub callback, OAuth-connect result) render via `_auth_page` (brand card).
-- **Landing sandbox + hosted skills:** `demo_sandbox_mint` (`POST /demo/sandbox`, open, per-IP
-  rate-limited) mints an anonymous throwaway team (its response now carries `live` = whether the seeded
+- **Landing sandbox + hosted skills:** the landing sandbox is **closed**: `POST /demo/sandbox`
+  returns 410 and authentication refuses every sandbox visitor token with 403
+  ([landing-sandbox](landing-sandbox.md)); the rest of this entry describes the unreachable code
+  awaiting removal. `demo_sandbox_mint` (`POST /demo/sandbox`, open, per-IP rate-limited) minted an anonymous throwaway team (its response now carries `live` = whether the seeded
   stripe tool is a real wire); `demo_sandbox_skill` (`GET /demo/sandbox/skill`) exports what the visitor
   built. `skill_samples` (`GET /skills/samples`, open) + `skill_install`
   (`GET /skills/{name}/install.sh?token=`) host sample skills. `call_tool` short-circuits **sandbox**

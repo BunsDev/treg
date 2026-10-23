@@ -12,13 +12,13 @@ from ..application import signup as signup_use_cases
 from ..application.onboard import first_run
 from ..config import get_settings
 from ..domain.identity.access import (
+    SANDBOX_CLOSED,
     Caller,
     _require_can_register,
     require_identity,
     require_member,
 )
 from ..models import User
-from .auth import _client_ip
 from .auth_helpers import require_managed_cli
 from .orgs import _require_admin_of, _owned_team_limit_error, _signup_http_error
 from .signup_cookies import REFERRAL_COOKIE
@@ -125,26 +125,10 @@ onboard_entry_router = app
 app = APIRouter()
 
 
-# Landing-page sandbox studio: an anonymous, throwaway team the visitor builds.
-# Per-IP limiter for the unauthenticated mint endpoint, in the DB (treg.ratestore) so it survives a
-# restart and holds across instances. It caps DB churn from the public landing page (abuse
-# is otherwise structurally contained — sandbox calls never touch the network, each sandbox is capped + TTL'd).
-SANDBOX_HIT_NS = onboard_use_cases.SANDBOX_HIT_NS
-SANDBOX_RATE_MAX = onboard_use_cases.SANDBOX_RATE_MAX
-SANDBOX_RATE_WINDOW_S = onboard_use_cases.SANDBOX_RATE_WINDOW_S
-
-
-@app.post("/demo/sandbox")
-async def demo_sandbox_mint(request: Request) -> dict:
-    """Mint a login-free, short-lived sandbox TEAM for the landing-page studio: a throwaway org + a
-    starter secret + a starter endpoint + a member token, returned so the browser (and the visitor's
-    terminal) can register more, call them, and export a skill — all with no account. Sandbox calls
-    never touch the network (see call_tool → sandbox.synthesize); rate-limited per IP; GC'd after the
-    TTL. No auth — this is the anonymous front door."""
-    try:
-        return await onboard_use_cases.mint_sandbox(client_ip=_client_ip(request))
-    except onboard_use_cases.SandboxError as exc:
-        raise _sandbox_http_error(exc) from exc
+@app.post("/demo/sandbox", status_code=410)
+async def demo_sandbox_mint() -> dict:
+    """The landing sandbox is closed: no new sandbox is minted."""
+    raise HTTPException(status_code=410, detail=SANDBOX_CLOSED)
 
 
 @app.get("/demo/sandbox/live")

@@ -67,10 +67,13 @@ async def _membership_by_token(token: str, db: AsyncSession) -> Membership | Non
         membership = await db.get(Membership, key.membership_id) if key.membership_id else None
         if membership is None:
             raise HTTPException(status_code=403, detail="membership removed or suspended")
-        return membership
-    return (
-        await db.execute(select(Membership).where(Membership.token_hash == token_hash))
-    ).scalar_one_or_none()
+    else:
+        membership = (
+            await db.execute(select(Membership).where(Membership.token_hash == token_hash))
+        ).scalar_one_or_none()
+    if membership is not None:
+        _refuse_sandbox_visitor(await db.get(User, membership.user_id))
+    return membership
 
 
 async def _membership_and_key_by_token(
@@ -109,6 +112,7 @@ async def _user_from_session(cookie: str, db: AsyncSession) -> User | None:
     user = await db.get(User, claims["uid"])
     if user is None or user.suspended or claims["tv"] != user.token_version:  # revoked = tv mismatch
         return None
+    _refuse_sandbox_visitor(user)
     return user
 
 
@@ -227,6 +231,7 @@ async def _user_from_identity_token(token: str, db: AsyncSession) -> User | None
     user = await db.get(User, claims["uid"])
     if user is None or user.suspended or claims["tv"] != user.token_version:  # revoked = tv mismatch
         return None
+    _refuse_sandbox_visitor(user)
     return user
 
 
@@ -435,10 +440,17 @@ PUBLIC_DEMO_DOMAIN = "public-demo.treg.local"  # unroutable — the public ident
 # skill-directory table in `agents.py` (which answers "where does each coding agent keep its skills").
 # The words collide, the concepts don't; kept apart deliberately.
 AGENT_DOMAIN = "agents.treg.local"  # unroutable — an agent acts only by its token
+SANDBOX_DOMAIN = "sandbox.treg.local"  # landing sandbox visitors; the sandbox is closed
+SANDBOX_CLOSED = "the demo sandbox is closed — sign in at treg.to to use treg"
 
 
 def _is_agent_email(email: str) -> bool:
     return _norm_email(email).endswith(f"@{AGENT_DOMAIN}")
+
+
+def _refuse_sandbox_visitor(user: User | None) -> None:
+    if user is not None and _norm_email(user.email).endswith(f"@{SANDBOX_DOMAIN}"):
+        raise HTTPException(status_code=403, detail=SANDBOX_CLOSED)
 
 
 def _is_machine_email(email: str) -> bool:
