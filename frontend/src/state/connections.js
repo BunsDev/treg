@@ -211,10 +211,14 @@ async openResources(c){
         // that the credential works — so pull the list again rather than leaving stale text on screen.
         this.loadConnections();
       }catch(e){
-        // e.detail carries the server's (and often the upstream's) actual words; e.message is just 'http'.
         if(!this.resPick || this.resPick.id!==c.id) return;
         this.resPick.loading=false;
-        this.resPick.err='Could not list '+plural+': '+(e.detail||e.message||e);
+        if(e.detail?.code==='youtube_quota_exceeded'){
+          this.resPick.err='YouTube is temporarily unavailable. We’re seeing high usage and have reached our current Google API limit. We’ve requested a higher limit and are waiting for Google’s response. Please try again later.';
+        }else{
+          // e.detail carries the server's (and often the upstream's) actual words; e.message is just 'http'.
+          this.resPick.err='Could not list '+plural+': '+(e.detail||e.message||e);
+        }
       }
     },
 async chooseResource(r){
