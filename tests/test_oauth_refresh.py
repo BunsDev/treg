@@ -207,26 +207,54 @@ async def test_exchange_code_persists_basic_auth_method_into_blob():
     assert "token_endpoint_auth_method" not in gblob
 
 
-async def test_refresh_uses_the_current_secret_for_treg_apps(monkeypatch):
-    # A connection stores the secret it was made with; after treg rotates its app secret the
-    # refresh must send the current one, and the stored blob moves to it.
+async def _refresh_stored(clients: AsyncClient, monkeypatch, *, provider: str, blob: dict):
+    """Store one oauth secret, refresh it through the live path, return (requests, stored blob)."""
+    from treg import crypto
     from treg.config import get_settings
+    from treg.infra.db import session_maker
+    from treg.models import Org, Secret
+    from sqlmodel import select
 
     monkeypatch.setenv("TREG_GOOGLE_CLIENT_ID", "treg-google-cid")
     monkeypatch.setenv("TREG_GOOGLE_CLIENT_SECRET", "rotated-csec")
     get_settings.cache_clear()
-    sent: list[str] = []
+    seen: list[tuple[str, str]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        sent.append(request.read().decode())
+        seen.append((str(request.url), request.read().decode()))
         return httpx.Response(200, json={"access_token": "NEW", "expires_in": 3600})
     try:
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            ours = await oauth.refresh(_basic_blob(client_id="treg-google-cid", client_secret="old-csec"), client)
-            theirs = await oauth.refresh(_basic_blob(client_id="team-own-cid", client_secret="team-csec"), client)
+        async with session_maker() as db:
+            org = (await db.execute(select(Org))).scalars().first()
+            row = Secret(org_id=org.id, name="conn", owner="o@example.com", kind="oauth",
+                         provider=provider, value=crypto.encrypt(json.dumps({**blob, "expires_at": 0})))
+            db.add(row)
+            await db.commit()
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                await oauth.ensure_fresh(row, db, client)
+            stored = json.loads(crypto.decrypt((await db.get(Secret, row.id)).value))
     finally:
         get_settings.cache_clear()
-    assert "client_secret=rotated-csec" in sent[0] and "old-csec" not in sent[0]
-    assert ours["client_secret"] == "rotated-csec"
-    assert "client_secret=team-csec" in sent[1]
-    assert theirs["client_secret"] == "team-csec"
+    return seen, stored
+
+
+_EVIL = "https://collector.example/token"
+
+
+async def test_platform_connection_refreshes_at_the_providers_endpoint_with_current_secret(clients, monkeypatch):
+    seen, stored = await _refresh_stored(clients, monkeypatch, provider="google-search-console", blob={
+        "access_token": "OLD", "refresh_token": "RT", "client_id": "treg-google-cid",
+        "client_secret": "old-csec", "token_uri": _EVIL})
+    assert [url for url, _ in seen] == ["https://oauth2.googleapis.com/token"]
+    assert "client_secret=rotated-csec" in seen[0][1]
+    assert stored["access_token"] == "NEW"
+    assert stored["client_secret"] == "old-csec"  # the platform secret is never written into the blob
+
+
+async def test_a_blob_naming_treg_client_id_without_platform_provenance_never_gets_the_secret(clients, monkeypatch):
+    seen, stored = await _refresh_stored(clients, monkeypatch, provider="", blob={
+        "access_token": "OLD", "refresh_token": "RT", "client_id": "treg-google-cid",
+        "client_secret": "whatever", "token_uri": _EVIL})
+    assert [url for url, _ in seen] == [_EVIL]
+    assert "rotated-csec" not in seen[0][1]
+    assert "rotated-csec" not in json.dumps(stored)

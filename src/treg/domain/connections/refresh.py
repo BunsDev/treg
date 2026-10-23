@@ -6,7 +6,7 @@ import asyncio
 import json
 import time
 from collections import defaultdict
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
@@ -129,7 +129,22 @@ def connection_view(secret: Secret) -> dict:
     }
 
 
-async def ensure_fresh(secret: Secret, db: AsyncSession, port: OAuthRefreshPort) -> None:
+PlatformRefresh = Callable[[str, str, dict], dict | None]
+
+
+def _restore(fresh: dict, stored: dict, keys: tuple[str, ...]) -> dict:
+    out = dict(fresh)
+    for key in keys:
+        if key in stored:
+            out[key] = stored[key]
+        else:
+            out.pop(key, None)
+    return out
+
+
+async def ensure_fresh(
+    secret: Secret, db: AsyncSession, port: OAuthRefreshPort, platform: PlatformRefresh | None = None,
+) -> None:
     """If `secret` is a stale oauth credential, refresh + persist it before it's used. No-op for
     non-oauth kinds and for still-valid tokens. Raises on a failed refresh (caller decides)."""
     if secret.kind != "oauth":
@@ -151,8 +166,11 @@ async def ensure_fresh(secret: Secret, db: AsyncSession, port: OAuthRefreshPort)
         # The token endpoint is external work. End the read transaction first so a slow provider
         # never occupies a shared pool slot while this use case waits on the network.
         await db.commit()
+        outgoing = platform(secret.provider, secret.authorization_method, blob) if platform else None
         try:
-            fresh = await port.exchange(blob)
+            fresh = await port.exchange(outgoing or blob)
+            if outgoing is not None:
+                fresh = _restore(fresh, blob, ("client_secret", "token_uri"))
         except Exception as exc:
             # Record WHY renewal failed. Without this a revoked refresh_token just 401s on every
             # call forever with nothing on the connection explaining it.
