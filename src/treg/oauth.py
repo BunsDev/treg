@@ -9,6 +9,7 @@ from __future__ import annotations
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from . import oauth_providers
 from .domain.connections.oauth_flow import pkce_challenge as pkce_challenge
 from .domain.connections.refresh import (
     EXPIRING_SOON_DAYS as EXPIRING_SOON_DAYS,
@@ -27,8 +28,8 @@ async def exchange_code(pending: PendingOAuth, code: str, client: httpx.AsyncCli
 
 
 async def refresh(blob: dict, client: httpx.AsyncClient) -> dict:
-    return await HTTPXOAuthRefreshPort(client).exchange(blob)
+    return await HTTPXOAuthRefreshPort(client, oauth_providers.registry_client_secret).exchange(blob)
 
 
 async def ensure_fresh(secret: Secret, db: AsyncSession, client: httpx.AsyncClient) -> None:
-    await _ensure_fresh(secret, db, HTTPXOAuthRefreshPort(client))
+    await _ensure_fresh(secret, db, HTTPXOAuthRefreshPort(client, oauth_providers.registry_client_secret))

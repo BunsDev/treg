@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 
 import httpx
 
@@ -10,12 +11,20 @@ from ..domain.connections.refresh import _DEFAULT_TOKEN_URI
 
 
 class HTTPXOAuthRefreshPort:
-    def __init__(self, client: httpx.AsyncClient):
+    def __init__(
+        self, client: httpx.AsyncClient,
+        client_secret_for: Callable[[str], str | None] | None = None,
+    ):
         self.client = client
+        self.client_secret_for = client_secret_for
 
     async def exchange(self, blob: dict) -> dict:
         """Exchange the refresh_token for a new access token. Returns an updated blob."""
         rt, cid, csec = blob.get("refresh_token"), blob.get("client_id"), blob.get("client_secret")
+        # A connection to one of treg's own apps refreshes with the deployment's current secret, so
+        # rotating that secret needs no rewrite of every stored connection.
+        if cid and self.client_secret_for is not None:
+            csec = self.client_secret_for(cid) or csec
         if not (rt and cid and csec):
             raise ValueError("oauth secret missing refresh_token / client_id / client_secret")
         # TikTok's token endpoint reads `client_key`; the blob records that at exchange time so a
@@ -55,7 +64,7 @@ class HTTPXOAuthRefreshPort:
         access = tok.get("access_token")
         if not access:  # a 200 with an error-shaped body ({"error":"invalid_grant"}) — surface it clearly
             raise ValueError(f"token endpoint returned no access_token: {tok.get('error') or tok}")
-        new = dict(blob)
+        new = dict(blob, client_secret=csec)
         if tried_basic and method is None:  # learned by the retry — remember it for the next refresh
             new["token_endpoint_auth_method"] = "client_secret_basic"
         new["access_token"] = new["token"] = access  # update both common key names

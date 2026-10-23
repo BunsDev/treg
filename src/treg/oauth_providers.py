@@ -4086,6 +4086,23 @@ def credentials(provider: OAuthProvider) -> tuple[str, str]:
     return client_id, client_secret
 
 
+def registry_client_secret(client_id: str) -> str | None:
+    """treg's current client secret for the app `client_id` names, or None when it is not one of
+    treg's apps (a team that brought its own)."""
+    if not client_id:
+        return None
+    s = get_settings()
+    for provider in REGISTRY.values():
+        profiles = [provider] + [provider.profile_for_authorization(m.name)
+                                 for m in provider.authorization_methods]
+        for profile in profiles:
+            if not (profile.client_id_setting and profile.client_secret_setting):
+                continue
+            if getattr(s, profile.client_id_setting, "") == client_id:
+                return getattr(s, profile.client_secret_setting, "") or None
+    return None
+
+
 def is_configured(provider: OAuthProvider) -> bool:
     """Whether THIS deployment can offer the provider. A pasted-secret provider (bot token or API
     key) needs nothing from us — the user brings their own — so it is always offerable."""
