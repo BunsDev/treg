@@ -861,6 +861,21 @@ def _unit_rate(provider: str | None, unit: object) -> object:
     return entry.get("usd") if isinstance(entry, dict) else entry
 
 
+_CEILING_PARAM_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def check_ceiling_param(rule, where: str, errors: list[str], *, prefix: str) -> None:
+    """A caller ceiling forwarded upstream: query name, USD, and nothing else.
+
+    `in: header` is refused so a declaration the relay cannot honour is not silently ignored.
+    """
+    if (not isinstance(rule, dict) or set(rule) != {"in", "name", "unit"}
+            or rule.get("in") != "query" or rule.get("unit") != "usd"
+            or not isinstance(rule.get("name"), str)
+            or not _CEILING_PARAM_NAME.fullmatch(rule["name"])):
+        fail(errors, where, f"{prefix} must be {{in: query, name: <identifier>, unit: usd}}")
+
+
 def check_cost(cost: dict, where: str, errors: list[str], warnings: list[str],
                input_schema: object = None, provider: str | None = None) -> None:
     """The price block's own rules — the ones that make a figure BILLABLE rather than decorative.
@@ -895,6 +910,8 @@ def check_cost(cost: dict, where: str, errors: list[str], warnings: list[str],
                                 "fx.yaml credit_rates_usd entry")
         if "settle" in cost or cost.get("type") == "free":
             fail(errors, where, "cost.reported_charge requires a paid price without cost.settle")
+    if "ceiling_param" in cost:
+        check_ceiling_param(cost.get("ceiling_param"), where, errors, prefix="cost.ceiling_param")
     if "call_fee" in cost:
         fee = cost["call_fee"]
         if (provider != "apify" or cost.get("type") != "per_result"
@@ -1269,6 +1286,8 @@ def main(argv: list[str]) -> int:
         need = "spec_urls" if extended_file else "docs"
         if not isinstance(src, dict) or not src.get(need):
             fail(errors, name, f"source.{need} missing")
+        if "ceiling_param" in data:
+            check_ceiling_param(data.get("ceiling_param"), name, errors, prefix="ceiling_param")
         proposed = set(data.get("proposed_capabilities") or {})
         known = capabilities | proposed
 

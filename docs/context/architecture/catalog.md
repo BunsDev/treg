@@ -87,6 +87,7 @@ sources:
   - src/treg/catalog/examples/tinyfish.web.agent.run.cancel.json
   - tests/test_tinyfish.py
   - src/treg/catalog/exa.yaml
+  - src/treg/catalog/anyapi.yaml
   - src/treg/catalog/anyapi.extended.yaml
   - src/treg/catalog/adyntel.yaml
   - src/treg/catalog/examples/adyntel.meta-ads.library.advertiser.json
@@ -1209,6 +1210,14 @@ ceiling. A finite nonnegative response value settles the call at that amount; a 
 body whose own `status` is 400 or more settles at zero; other missing, invalid, or non-finite
 evidence falls back to the normal estimate/miss rules. `reported_charge` is generic
 catalog metadata, not a provider-specific billing branch, and cannot be combined with `cost.settle`.
+
+A provider file, or one endpoint's `cost`, may declare `ceiling_param: {in: query, name, unit: usd}`.
+When the call has a caller ceiling and the caller did not send that query name, the call application
+appends it to the outbound query at the remaining ceiling in USD, so the provider refuses a dearer
+source instead of settling it. The validator requires `in: query`, `unit: usd` and an identifier
+`name`. The provider rule lives on `Catalog.ceiling_params`, not on `provider_meta` and not copied
+onto every cost, so catalog reads stay unchanged. A row-level `cost.ceiling_param` overrides it.
+The appended pair is outbound only: `params_hash` and the archive key stay the inbound query.
 
 `spooled_response: true` marks a synchronous endpoint whose answer inlines media too large for
 the 8 MiB settlement buffer (Gemini returns images as base64 in its JSON: ~9 MB at 2K, ~23 MB at

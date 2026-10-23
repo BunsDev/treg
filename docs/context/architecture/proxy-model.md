@@ -117,6 +117,11 @@ incl. duplicates, headers, cookies, body bytes):
    surface: the SDK's pydantic serializer cannot write the escape, so `mcp._body` replaces each
    unpaired surrogate with U+FFFD (paired text is unchanged) rather than lose the paid answer.
 
+A catalog `ceiling_param` is appended by the call application onto `UpstreamRequest.query_items`
+before `relay()`, and only when the call carries a caller ceiling the caller did not already send
+under that name. `relay()` forwards that list verbatim. The pair is absent from the inbound query,
+so it does not enter `params_hash` or the archive key.
+
 > **What treg keeps from a call.** Successes retain no content: the relay forwards bytes and the audit
 > row records status, size and timing. A **failed relayed call** - platform, own-key, or plain own-tool
 > - is the exception: `CallRecord.error_request` / `error_response` retain a redacted, truncated copy

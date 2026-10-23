@@ -165,7 +165,9 @@ async def relay(
         headers["accept-encoding"] = "identity"
     # Query: a list of pairs preserves duplicate keys verbatim (?tag=a&tag=b). A marketplace
     # endpoint-id call may have CONSUMED some params into the path (`{siteUrl}` placeholders) —
-    # those must not also reach the upstream as query noise.
+    # those must not also reach the upstream as query noise. The call application may already
+    # have appended a catalog ceiling_param the caller did not send; it is forwarded like any
+    # other query param.
     params: list[tuple[str, str]] = [
         (k, v) for k, v in request.query_items
         if not drop_params or k not in drop_params

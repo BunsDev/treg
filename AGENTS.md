@@ -43,7 +43,12 @@ Everything else in this file is guidance; these are the contract, and they win o
    transport headers listed in
    `src/treg/infra/upstream/relay.py`, and (on treg's shared key only) the per-org and, for pinned
    agents, per-pin re-scoping of the caller's `Idempotency-Key` and treg's own `User-Agent` in place
-   of the caller's are the only rewrites. A credential
+   of the caller's are the only rewrites of what the caller sent. One addition is allowed: when the
+   catalog declares `ceiling_param` (`{in: query, name, unit: usd}` on the provider file or on that
+   endpoint's `cost`), the call carries a caller ceiling, and the caller did not already send that
+   query name, the call application appends `name=<remaining ceiling in USD>` to the outbound query
+   before `relay()`. An explicit caller value is never rewritten. The appended pair is absent from
+   the inbound query, so it does not enter `params_hash` or the archive key. A credential
    binding with `location: "json"` explicitly parses and reserializes the top-level JSON object; it
    is not byte-faithful and must never be used with an upstream that signs or hashes the raw body.
    Never add upstream-specific modeling.
