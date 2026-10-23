@@ -34,6 +34,12 @@
 #      that call. `cost.reported_charge` makes treg settle on that number instead of the estimate,
 #      so a rescued request bills what it really cost and a cheap request can bill LESS than the
 #      catalogued price.
+#   3. CEILING. This file declares `ceiling_param` (`max_cost_usd` on the query). When a call
+#      carries a caller ceiling (`X-Treg-Route-Max-Cost`, or the remaining route ceiling a child
+#      inherits) and the caller did not already send `max_cost_usd`, treg appends that ceiling
+#      upstream. AnyAPI then refuses any source dearer than it with HTTP 400 `max_cost_exceeded`
+#      and no charge, so settlement cannot exceed the ceiling. An explicit `max_cost_usd` from
+#      the caller is relayed unchanged.
 # A request that no source could serve returns a non-2xx and is not charged. A source that answers
 # not-found is a 2xx with `output.found: false` and IS charged at the row's price: linkedin.email
 # billed $0.011 for a profile that does not exist (probed 2026-09-19), so a miss is not free here.
@@ -47,6 +53,10 @@ limits: no published per-key request-rate limit on /v1/run - AnyAPI does not adv
   not enforce. Spend is bounded instead by the wallet balance, the key's own spend cap, and the per-request
   `max_cost_usd` ceiling the caller sets. The unauthenticated /agent/signup trial route is limited to
   3 per IP per hour.
+ceiling_param:
+  in: query
+  name: max_cost_usd
+  unit: usd
 pricing_url: https://getanyapi.com/catalog
 proposed_capabilities:
 endpoints:
@@ -214,13 +224,12 @@ endpoints:
   docs_url: https://getanyapi.com/api/instagram/reels-search
   note: 'AnyAPI slug `instagram.reels_search`. Price is the p90 of what AnyAPI really charged for this
     endpoint over the 60 days to 2026-09-09 (9055 charged calls, $0.002 median), not a list price; roughly
-    one call in ten settles above it. That p90 is capped here at $0.0015, the dearest price any source
-    can charge for this request today: the dearer source it measured has since been withdrawn, so no call
-    can settle at the p90 any more. 2 sources can serve it; the cheapest serves first and a failed attempt
-    is retried on the next, up to a $0.0015 ceiling per request. Every response reports its exact charge
-    as `costUsd`, so `reported_charge` settles the real number rather than this estimate. A request no
-    source could serve is not charged. Send the `max_cost_usd` query parameter to refuse any source dearer
-    than a price you name.'
+    one call in ten settles above it. Most calls settle near $0.0011. A failover source can settle
+    $0.0024. 2 sources can serve it; the cheapest serves first and a failed attempt is retried on the
+    next. Every response reports its exact charge as `costUsd`, so `reported_charge` settles the real
+    number rather than this estimate. A request no source could serve is not charged. Send
+    `X-Treg-Route-Max-Cost` to cap what a failover source may settle; an explicit `max_cost_usd` query
+    parameter still passes through.'
 - id: anyapi.google.serp.organic
   capability: google.serp.organic
   platform: google
@@ -382,11 +391,13 @@ endpoints:
   note: The cheap tier of LinkedIn post search. `linkedin.search_posts_full` ($0.005) returns the full
     post record for each hit. AnyAPI slug `linkedin.search_posts`. Price is the p90 of what AnyAPI really
     charged for this endpoint over the 60 days to 2026-09-09 (5040 charged calls, $0.002 median), not
-    a list price; roughly one call in ten settles above it. 2 sources can serve it; the cheapest serves
+    a list price; roughly one call in ten settles above it. The cheap source settles near $0.0012, but a
+    failover source settles $0.008 on a meaningful share of calls (p90 over the 21 days to 2026-10-23
+    is $0.008). `X-Treg-Route-Max-Cost` caps that failover. 2 sources can serve it; the cheapest serves
     first and a failed attempt is retried on the next, up to a $0.018 ceiling per request. Every response
     reports its exact charge as `costUsd`, so `reported_charge` settles the real number rather than this
-    estimate. A request no source could serve answers non-2xx and is not charged; a source that answers not-found is a 2xx whose `found` is false and IS charged (probed 2026-09-19). Send the `max_cost_usd` query parameter
-    to refuse any source dearer than a price you name.
+    estimate. A request no source could serve answers non-2xx and is not charged; a source that answers not-found is a 2xx whose `found` is false and IS charged (probed 2026-09-19). Send `X-Treg-Route-Max-Cost`
+    to cap what a failover source may settle; an explicit `max_cost_usd` query parameter still passes through.
 - id: anyapi.x.user.posts
   capability: x.user.posts
   platform: x

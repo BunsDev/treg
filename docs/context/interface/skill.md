@@ -3,6 +3,7 @@ title: The shippable tools-registry skill (3 personas)
 status: shipped
 sources:
   - src/treg/web/skill.md
+  - src/treg/web/integrate.md
   - src/treg/web/skills/make-ugc/SKILL.md
   - src/treg/web/skills/lead-signals/SKILL.md
   - src/treg/web/skills/web-access/SKILL.md
@@ -49,7 +50,9 @@ each was charged and what to do, idempotent retries, generation tasks, the team'
 sharing keys, running a team, and one Rules list. The money rule both state: call at the listed
 price without asking and report `X-Treg-Cost-Micro` after; only before a generation task or a loop
 over many inputs, say the expected total and keep a running sum against it, because
-`X-Treg-Route-Max-Cost` caps each call and does not add up across calls. Provider-specific detail
+`X-Treg-Route-Max-Cost` caps each call and does not add up across calls. Where a provider accepts
+a ceiling parameter, the remaining ceiling is forwarded upstream so settlement cannot exceed it;
+elsewhere the header is a pre-reservation guard. Provider-specific detail
 (a provider's allowance, voice discovery, pricing provenance) lives on its catalog row as a `note`,
 which `catalog get` shows, not in either file.
 

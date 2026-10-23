@@ -229,6 +229,39 @@ def _set_caller_max_cost(request, mk: MarketplaceCall) -> None:
                                detail=f"{routed.MAX_COST_HEADER} must be a USD number, got {raw!r}") from exc
 
 
+def _format_ceiling_usd(micro: int) -> str:
+    """USD text for an upstream ceiling parameter: no exponent, no trailing zeros."""
+    micro = int(micro)
+    sign = "-" if micro < 0 else ""
+    whole, frac = divmod(abs(micro), 1_000_000)
+    if frac == 0:
+        return f"{sign}{whole}"
+    return f"{sign}{whole}.{frac:06d}".rstrip("0")
+
+
+def _ceiling_query(mk: MarketplaceCall | None, query_items: tuple[tuple[str, str], ...]) -> tuple[tuple[str, str], ...]:
+    """The catalog ceiling parameter to append, or nothing.
+
+    A caller who already sent the parameter keeps their value. The pair is absent from the
+    inbound query, so it does not enter params_hash or the archive key.
+    """
+    if mk is None or mk.max_cost_micro is None or mk.max_cost_micro < 0:
+        return ()
+    cat = catalog_store.load()
+    ep = cat.by_id.get(mk.endpoint_id) or {}
+    cost = ep.get("cost") if isinstance(ep.get("cost"), dict) else {}
+    rule = cost.get("ceiling_param")
+    if not isinstance(rule, dict):
+        rule = cat.ceiling_params.get(str(ep.get("provider") or mk.provider or ""))
+    name = rule.get("name") if isinstance(rule, dict) else None
+    if (not isinstance(rule, dict) or rule.get("in") != "query" or rule.get("unit") != "usd"
+            or not isinstance(name, str) or not name):
+        return ()
+    if any(key == name for key, _ in query_items):
+        return ()
+    return ((name, _format_ceiling_usd(mk.max_cost_micro)),)
+
+
 def _client_name(request: _ApplicationRequest) -> str:
     return _norm_client(request.headers.get("X-Treg-Client", ""))
 
@@ -1240,10 +1273,12 @@ async def _execute_call(request: _ApplicationRequest, upstream_client: httpx.Asy
                 raw_headers = scope_shared_idempotency_key(
                     raw_headers, caller.org_id, pinned_tags=caller.membership.pinned_tags)
                 raw_headers = identify_as_treg(raw_headers)
+            query_items = tuple(request.query_params.multi_items())
+            query_items += _ceiling_query(mk, query_items)
             upstream_request = UpstreamRequest(
                 method=request.method,
                 raw_headers=raw_headers,
-                query_items=tuple(request.query_params.multi_items()),
+                query_items=query_items,
                 body_stream=request.stream,
                 has_body=request.has_body,
                 body_read=request.body,

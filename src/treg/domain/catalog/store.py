@@ -131,6 +131,9 @@ class Catalog:
     _provider_focus: dict | None = field(default=None, init=False, repr=False, compare=False)  # see _reaches()
     by_id: dict[str, dict] = field(default_factory=dict)
     provider_meta: dict[str, dict] = field(default_factory=dict)  # service -> {limits, pricing_url, docs}
+    # service -> {in, name, unit}: a caller ceiling forwarded as an upstream query param.
+    # Kept off provider_meta so catalog reads do not grow a new public field.
+    ceiling_params: dict[str, dict] = field(default_factory=dict)
     contracts: dict = field(default_factory=dict)   # capability -> routing.Contract
     adapters: dict = field(default_factory=dict)    # endpoint id -> routing.Adapter (verified flag set)
 
@@ -430,6 +433,7 @@ def _parse(directory: Path) -> Catalog:
     endpoints: list[dict] = []
     by_id: dict[str, dict] = {}
     provider_meta: dict[str, dict] = {}
+    ceiling_params: dict[str, dict] = {}
     # Sorted so a rebuild is deterministic; `<service>.extended.yaml` sorts right after
     # `<service>.yaml`, and both land under the same provider (curation splits a provider's
     # core operations from the long tail across two files).
@@ -457,6 +461,11 @@ def _parse(directory: Path) -> Catalog:
         _validate_cache(doc.get("cache"), header=True)
         if doc.get("cache") and not meta.get("cache"):
             meta["cache"] = doc["cache"]
+        # A provider that accepts a caller ceiling as a query param states it once. The core file
+        # is authoritative: an extended file is parsed first and must not shadow it.
+        rule = doc.get("ceiling_param")
+        if isinstance(rule, dict) and (provider not in ceiling_params or not path.name.endswith(".extended.yaml")):
+            ceiling_params[provider] = rule
         for raw in doc.get("endpoints") or []:
             if not isinstance(raw, dict) or not raw.get("id"):
                 continue
@@ -532,7 +541,8 @@ def _parse(directory: Path) -> Catalog:
     cat = Catalog(fx=fx, credit_rates=credit_rates, unit_rates=unit_rates,
                   shared_plans=shared_plans, trial_pools=trial_pools, platforms=platforms,
                   capabilities=capabilities, capability_titles=capability_titles, endpoints=endpoints, by_id=by_id,
-                  provider_meta=provider_meta, aliases=aliases, contracts=contracts, adapters=adapters)
+                  provider_meta=provider_meta, ceiling_params=ceiling_params, aliases=aliases,
+                  contracts=contracts, adapters=adapters)
     from .routing.synthetic import routed_endpoint
     for cap, contract in contracts.items():
         if not contract.routed:  # admission-only contract: never a treg.<capability> row

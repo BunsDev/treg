@@ -59,9 +59,12 @@ Two response headers matter on every call:
 Neither lives in the provider's body, which treg relays unchanged — including its errors. A 4xx/5xx
 from the provider costs nothing. One request header matters when you resell with a budget:
 
-- **`X-Treg-Route-Max-Cost: <usd>`** — a hard ceiling for this one call. If the reserve would exceed
+- **`X-Treg-Route-Max-Cost: <usd>`** — a ceiling for this one call. If the reserve would exceed
   it treg answers **402** `error: route_max_cost` with `max_cost_micro` and `estimated_cost_micro`,
-  and nothing is charged. Direct calls have no default ceiling; only the header caps them.
+  and nothing is charged. Where the provider accepts a ceiling parameter, treg forwards the
+  remaining ceiling upstream so settlement cannot exceed it; a refusal from that parameter is a
+  non-2xx and costs nothing. For every other provider the header is a pre-reservation guard.
+  Direct calls have no default ceiling; only the header caps them.
 
 The catalog's `~$/call` figure is an estimate at the default page size: a `per_result` price with
 `unit: row` scales with your `limit`; with `unit: target` / `domain` / `keyword` it scales with how
