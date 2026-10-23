@@ -28,8 +28,8 @@ async def exchange_code(pending: PendingOAuth, code: str, client: httpx.AsyncCli
 
 
 async def refresh(blob: dict, client: httpx.AsyncClient) -> dict:
-    return await HTTPXOAuthRefreshPort(client, oauth_providers.registry_client_secret).exchange(blob)
+    return await HTTPXOAuthRefreshPort(client).exchange(blob)
 
 
 async def ensure_fresh(secret: Secret, db: AsyncSession, client: httpx.AsyncClient) -> None:
-    await _ensure_fresh(secret, db, HTTPXOAuthRefreshPort(client, oauth_providers.registry_client_secret))
+    await _ensure_fresh(secret, db, HTTPXOAuthRefreshPort(client), oauth_providers.platform_refresh_blob)
