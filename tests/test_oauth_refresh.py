@@ -205,3 +205,28 @@ async def test_exchange_code_persists_basic_auth_method_into_blob():
     async with httpx.AsyncClient(transport=httpx.MockTransport(g_handler)) as client:
         gblob = await oauth.exchange_code(g, "the-code", client)
     assert "token_endpoint_auth_method" not in gblob
+
+
+async def test_refresh_uses_the_current_secret_for_treg_apps(monkeypatch):
+    # A connection stores the secret it was made with; after treg rotates its app secret the
+    # refresh must send the current one, and the stored blob moves to it.
+    from treg.config import get_settings
+
+    monkeypatch.setenv("TREG_GOOGLE_CLIENT_ID", "treg-google-cid")
+    monkeypatch.setenv("TREG_GOOGLE_CLIENT_SECRET", "rotated-csec")
+    get_settings.cache_clear()
+    sent: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request.read().decode())
+        return httpx.Response(200, json={"access_token": "NEW", "expires_in": 3600})
+    try:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            ours = await oauth.refresh(_basic_blob(client_id="treg-google-cid", client_secret="old-csec"), client)
+            theirs = await oauth.refresh(_basic_blob(client_id="team-own-cid", client_secret="team-csec"), client)
+    finally:
+        get_settings.cache_clear()
+    assert "client_secret=rotated-csec" in sent[0] and "old-csec" not in sent[0]
+    assert ours["client_secret"] == "rotated-csec"
+    assert "client_secret=team-csec" in sent[1]
+    assert theirs["client_secret"] == "team-csec"

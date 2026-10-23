@@ -862,7 +862,7 @@ async def _connection_for_upstream(
         secret = await _owned_connection(secret_id, org_id, db)
         _refuse_paused(secret.provider)
         await connection_refresh.ensure_fresh(
-            secret, db, HTTPXOAuthRefreshPort(client),
+            secret, db, HTTPXOAuthRefreshPort(client, oauth_providers.registry_client_secret),
         )
         return secret, crypto.decrypt(secret.value)
 
