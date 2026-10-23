@@ -486,6 +486,9 @@ module symbols:
   examples (marker `stamped: resource`, so re-picking replaces instead of piling up).
 - Post-connect helpers the dashboard/CLI drive: resource **discovery** (`supports_discovery`,
   `discover_*` — which site/property/account this connection acts on), row **enrichment**.
+  `list_connection_resources` turns YouTube's `quotaExceeded` discovery response into the stable
+  `youtube_quota_exceeded` error code, so the channel picker can explain the temporary limit without
+  showing Google's raw error text.
   Discovery can walk a SECOND listing (`discover_extra_path` + `discover_extra_list_paths`): Meta's
   Business Manager owns assets on the user's behalf, so an agency member sees `[]` from
   `/me/accounts` for exactly the Pages/Instagram accounts they manage all day — the Business walk

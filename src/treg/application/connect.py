@@ -904,6 +904,14 @@ async def list_connection_resources(
         body = {}
     if resp.status_code >= 400 or body.get("ok") is False:
         err = body.get("error")
+        if provider.service == "youtube" and isinstance(err, dict) and any(
+            item.get("reason") == "quotaExceeded"
+            for item in err.get("errors", []) if isinstance(item, dict)
+        ):
+            raise ConnectError(
+                "resource_discovery_failed",
+                {"code": "youtube_quota_exceeded"},
+            )
         upstream = err.get("message", "") if isinstance(err, dict) else (err or "")
         if not upstream:
             upstream = (resp.text or "")[:200]

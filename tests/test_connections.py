@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 import json
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 from sqlmodel import select
 
 from treg import api as A
@@ -108,6 +108,22 @@ async def test_discovery_refused_for_a_provider_that_cannot_discover(clients: As
     st = await _connect_byo(clients)  # BYO → no provider → no discovery
     r = await clients.get(f"/connections/{st['secret_id']}/resources")
     assert r.status_code == 422
+
+
+async def test_youtube_quota_discovery_returns_a_safe_error(clients: AsyncClient, treg_google_app, monkeypatch):
+    st = await _connect_byo(clients, provider="youtube", name="youtube")
+    async def quota_response(*args, **kwargs):
+        return Response(403, json={"error": {
+            "code": 403,
+            "message": "The request cannot be completed because you have exceeded your quota.",
+            "errors": [{"reason": "quotaExceeded", "domain": "youtube.quota"}],
+        }})
+
+    monkeypatch.setattr(A.app.state.http, "get", quota_response)
+    r = await clients.get(f"/connections/{st['secret_id']}/resources")
+    assert r.status_code == 502
+    assert r.json() == {"detail": {"code": "youtube_quota_exceeded"}}
+    assert "exceeded your quota" not in r.text
 
 
 async def test_revoke_removes_the_connection(clients: AsyncClient):
