@@ -38,6 +38,9 @@ was tested):
 - **Tool & skill.** A **tool** = an upstream `base_url` + a list of credential **bindings** (a request may
   carry several). A **skill / bundle** = a recipe (`SKILL.md`) + its secrets + its tool(s), registered from
   a folder via a `treg.json` contract.
+- **CLI execution is local.** `treg run` uses the tool's configured local execution permissions;
+  `treg runs` reads the audit log. Server-side CLI execution is disabled for everyone: `--server`
+  returns HTTP 503.
 
 ### Roles at a glance
 

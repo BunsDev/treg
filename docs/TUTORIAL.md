@@ -43,10 +43,8 @@ tested):
   a folder via a `treg.json` contract.
 - **Two ways to use a tool.** `treg call` proxies an HTTP **API** — the secret is injected server-side and
   nothing lands on your machine. `treg run` runs a vendor **command-line tool** (stripe, gh, gcloud…) with
-  the credential injected, so you use the CLI without owning it or logging in. Two tiers: `--local` (default;
-  runs on your machine — on Linux the key is isolated under a dedicated `treg-run` user) and `--server`
-  (runs on the registry server, so the key never reaches you). The owner opts each tool in first; `treg runs`
-  is the audit log.
+  the credential injected locally. The owner opts each tool in first; `treg runs` is the audit log.
+  Server-side CLI execution is disabled for everyone: `--server` returns HTTP 503.
 
 ### Roles at a glance
 
@@ -614,8 +612,8 @@ an owner/admin can flip it.
 Now Bob runs Stripe's real CLI *through* treg. Everything after `--` is handed to the vendor tool verbatim.
 treg injects the credential just for this run; Bob never logged into Stripe or stored its key. The default
 tier is `--local` — it runs on Bob's own machine, and on Linux the key is isolated under a dedicated
-`treg-run` user (installed once with `sudo treg setup-local-run`; on macOS it's best-effort). Add `--server`
-to run it on the registry instead, for a catalog-known CLI, so the key never reaches Bob's machine at all.
+`treg-run` user (installed once with `sudo treg setup-local-run`; on macOS it's best-effort).
+Server-side CLI execution is disabled; `--server` returns HTTP 503.
 
 ```bash
 HOME=~/.treg-personas/bob treg run stripe -- get /v1/balance
@@ -634,9 +632,9 @@ credential, two ways to use it.
 
 ## Step 22e — Every run is on the record
 
-Like proxied calls, CLI runs are audited. A `--server` run is recorded in the run ledger with its exit code
-and duration; a `--local` run leaves its audit trail beside the calls (`treg calls`). The owner reviews
-server runs with `treg runs`.
+Like proxied calls, local CLI runs are audited. The owner reviews them with `treg runs`; historical
+server runs remain readable there too. The example below is a historical server run; new server runs
+are disabled.
 
 ```bash
 HOME=~/.treg-personas/tom treg runs --limit 5
@@ -931,7 +929,7 @@ treg secret ls | rm ID | update ID …            # tool ls | rm | update likewi
 treg call <tool> <path>  |  call <full-url>     # proxy a call (named or agent-native)
 treg calls [--limit N]                          # the call audit log
 
-treg run <tool> -- <cli args>                   # run a vendor CLI with the key injected (--local default; --server = on the registry)
+treg run <tool> -- <cli args>                   # run a vendor CLI locally with the key injected (--server is disabled)
 treg runs [--limit N]                           # the CLI-run audit log
 treg tool update <id> --local-run on|off        # owner opt-in: allow/forbid `treg run` for a tool
 sudo treg setup-local-run                       # one-time: isolate local runs under the treg-run user (Linux)

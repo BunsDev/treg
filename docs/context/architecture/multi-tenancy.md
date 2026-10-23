@@ -212,11 +212,12 @@ Org existence and coordinate with deletion before cleanup starts. See [configura
   another org, 403 when the role gate fails. **`_require_can_register`** gates create (secrets/tools/
   skills/oauth): a **viewer** (rank below member) may `call` + list only, and gets 403 on any register.
   `ROLE_RANK` orders owner > admin > member > viewer.
-- **Per-member tool ACL (the release feature).** `_require_tool_access(caller, tool.name)` gates **all**
-  use of a tool — the proxy `call_tool`, the server `run_tool_server`, AND the local `grant_local_run`:
+- **Per-member tool ACL (the release feature).** `_require_tool_access(caller, tool.name)` gates
+  the proxy `call_tool` and the local `grant_local_run`:
   allowed if the member's `tool_access` is NULL (all) or names the tool; the **owner is exempt**
   (`_tool_allowed`), admins + members can be restricted. `_require_local_run(caller)` additionally gates the
-  LOCAL tier on `local_run_enabled` (off → server runs only). Set via `set_member_access`
+  local tier on `local_run_enabled`. Server-side CLI execution is disabled for every caller, including
+  owners; `run_tool_server` always returns 503. Access is set via `set_member_access`
   (`PATCH /orgs/{id}/members/{user}/access`, admin+; an owner can't be restricted): `_normalize_tool_access`
   validates the names against the org's tools (422 on unknown) and **collapses an all-tools selection back
   to NULL** so a fully-checked member keeps auto-getting new tools. It's an **explicit allow-list**: a

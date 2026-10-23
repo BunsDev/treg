@@ -191,7 +191,7 @@ async def test_runs_are_filtered_before_limits(clients, identities):
     assert (await clients.get('/runs', headers=h['aw'])).json() == []
 
 
-async def test_run_writers_snapshot_pins(clients, identities, monkeypatch):
+async def test_local_run_writer_snapshots_pins(clients, identities, monkeypatch):
     from treg.config import get_settings
     monkeypatch.setattr(get_settings(), 'run_proof', 'synthetic-proof')
     org, _ = identities
@@ -199,13 +199,11 @@ async def test_run_writers_snapshot_pins(clients, identities, monkeypatch):
     token = await _mint_agent(clients, org, 'runner', role='member',
                              pinned_tags={'customer': 'a'}, local_run_enabled=True)
     headers = {'X-Treg-Token': token}
-    response = await clients.post('/run', headers=headers, json={'tool': 'sh-skill', 'args': ['-c', 'echo hi']})
-    assert response.status_code == 200, response.text
     grant = await clients.post('/tools/sh-skill/grant', headers={**headers, 'X-Treg-Run-Proof': 'synthetic-proof'}, json={'argv': ['echo', 'hi']})
     assert grant.status_code == 200, grant.text
     await audit.drain()
     rows = (await clients.get('/runs', headers=headers)).json()
-    assert len(rows) == 2 and {r['where'] for r in rows} == {'local', 'server'}
+    assert len(rows) == 1 and rows[0]['where'] == 'local'
 
 
 async def test_same_provider_idempotency_label_is_partitioned_by_pin(clients, identities, monkeypatch, replicate_platform):

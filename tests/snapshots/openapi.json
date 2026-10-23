@@ -1092,6 +1092,64 @@
         "title": "RoleIn",
         "type": "object"
       },
+      "RunIn": {
+        "additionalProperties": false,
+        "description": "A dry run of a folder: the four files plus the inputs. Nothing is stored; every step is\nreal and charged to the maker (HUB-DECISIONS round 4 q10 / round 5 q2: `treg hub run .`).",
+        "properties": {
+          "check": {
+            "additionalProperties": true,
+            "title": "Check",
+            "type": "object"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "maxLength": 50000000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "inputs": {
+            "additionalProperties": true,
+            "title": "Inputs",
+            "type": "object"
+          },
+          "manifest": {
+            "additionalProperties": true,
+            "title": "Manifest",
+            "type": "object"
+          },
+          "readme": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Readme",
+            "type": "string"
+          },
+          "script": {
+            "anyOf": [
+              {
+                "maxLength": 200000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Script"
+          }
+        },
+        "required": [
+          "manifest",
+          "check",
+          "readme"
+        ],
+        "title": "RunIn",
+        "type": "object"
+      },
       "RunReportIn": {
         "properties": {
           "audit_id": {
@@ -1801,96 +1859,6 @@
           "type"
         ],
         "title": "ValidationError",
-        "type": "object"
-      },
-      "treg__api__RunIn": {
-        "properties": {
-          "args": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Args",
-            "type": "array"
-          },
-          "timeout_s": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Timeout S"
-          },
-          "tool": {
-            "title": "Tool",
-            "type": "string"
-          }
-        },
-        "required": [
-          "tool"
-        ],
-        "title": "RunIn",
-        "type": "object"
-      },
-      "treg__routers__hub__RunIn": {
-        "additionalProperties": false,
-        "description": "A dry run of a folder: the four files plus the inputs. Nothing is stored; every step is\nreal and charged to the maker (HUB-DECISIONS round 4 q10 / round 5 q2: `treg hub run .`).",
-        "properties": {
-          "check": {
-            "additionalProperties": true,
-            "title": "Check",
-            "type": "object"
-          },
-          "data": {
-            "anyOf": [
-              {
-                "maxLength": 50000000,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Data"
-          },
-          "inputs": {
-            "additionalProperties": true,
-            "title": "Inputs",
-            "type": "object"
-          },
-          "manifest": {
-            "additionalProperties": true,
-            "title": "Manifest",
-            "type": "object"
-          },
-          "readme": {
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Readme",
-            "type": "string"
-          },
-          "script": {
-            "anyOf": [
-              {
-                "maxLength": 200000,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Script"
-          }
-        },
-        "required": [
-          "manifest",
-          "check",
-          "readme"
-        ],
-        "title": "RunIn",
         "type": "object"
       }
     }
@@ -7629,7 +7597,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/treg__routers__hub__RunIn"
+                "$ref": "#/components/schemas/RunIn"
               }
             }
           },
@@ -14337,52 +14305,10 @@
     },
     "/run": {
       "post": {
-        "description": "Run a tool's CLI **on the treg server**, with its `cli.inject` secrets injected into the\nchild process — the caller never holds the key. Both run tiers read the same `Tool.cli`\nprofile; any tool WITH a profile is server-runnable (no per-tool opt-in — unlike the local\ntier, the key never reaches the member, and the bin allow-list still gates what executes).\nSee docs/CLI-RUN-PLAN.md.\n\nmember+ (executing argv server-side is a register-tier capability, not a read); the sandbox is\nexcluded (it never touches the real world). A non-zero CLI exit is a normal 200 result with\n`exit_code` set; only a failure to *start* (not enabled / CLI absent) is a 4xx.",
+        "description": "Server-side CLI execution is disabled for every caller.",
         "operationId": "run_tool_server_run_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "x-treg-token",
-            "required": false,
-            "schema": {
-              "default": "",
-              "title": "X-Treg-Token",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "x-treg-org",
-            "required": false,
-            "schema": {
-              "default": "",
-              "title": "X-Treg-Org",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "treg_session",
-            "required": false,
-            "schema": {
-              "default": "",
-              "title": "Treg Session",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/treg__api__RunIn"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
-          "200": {
+          "503": {
             "content": {
               "application/json": {
                 "schema": {
@@ -14393,16 +14319,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
           }
         },
         "summary": "Run Tool Server"
