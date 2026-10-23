@@ -674,7 +674,9 @@ async def test_upload_timeout_and_byte_shedding_are_observable(clients, r2, monk
 
 
 async def test_upload_timeout_retries_once_and_recovers(clients, r2, monkeypatch):
-    monkeypatch.setattr(get_settings(), 'archive_r2_timeout_s', 0.08)
+    # One attempt may use 40% of this budget. 2s still times out a 1s put and leaves
+    # room to retry when a busy event loop delivers that timeout late.
+    monkeypatch.setattr(get_settings(), 'archive_r2_timeout_s', 2.0)
     events, calls = [], 0
     real_put = r2.put
     async def timeout_once(body, **kwargs):
