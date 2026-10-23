@@ -8,6 +8,7 @@ refuses that source before it runs.
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -18,6 +19,7 @@ from treg.application.call import service as call_service
 from treg.application.call.service import _format_ceiling_usd
 from treg.application.call.types import UpstreamResponse
 from treg.config import get_settings
+from treg.domain import money as ledger
 from treg.domain.catalog import store as catalog_store
 
 from test_marketplace_call import _balance, _dropleads_response, _entries, _telemetry
@@ -43,19 +45,32 @@ def test_ceiling_usd_has_no_exponent():
     assert "e" not in _format_ceiling_usd(1).lower()
 
 
-def test_anyapi_declares_a_provider_ceiling_param():
-    cat = catalog_store.load()
-    assert cat.ceiling_params["anyapi"] == {"in": "query", "name": "max_cost_usd", "unit": "usd"}
-    assert cat.by_id["anyapi.linkedin.search.posts"]["cost"]["value"] == 0.002
-    assert cat.by_id["anyapi.instagram.search.reels"]["cost"]["value"] == 0.0015
-    for endpoint_id in ("anyapi.linkedin.search.posts", "anyapi.instagram.search.reels",
-                        "anyapi.facebook.ad_details"):
-        assert "ceiling_param" not in cat.by_id[endpoint_id]["cost"]
-    assert "ceiling_param" not in cat.provider_meta["anyapi"]
+def test_a_row_ceiling_param_overrides_the_provider_rule(monkeypatch):
+    cat = catalog_store.Catalog(
+        by_id={
+            "demo.one": {"provider": "demo", "cost": {"type": "per_call", "value": 1}},
+            "demo.two": {"provider": "demo", "cost": {
+                "type": "per_call", "value": 1,
+                "ceiling_param": {"in": "query", "name": "cap", "unit": "usd"},
+            }},
+            "other.one": {"provider": "other", "cost": {"type": "per_call", "value": 1}},
+        },
+        ceiling_params={"demo": {"in": "query", "name": "max_cost_usd", "unit": "usd"}},
+    )
+    monkeypatch.setattr(catalog_store, "load", lambda **kwargs: cat)
+
+    def call(endpoint_id, query=()):
+        mk = SimpleNamespace(endpoint_id=endpoint_id, provider="demo", max_cost_micro=3_000)
+        return call_service._ceiling_query(mk, query)
+
+    assert call("demo.one") == (("max_cost_usd", "0.003"),)
+    assert call("demo.two") == (("cap", "0.003"),)
+    assert call("demo.one", (("max_cost_usd", "0.001"),)) == ()
+    assert call("other.one") == ()
 
 
 async def test_direct_ceiling_is_forwarded_unless_the_caller_already_set_it(
-    clients: AsyncClient, anyapi_on, fake_getaddrinfo,
+    clients: AsyncClient, anyapi_on, fake_getaddrinfo, monkeypatch,
 ):
     fake_getaddrinfo({"api.getanyapi.com": ["1.1.1.1"]})
     plain = await clients.post(f"/call/{EP}", json=BODY)
@@ -76,6 +91,12 @@ async def test_direct_ceiling_is_forwarded_unless_the_caller_already_set_it(
     assert [pair for pair in explicit.json()["query_multi"] if pair[0] == "max_cost_usd"] == [
         ["max_cost_usd", "0.001"]]
     assert (await _telemetry(clients))["params_hash"] != plain_hash
+
+    monkeypatch.setattr(get_settings(), "platform_margin", 0.25)
+    margined = await clients.post(f"/call/{EP}", json=BODY, headers={HDR: "0.003"})
+    assert margined.status_code == 200, margined.text
+    assert margined.json()["query"]["max_cost_usd"] == "0.0024"
+    assert ledger.with_margin(2_400) <= 3_000 < ledger.with_margin(2_401)
 
 
 async def test_max_cost_exceeded_releases_the_hold(

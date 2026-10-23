@@ -1315,14 +1315,16 @@ child snapshot and checks its own estimate; a preceding direct charge reduces th
 
 When the catalog declares `ceiling_param` (`{in: query, name, unit: usd}` on the provider file, or
 on that endpoint's `cost`), and `max_cost_micro` is set, and the caller did not already send that
-query name, the call application appends `name=<remaining ceiling in USD>` to the outbound query
-before `relay()`. AnyAPI's parameter is `max_cost_usd`: the provider refuses a source dearer than
-that price with HTTP 400 `max_cost_exceeded` and no charge, so a failover cannot settle above the
-ceiling. That 400 stays a non-2xx uncharged relay; a routed waterfall treats it as a failed attempt
-and may move on. An explicit caller value is never rewritten. The appended pair is not part of the
-inbound query, so it does not change `params_hash` or the archive key. For every other provider the
-ceiling remains a pre-reservation guard: provider-reported settlement can still exceed the estimate
-the guard checked.
+query name, the call application appends `name=<USD>` to the outbound query before `relay()`. The
+USD figure is the largest provider charge that still settles within the caller's ceiling after
+`with_margin` (which rounds up). At margin 0 that is the ceiling itself. AnyAPI's parameter is
+`max_cost_usd`: the provider refuses a source dearer than that price with HTTP 400
+`max_cost_exceeded` and no charge, so a failover cannot settle above the ceiling. That 400 stays a
+non-2xx uncharged relay; a routed waterfall treats it as a failed attempt and may move on. An
+explicit caller value is never rewritten. The appended pair is not part of the inbound query, so
+it does not change `params_hash` or the archive key. For every other provider the ceiling remains
+a pre-reservation guard: provider-reported settlement can still exceed the estimate the guard
+checked.
 
 ## Overflow money
 

@@ -1041,8 +1041,9 @@ who named the endpoint and page size is uncapped unless they send the header. A 
 a 400. Routed children receive the unspent part of the route ceiling, including the default ceiling;
 this same reservation check also applies to overflow at its own price. Refusing a child cannot
 undo earlier paid attempts. Where the catalog declares `ceiling_param`, treg also forwards the
-remaining ceiling as that upstream query parameter, and never replaces a value the caller already
-sent, so settlement on a provider that reports its own charge cannot exceed the ceiling. The
+largest provider charge that still settles within the remaining ceiling after platform margin
+(the ceiling itself when the margin is 0), and never replaces a value the caller already sent,
+so settlement on a provider that reports its own charge cannot exceed the ceiling. The
 provider's refusal is a non-2xx and is not charged. For every other provider the header remains a
 pre-reservation guard. Asked for by a customer whose runner approved $0.23 and was billed $0.56 (2026-09-04).
 

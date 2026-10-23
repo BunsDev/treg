@@ -22,6 +22,7 @@ from ...client_identity import _norm_client
 from ...config import get_settings
 from ...domain.catalog import results as catalog_results
 from ...domain.catalog import store as catalog_store
+from ...domain.money import with_margin
 from ...domain import provider_resources
 from ...infra import money_admission
 from ...infra.db import session_maker
@@ -229,6 +230,23 @@ def _set_caller_max_cost(request, mk: MarketplaceCall) -> None:
                                detail=f"{routed.MAX_COST_HEADER} must be a USD number, got {raw!r}") from exc
 
 
+def _provider_ceiling_micro(caller_micro: int) -> int:
+    """Largest provider charge that still settles within the caller's ceiling.
+
+    `with_margin` rounds up. At margin 0 the ceiling is already that charge.
+    """
+    if caller_micro <= 0 or get_settings().platform_margin <= 0:
+        return caller_micro
+    lo, hi = 0, caller_micro
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if with_margin(mid) <= caller_micro:
+            lo = mid
+        else:
+            hi = mid - 1
+    return lo
+
+
 def _format_ceiling_usd(micro: int) -> str:
     """USD text for an upstream ceiling parameter: no exponent, no trailing zeros."""
     micro = int(micro)
@@ -259,7 +277,7 @@ def _ceiling_query(mk: MarketplaceCall | None, query_items: tuple[tuple[str, str
         return ()
     if any(key == name for key, _ in query_items):
         return ()
-    return ((name, _format_ceiling_usd(mk.max_cost_micro)),)
+    return ((name, _format_ceiling_usd(_provider_ceiling_micro(mk.max_cost_micro))),)
 
 
 def _client_name(request: _ApplicationRequest) -> str:
