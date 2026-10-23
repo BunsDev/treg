@@ -585,7 +585,7 @@ async def test_default_key_rotation_is_team_specific_and_not_revocable(sent_otps
         assert rotated.status_code == 200, rotated.text
         replacement = rotated.json()["secret"]
         assert replacement != first_token
-        assert (await client.get("/tools", headers=_h(first_token))).json() == {"detail": "revoked key"}
+        assert (await client.get("/tools", headers=_h(first_token))).json()["detail"] == "revoked key"
         assert (await client.get("/tools", headers=_h(replacement))).status_code == 200
         assert (await client.get("/tools", headers=_h(second_token))).status_code == 200
         refused = await client.post(

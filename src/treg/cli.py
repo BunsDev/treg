@@ -467,6 +467,9 @@ def _show_failure_diagnostics(resp: httpx.Response) -> None:
     print(line, file=sys.stderr)
     if notice:
         print(f"treg: {notice}", file=sys.stderr)
+    if resp.status_code == 401 and not relayed and os.environ.get("TREG_TOKEN"):
+        print("treg: TREG_TOKEN was rejected, and it overrides `treg login`: set it to a current key",
+              file=sys.stderr)
 
 
 def _as_list(resp: httpx.Response) -> list[dict]:

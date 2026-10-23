@@ -176,8 +176,10 @@ for a per-org token, and picks the org for an identity token). `_effective_org` 
 exits non-zero on HTTP >= 400, and on >= 400 first prints one stderr line (`_show_failure_diagnostics`,
 2026-09-05): the HTTP status, whose answer it is (`X-Treg-Error: 1` = treg refused; absent = the
 provider answered and treg relayed it unchanged), the `X-Treg-Call-Id` to quote to support, and the
-`X-Treg-Cost-Micro` charge when the header is present. stdout stays the exact body — a runner that
-saved only stdout filed 115 relayed Moz quota 403s as a bare "cli_error" with no status or id. A
+`X-Treg-Cost-Micro` charge when the header is present. When `TREG_TOKEN` is set, treg's own 401
+(never a relayed one) adds that the variable overrides `treg login` and needs a current key: the
+body's `hint` cannot know that. stdout stays the exact body — a runner that saved only stdout
+filed 115 relayed Moz quota 403s as a bare "cli_error" with no status or id. A
 metered 2xx gets the matching line (`_show_charge_line`: `treg: charged $0.006667 · call id …`,
 replay-aware), plus a provider-failure line for `X-Treg-Upstream-Failed` ([api](api.md)). `X-Treg-Capacity:
 exhausted` (treg's own account is out) replaces the failure line's "whose answer" with the shared

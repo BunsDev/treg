@@ -14,6 +14,10 @@ from . import analytics
 from .call_surface import split_call_path
 from .caller_metadata import _client_of
 from .client_identity import _norm_client
+from .config import get_settings
+
+# The token refusals `domain/identity/access.py` raises; their bodies carry `hint` (interface/api.md).
+_TOKEN_REFUSALS = frozenset({"not authenticated", "invalid token", "revoked key", "disabled key"})
 
 
 # create_app supplies the call-specific compensation callback before registering these adapters.
@@ -68,9 +72,19 @@ async def _mark_treg_own_errors(request: Request, exc: StarletteHTTPException):
     A caller cannot otherwise tell a treg 404 ("no tool registered for that host") from the vendor's
     own 404 — both are a status code and some JSON. The local proxy needs that distinction to explain
     a failure without ever rewriting a real vendor response, and an agent reading a raw 403 needs to
-    know whether to fix its request or ask an admin. The header is only ever ADDED; the status and the
-    body are untouched, and a client that ignores it sees exactly what it saw before."""
-    resp = await http_exception_handler(request, exc)
+    know whether to fix its request or ask an admin. The header is only ever ADDED; the status and
+    `detail` are untouched, and a client that ignores it sees exactly what it saw before.
+
+    A token refusal also carries a top-level `hint` naming the way back in, on every route: scripts,
+    older CLIs and agents print the body verbatim, so the body is the one place all of them read."""
+    if exc.status_code == 401 and isinstance(exc.detail, str) and exc.detail in _TOKEN_REFUSALS:
+        base = get_settings().public_url.rstrip("/")
+        resp = JSONResponse(
+            {"detail": exc.detail,
+             "hint": f"Sign in with `treg login`, or use a current key from {base}."},
+            status_code=401, headers=exc.headers)
+    else:
+        resp = await http_exception_handler(request, exc)
     if split_call_path(request.url.path):
         resp.headers["X-Treg-Error"] = "1"
         # Refusals that raised before the handler's own audit ran (bad token, unknown tool, ACL,
