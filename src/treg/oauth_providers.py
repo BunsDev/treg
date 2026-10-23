@@ -4086,21 +4086,25 @@ def credentials(provider: OAuthProvider) -> tuple[str, str]:
     return client_id, client_secret
 
 
-def registry_client_secret(client_id: str) -> str | None:
-    """treg's current client secret for the app `client_id` names, or None when it is not one of
-    treg's apps (a team that brought its own)."""
-    if not client_id:
+def platform_refresh_blob(service: str, method: str, blob: dict) -> dict | None:
+    """The blob to refresh one of treg's own connections with: the current client secret, sent only
+    to the provider's own token endpoint. None when the connection is not one of treg's apps, or when
+    its refresh sends no client secret."""
+    provider = REGISTRY.get(service or "")
+    if provider is None or not blob.get("refresh_include_client", True):
+        return None
+    try:
+        profile = provider.profile_for_authorization(method or "")
+    except ValueError:
+        return None
+    if not (profile.client_id_setting and profile.client_secret_setting and profile.token_uri):
         return None
     s = get_settings()
-    for provider in REGISTRY.values():
-        profiles = [provider] + [provider.profile_for_authorization(m.name)
-                                 for m in provider.authorization_methods]
-        for profile in profiles:
-            if not (profile.client_id_setting and profile.client_secret_setting):
-                continue
-            if getattr(s, profile.client_id_setting, "") == client_id:
-                return getattr(s, profile.client_secret_setting, "") or None
-    return None
+    client_id = getattr(s, profile.client_id_setting, "") or ""
+    client_secret = getattr(s, profile.client_secret_setting, "") or ""
+    if not (client_id and client_secret) or blob.get("client_id") != client_id:
+        return None
+    return {**blob, "client_secret": client_secret, "token_uri": profile.token_uri}
 
 
 def is_configured(provider: OAuthProvider) -> bool:

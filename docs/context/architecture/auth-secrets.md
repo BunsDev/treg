@@ -284,12 +284,14 @@ hit it live). Now the method rides in the blob and `refresh()` honors it; a lega
 field gets body auth, then ONE retry with Basic on a 4xx, and stamps whichever worked — existing
 broken connections self-heal on their next call, no migration.
 
-The blob also snapshots `client_secret`, but for treg's own apps `refresh()` does not trust that copy:
-when the blob's `client_id` is one this deployment configures, `oauth_providers.registry_client_secret`
-supplies the current env secret, which is sent and written back into the blob. Rotating one of treg's
-app secrets is therefore an env change plus a deploy on every service that refreshes; the stored copy
-is ignored, so the old secret can be deleted at the provider as soon as that deploy is live.
-A team's own app (an unknown `client_id`) keeps using the secret it stored.
+The blob also snapshots `client_secret` and `token_uri`, and a team member can rewrite the blob. So
+for treg's own apps `ensure_fresh` does not trust either: when the `Secret` row's `provider` is a
+registry provider and the blob's `client_id` is the one this deployment configures for that provider
+profile, `oauth_providers.platform_refresh_blob` substitutes the current env secret **and** the
+profile's own `token_uri`, and neither is written back (the stored blob keeps its own values). Any other
+blob, including one that merely names treg's `client_id`, refreshes with only what it stores. Rotating a
+treg app secret is therefore an env change plus a deploy on every service that refreshes; the old
+secret can be deleted at the provider as soon as that deploy is live.
 
 **Connect flow (mint the first token):** `consent_url(pending)` builds the provider consent URL
 (default `access_type=offline` + `prompt=consent` so a refresh token comes back); `exchange_code(pending,
