@@ -24,9 +24,15 @@ async autoTeam(){ if(this.firstTeam.busy) return; this.firstTeam.busy=true; this
         // Google Ads `treg Signup (web)`: the browser-side twin of the server outbox row, for Google's
         // cross-device and modeled attribution; secondary in the account, so it never double counts.
         try{ if(typeof window.tregSignupConversion==='function') window.tregSignupConversion(o.org_id||o.org); }catch(e){}
-        this.firstTeam.name=o.name; }
+        this.firstTeam.name=o.name;
+        this.welcome.step=1; this.welcome.on=true; }  // the team exists: pick your agent → setup line → a first prompt
       catch(e){ this.firstTeam.err='Could not create your team: '+(e.detail||e.status)+'.'; }
       finally{ this.firstTeam.busy=false; } },
+welcomeFinish(){ this.track('onboarding_finished',{agent:this.welcome.agent, step:this.welcome.step}); this.welcome.on=false;
+      // Someone who signed up on the way to a platform (a /search result) stays on it; otherwise
+      // Getting started, where the setup line lives.
+      if(this.view!=='platform') this.go('start'); },
+welcomeTryProvider(service,group){this.track('tryit_oauth_clicked',{service,group,from:'onboarding'});this.welcome.on=false;this.openProvider(service);},
 _welcomeAgentFromRef(){  // /grokbot's "Setup treg" CTA → Getting started already has Grok Bot picked; any other ref is ignored
       const r=storageGet('treg-ref'); storageRemove('treg-ref');
       if(r && this.welcomeAgents.concat(this.welcomeMoreAgents).some(a=>a.id===r)) this.welcome.agent=r; },

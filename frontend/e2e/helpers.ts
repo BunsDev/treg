@@ -15,6 +15,10 @@ export async function signIn(page: Page, who = 'browser', team = 'Browser test t
   await page.getByRole('dialog', { name: 'Sign in' }).getByRole('button', { name: 'Sign in', exact: true }).click()
   // The first team is made for a new account; rename it so specs can find it by name.
   await expect(page.getByText(/^We made your team/)).toBeVisible()
+  const welcome = page.getByRole('dialog', { name: 'Set up your team' })
+  await expect(welcome.getByText('Which agent are you using?', { exact: true })).toBeVisible()
+  await welcome.getByRole('link', { name: 'Skip', exact: true }).click()
+  await expect(welcome).toBeHidden()
   const [org] = await page.evaluate(() => fetch('/orgs', { credentials: 'include' }).then(r => r.json()))
   const renamed = await page.evaluate(([id, slug, name]) => fetch(`/orgs/${id}`, {
     method: 'PATCH', credentials: 'include', headers: { 'content-type': 'application/json', 'x-treg-org': slug },
