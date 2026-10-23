@@ -32,6 +32,9 @@ _ONBOARD_HTTP_ERRORS = {
     "org_not_found": (404, "org not found"),
     "not_demo_email": (400, "onboarding auto-accept is for demo teammates only"),
     "invite_not_found": (404, "no pending invite for that email"),
+    "sandbox_user": (403, (
+        "the demo sandbox can't create a real team — sign in with GitHub, Google, or email to make one"
+    )),
 }
 
 
@@ -71,6 +74,8 @@ async def onboard_demo(
     try:
         return await onboard_use_cases.provision_demo(
             user_id=user.id, team_name=(body.team_name if body else "Acme Design"))
+    except onboard_use_cases.OnboardError as exc:
+        raise _onboard_http_error(exc) from exc
     except OwnedTeamLimitReached as exc:
         raise _owned_team_limit_error() from exc
 

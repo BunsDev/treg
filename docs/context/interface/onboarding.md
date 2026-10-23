@@ -111,7 +111,7 @@ tool seeding, and teammate acceptance run in short use-case-owned sessions.
 ## Endpoints (`routers/onboard.py`, all identity/member-scoped)
 
 - `POST /onboard/demo {team_name}` (`require_identity`) → `application.onboard.provision_demo`
-  (CLI quick mode: full seed).
+  (CLI quick mode: full seed). A landing sandbox visitor gets 403, as on `POST /orgs`.
 - `POST /onboard/seed-tool` (`require_member`, member+) → `application.onboard.seed_tool` into the active team.
 - `POST /onboard/accept-teammate {email}` (`require_member`, admin+, demo-domain only) →
   `application.onboard.accept_teammate` — auto-joins the teammate the user just invited.

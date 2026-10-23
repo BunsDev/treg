@@ -237,3 +237,41 @@ async def test_gc_skips_a_sandbox_it_cannot_delete_and_reaps_the_rest(anon, monk
         assert await sandbox.gc(db) == 1
     async with session_maker() as db:
         assert not (await db.execute(select(Org))).scalars().all()
+
+
+async def test_visitor_cannot_mint_a_demo_team(anon):
+    """A visitor is a member of its sbx-* team, not an owner, so the demo seeder used to give it a
+    second team whose slug `is_sandbox` never matches: a full team, outside every sandbox guard."""
+    from treg.models import Org
+
+    tok = (await anon.post("/demo/sandbox")).json()["token"]
+    r = await anon.post("/onboard/demo", json={"team_name": "Acme"}, headers=_h(tok))
+    assert r.status_code == 403, r.text
+    async with session_maker() as db:
+        assert all(sandbox.is_sandbox(o) for o in (await db.execute(select(Org))).scalars().all())
+
+
+async def test_gc_keeps_a_visitor_that_belongs_to_a_real_team(anon):
+    """gc deletes only sandbox orgs. A visitor in any other org is kept whole for review; the
+    other expired visitors are still reaped."""
+    from treg.models import Membership, Org
+
+    slugs = [(await anon.post("/demo/sandbox")).json()["org_slug"] for _ in range(2)]
+    await drain_background_writes()
+    async with session_maker() as db:
+        visitors = (await db.execute(
+            select(User).where(User.email.like(f"visitor-%@{sandbox.SANDBOX_DOMAIN}")))).scalars().all()
+        for u in visitors:
+            u.created_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=sandbox.SANDBOX_TTL_MIN + 5)
+        escaped = Org(name="Acme", slug="acme", demo=True)
+        db.add(escaped)
+        await db.flush()
+        kept = (await db.execute(select(Membership).join(Org, Org.id == Membership.org_id)
+                                 .where(Org.slug == slugs[0]))).scalar_one()
+        db.add(Membership(user_id=kept.user_id, org_id=escaped.id, role="owner", token_hash=""))
+        await db.commit()
+        kept_user = kept.user_id
+        assert await sandbox.gc(db) == 1
+    async with session_maker() as db:
+        assert {o.slug for o in (await db.execute(select(Org))).scalars().all()} == {slugs[0], "acme"}
+        assert [u.id for u in (await db.execute(select(User))).scalars().all()] == [kept_user]
