@@ -45,9 +45,9 @@ provider account and bypass this platform ownership table.
 - **Local runs are sandboxed.** `treg run` on a member's machine executes the CLI as a locked-down
   `treg-run` user, with an egress allow-list and an optional filesystem jail, so a shared key can't be
   read, exfiltrated over the network, or written to a member-readable file.
-- **Server runs are resource-limited.** `treg run --server` executes each CLI with a scrubbed environment
-  (treg's own secrets removed), a per-run throwaway home, an allow-list of runnable commands, output
-  redaction, and POSIX resource limits (CPU, file size, no core dumps).
+- **Server runs are disabled.** `POST /run` unconditionally returns 503 before authentication,
+  database access, secret decryption or subprocess execution. No role, CLI profile or executable
+  allow-list can enable it.
 - **Signup credit belongs to a verified account, once.** Only an email OTP, provider-verified
   Google/GitHub email, or inbox-only invitation link marks an identity verified. Legacy `POST /users`
   and admin-visible invitation codes do not. `claim_signup_promo` atomically consumes the user's
@@ -117,10 +117,9 @@ row names any more are deleted by `treg-worker media sweep`.
 
 ## Known limitations (by design, documented on purpose)
 
-**Server runs do not yet have filesystem/network isolation.** The resource limits above cap denial of
-service, but a full jail (a locked-down user + egress allow-list, like the local sandbox) requires a
-container deployment and is planned. In the supported hosted configuration the encryption key is
-an environment variable rather than an on-disk secret file, and only allow-listed CLIs may run.
+**The server CLI runner lacks filesystem/process isolation.** A scrubbed child environment and
+resource limits do not isolate it from the server's credentials. Server-side CLI execution remains
+disabled until an independently reviewed isolation boundary is in place.
 
 ## Supported versions
 

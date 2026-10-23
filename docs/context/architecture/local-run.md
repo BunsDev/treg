@@ -20,9 +20,8 @@ A member runs a vendor CLI (`stripe`, `gh`, `flyctl`, `gcloud`, …) on their ow
 credential stays in treg custody. The security goal: **no other program of the same user may read the
 credential** while the CLI runs.
 
-> `treg run` has a second tier — **`--server`** (Tier 0): the CLI runs on the registry server instead of
-> the member's machine (`POST /run`, `runner.run_bundle`). This fragment covers the **`--local`** (default)
-> tier; the dispatcher (`cli.cmd_run`) picks between them by flag.
+> Server-side CLI execution (`--server`) is disabled globally: `POST /run` returns 503. This fragment
+> covers the **`--local`** (default) tier.
 
 ## Why a dedicated user (the two dead ends, briefly)
 Two cheaper ideas were tested on real Linux and rejected:
@@ -97,10 +96,10 @@ one of `AUTH_MECHANISMS` = `env|argv|config_file|device`; `detect.config_paths` 
 `beta` a bool). `_resolve_secret_id` returns None for an ambiguous multi-credential tool with no explicit
 mapping (so the grant fails loudly, never injects the wrong key).
 
-**`auth_mechanism` splits the tiers.** `env`/`argv` are server-injectable (treg holds the key); `config_file`
-(the CLI reads its own `~/.config`) and `device` are local-only. So `server_runnable` (api `_tool_view`) now
-requires `auth_mechanism in (env, argv)` — a config_file/device CLI is surfaced as local-only and the
-dashboard won't offer server-run for it. This field also drives `treg upload clis` routing (see
+**`auth_mechanism` describes credential injection.** `env`/`argv` inject a value; `config_file`
+reads the CLI's own `~/.config`, and `device` uses its local authorization flow. `server_runnable`
+(`_tool_view`) is always false while server execution is disabled. The authentication mechanism
+also drives `treg upload clis` routing (see
 [env-import](../interface/env-import.md)).
 
 ## The local sandbox (defence in depth around the run)

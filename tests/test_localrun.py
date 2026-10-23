@@ -181,14 +181,14 @@ _ENV_CLI = {"enabled": True, "bin": "stripe", "inject": [{"via": "env", "name": 
 
 
 # ---- endpoint: grant happy path + audit ----------------------------------------------------
-async def test_config_file_cli_is_local_only_not_server_runnable(clients: AsyncClient):
+async def test_cli_profiles_never_advertise_server_execution(clients: AsyncClient):
     """A config_file/device CLI authenticates from the member's own machine, so it must NOT report as
-    server_runnable (the auto-import routes it local). An env CLI stays server_runnable."""
+    server_runnable. An env CLI also has server execution disabled."""
     await _mk_tool(clients, name="pscale", cli={"enabled": True, "bin": "stripe", "auth_mechanism": "config_file"})
     await _mk_tool(clients, name="strp", cli={"enabled": True, "bin": "stripe", "auth_mechanism": "env"})
     tools = {t["name"]: t for t in (await clients.get("/tools")).json()}
     assert tools["pscale"]["server_runnable"] is False   # config_file → local only
-    assert tools["strp"]["server_runnable"] is True       # env → server-injectable
+    assert tools["strp"]["server_runnable"] is False
 
 
 async def test_grant_local_tier_cli_injects_nothing(clients: AsyncClient):

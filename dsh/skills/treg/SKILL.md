@@ -343,7 +343,7 @@ without you logging in:
   Python requests and httpx, and Deno are covered at any version.
 - `treg run stripe -- balance retrieve` runs one vendor CLI. `--local` (the default) runs it on this
   machine, isolated under a dedicated user once an admin has run `sudo treg setup-local-run`;
-  `--server` runs it on the registry so the key never reaches the machine.
+  server-side execution (`--server`) is disabled globally.
 - `treg shell start` opens a subshell where registered CLIs get their credentials by themselves;
   `--proxy` also credentials HTTPS calls your own code makes to a registered API. `treg serve` runs
   the same proxy as a background service. A certificate-pinned client refuses the interception: use

@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import QueryableAttribute, defer
 from sqlmodel import select
 
-from . import archive, audit, crypto, localrun, oauth_providers, ratestore, runner, sandbox as demo_sandbox
+from . import archive, crypto, localrun, oauth_providers, ratestore
 from .application import asynctasks as async_task_app
 from .caller_metadata import _client_of
 from .config import get_settings
@@ -77,7 +77,6 @@ from .routers.auth import _client_ip
 from .routers.auth_helpers import _same_origin
 from .routers.call import _enforce_daily_cap, _require_tool_use_http
 from .routers.orgs import _day_start_utc, _enforce_deny, _require_admin_of
-from .routers.resources import _allowed_server_bins
 from .routers.web import LOCAL_USER_EMAIL, _WEB_DIR
 from .timeutil import utcnow_naive as _utcnow_naive
 
@@ -869,72 +868,10 @@ router.routes.extend(showcase_routes.router.routes)
 router.routes.extend(images_routes.router.routes)
 
 
-class RunIn(BaseModel):
-    tool: str             # the tool name in the caller's org (its `cli` profile drives execution)
-    args: list[str] = []  # argv passed to the CLI (secrets are injected via env, never here)
-    timeout_s: int | None = None
-
-
-@app.post("/run")
-async def run_tool_server(
-    body: RunIn, request: Request,
-    caller: Caller = Depends(require_member), db: AsyncSession = Depends(get_session),
-) -> dict:
-    """Run a tool's CLI **on the treg server**, with its `cli.inject` secrets injected into the
-    child process — the caller never holds the key. Both run tiers read the same `Tool.cli`
-    profile; any tool WITH a profile is server-runnable (no per-tool opt-in — unlike the local
-    tier, the key never reaches the member, and the bin allow-list still gates what executes).
-    See docs/CLI-RUN-PLAN.md.
-
-    member+ (executing argv server-side is a register-tier capability, not a read); the sandbox is
-    excluded (it never touches the real world). A non-zero CLI exit is a normal 200 result with
-    `exit_code` set; only a failure to *start* (not enabled / CLI absent) is a 4xx."""
-    _require_can_register(caller)
-    if demo_sandbox.is_sandbox(caller.org):
-        raise HTTPException(status_code=403, detail="CLI run is disabled in the sandbox")
-    tool = (
-        await db.execute(select(Tool).where(Tool.name == body.tool, Tool.org_id == caller.org_id))
-    ).scalar_one_or_none()
-    if tool is None:
-        raise HTTPException(status_code=404, detail=f"no tool {body.tool!r} in this org")
-    _require_tool_use_http(caller, tool)
-    # A run executes a CLI, so there is no request path to match — evaluate the tool's own upstream
-    # host, which is what a host-level rule ("nobody may reach api.stripe.com") is really saying.
-    await _enforce_deny(caller, tool.base_url, "", db, tool.project_id)
-    await _enforce_daily_cap(caller, db)
-    try:
-        exec_bin = runner.resolve_exec_bin(tool)  # the SAME resolution run_tool execs — never diverges
-    except runner.RunError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    if exec_bin not in _allowed_server_bins():
-        raise HTTPException(status_code=422, detail=(
-            f"{exec_bin!r} is not approved for server runs — only catalog-known CLIs may run on the "
-            "server (an admin can allow more via TREG_RUN_ALLOWED_BINS). Use `treg run --local` instead."))
-    timeout = max(1, min(body.timeout_s or runner.DEFAULT_TIMEOUT_S, 600))
-    try:
-        async with runner.run_slot(caller.email):  # cap concurrent server runs (global + per-user)
-            result = await runner.run_tool(tool, list(body.args), db, timeout_s=timeout)
-    except runner.RunBusy as exc:
-        raise HTTPException(status_code=429, detail=str(exc)) from exc
-    except runner.RunError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    audit.record_run(
-        org_id=caller.org_id, user_email=caller.email, bundle_name=tool.name,
-        argv=_redact_argv_list(list(body.args)),
-        exit_code=result.exit_code, duration_ms=result.duration_ms, client=_client_of(request),
-        tags=dict(caller.membership.pinned_tags or {}) or None,
-        api_key_id=caller.api_key.id if caller.api_key else None,
-        api_key_name=caller.api_key.name if caller.api_key else None,
-        api_key_prefix=caller.api_key.safe_prefix if caller.api_key else None,
-    )
-    return {
-        "tool": tool.name,
-        "exit_code": result.exit_code,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
-        "duration_ms": result.duration_ms,
-        "timed_out": result.timed_out,
-    }
+@app.post("/run", status_code=503)
+async def run_tool_server() -> dict:
+    """Server-side CLI execution is disabled for every caller."""
+    raise HTTPException(status_code=503, detail="Server-side CLI execution is disabled")
 
 
 # Deployment and imports keep using `treg.api:app`; the concrete assembly lives in bootstrap.

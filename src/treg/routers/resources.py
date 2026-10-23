@@ -469,12 +469,7 @@ def _tool_view(t: Tool) -> dict:
         "health_check": t.health_check,
         "examples": t.examples or [],
         "cli": t.cli,
-        # Server-computed so the dashboard never guesses: a run needs a cli profile, an allow-listed bin
-        # (server config the client can't see), AND a server-injectable auth mechanism — a config_file /
-        # device CLI authenticates from the member's own machine, so it's local-only (default "env" keeps
-        # every pre-auth_mechanism tool server-runnable as before).
-        "server_runnable": (bool(t.cli) and (t.cli.get("bin") or t.name) in _allowed_server_bins()
-                            and (t.cli.get("auth_mechanism") or "env") in ("env", "argv")),
+        "server_runnable": False,
         "project_id": t.project_id,  # None = org-wide
         "bundle_id": t.bundle_id,
     }

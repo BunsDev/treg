@@ -60,13 +60,11 @@ async def test_update_tool_grandfathers_an_admin_added_shared_binding(clients: A
 async def test_delete_org_removes_run_records(clients: AsyncClient):
     from treg.infra.db import session_maker
     from treg.models import RunRecord
-    # a server-runnable tool + a server run → writes a RunRecord
-    await clients.post("/skills", json={"name": "r3", "recipe": "r", "secrets": [],
-                                        "tools": [{"name": "r3", "base_url": "https://api.example.com",
-                                                   "cli": {"bin": "sh"}}]})
-    await clients.post("/run", json={"tool": "r3", "args": ["-c", "true"]})
     org_id = (await clients.get("/orgs")).json()[0]["org_id"]
     async with session_maker() as s:
+        s.add(RunRecord(org_id=org_id, user_email="synthetic@example.invalid",
+                        bundle_name="r3", argv=["-c", "true"], exit_code=0, duration_ms=1))
+        await s.commit()
         before = len((await s.execute(select(RunRecord).where(RunRecord.org_id == org_id))).scalars().all())
     assert before >= 1
     slug = (await clients.get("/orgs")).json()[0]["slug"]
