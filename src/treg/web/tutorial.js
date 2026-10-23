@@ -34,7 +34,7 @@
     { h: "Import",
       p: "<code>treg upload</code> is the bulk on-ramp: it scans a <code>.env</code> (matching the providers treg recognizes) and/or a folder of skills, and registers everything you pick in one pass - building a <code>treg.json</code> for any skill that lacks one. Preview first with <code>treg scan</code> (read-only); idempotent, so re-run freely. <code>treg skill install</code> is the reverse: pull a shared skill onto your machine." },
     { h: "Two ways to use a tool",
-      p: "<code>treg call</code> proxies an HTTP <b>API</b> - the secret is injected server-side and nothing lands on your machine. <code>treg run</code> runs a vendor <b>command-line tool</b> (stripe, gh, gcloud…) with the credential injected, so you use the CLI without owning it or logging in. Two tiers: <code>--local</code> (default; runs on your machine - on Linux the key is isolated under a dedicated <code>treg-run</code> user) and <code>--server</code> (runs on the registry server, so the key never reaches you). The owner opts each tool in first; <code>treg runs</code> is the audit log." },
+      p: "<code>treg call</code> proxies an HTTP <b>API</b> - the secret is injected server-side and nothing lands on your machine. <code>treg run</code> runs a vendor <b>command-line tool</b> (stripe, gh, gcloud…) locally with the credential injected. The owner opts each tool in first; <code>treg runs</code> is the audit log. Server-side CLI execution is disabled: <code>--server</code> returns HTTP 503." },
   ];
 
   const ROLES = {
@@ -210,13 +210,13 @@
       notice: "Off by default - a run is more powerful than a proxied call, so it's opt-in per tool, and only an owner/admin can flip it." },
 
     { part: "Part 6c · Run a CLI tool", who: "bob", title: "Run the vendor CLI - no login, nothing on disk",
-      explain: "Now Bob runs Stripe's real CLI <i>through</i> treg. Everything after <code>--</code> is handed to the vendor tool verbatim. treg injects the credential just for this run; Bob never logged into Stripe or stored its key. The default tier is <code>--local</code> - it runs on Bob's own machine, and on Linux the key is isolated under a dedicated <code>treg-run</code> user (installed once with <code>sudo treg setup-local-run</code>; on macOS it's best-effort). Add <code>--server</code> to run it on the registry instead, for a catalog-known CLI, so the key never reaches Bob's machine at all.",
+      explain: "Now Bob runs Stripe's real CLI <i>through</i> treg. Everything after <code>--</code> is handed to the vendor tool verbatim. treg injects the credential just for this run; Bob never logged into Stripe or stored its key. The default tier is <code>--local</code> - it runs on Bob's own machine, and on Linux the key is isolated under a dedicated <code>treg-run</code> user (installed once with <code>sudo treg setup-local-run</code>; on macOS it's best-effort). Server-side CLI execution is disabled; <code>--server</code> returns HTTP 503.",
       cmd: `HOME=~/.treg-personas/bob treg run stripe -- get /v1/balance`,
       out: `{\n  "object": "balance",\n  "available": [{ "amount": 0, "currency": "usd" }],\n  …\n}\n# Stripe's own CLI ran with the org key injected - Bob never logged in or held the key.`,
       notice: "<code>treg run &lt;tool&gt; -- &lt;args&gt;</code> for a CLI; <code>treg call &lt;tool&gt; &lt;path&gt;</code> for an HTTP API - same credential, two ways to use it." },
 
     { part: "Part 6c · Run a CLI tool", who: "tom", title: "Every run is on the record",
-      explain: "Like proxied calls, CLI runs are audited. A <code>--server</code> run is recorded in the run ledger with its exit code and duration; a <code>--local</code> run leaves its audit trail beside the calls (<code>treg calls</code>). The owner reviews server runs with <code>treg runs</code>.",
+      explain: "Like proxied calls, local CLI runs are audited. The owner reviews them with <code>treg runs</code>; historical server runs remain readable there too. The example below is a historical server run; new server runs are disabled.",
       cmd: `HOME=~/.treg-personas/tom treg runs --limit 5`,
       out: `[\n  {\n    "id": 1,\n    "user_email": "bob@superdesign.dev",\n    "bundle_name": "stripe",\n    "argv": ["get", "/v1/balance"],\n    "exit_code": 0,\n    "duration_ms": 812,\n    "created_at": "2026-07-02T…"\n  }\n]`,
       notice: "The mnemonic: <code>treg call</code> → <code>treg calls</code>; <code>treg run</code> → <code>treg runs</code>. Two verbs, two ledgers." },
@@ -312,13 +312,13 @@
       explain: "You already have <code>gh</code>, <code>stripe</code>, <code>gcloud</code> … installed and logged in. <code>treg scan clis</code> reads your machine: for each CLI in treg's catalog it checks whether the program is installed, whether its API key is in your environment, and whether you are logged into the CLI itself. It writes <b>nothing</b> - it only reports.",
       cmd: `treg scan clis`,
       out: `Scanned 21 catalog CLIs — 9 installed here.\n\nWould register (server, key injected):\n  openai\n  stripe\nWould register (local, uses your login):\n  doctl\n  flyctl\n  gcloud\n  gh\n  supabase\n  vercel\nNot supported:\n  az: az has no token-override env var (device/browser login only)\n\n12 more catalog CLIs aren't installed. List them with: treg scan clis --status`,
-      notice: "Two tiers. <b>Server</b> (openai, stripe): the key is in your environment, so treg can hold it and inject it - the key never touches a member's machine. <b>Local</b> (gh, gcloud, …): you're logged into the CLI itself, so treg registers it with no secret and just runs the CLI you already authenticated." },
+      notice: "The scan's <b>server</b> label (openai, stripe) means the key can be uploaded for injection; server-side execution is disabled. <b>Local</b> (gh, gcloud, …) means treg registers the CLI without a secret and uses your existing login. CLI execution is local, subject to the tool and member permissions." },
 
     { part: "Part 1 · Auto-import", who: "you", title: "Register them",
       explain: "Same scan, but it registers. <code>--replace</code> deletes-and-recreates anything already registered, so re-running is always safe.",
       cmd: `treg upload clis --replace`,
       out: `Scanned 21 catalog CLIs — 9 installed here.\n\nRegistered (server, key injected):\n  openai\n  stripe\nRegistered (local, uses your login):\n  doctl\n  flyctl\n  gcloud\n  gh\n  supabase\n  vercel`,
-      notice: "The server-tier CLIs uploaded their key (encrypted) and are now bound tools; the local-tier CLIs registered <b>secret-less</b> - \"inject nothing, just run the program the member is logged into.\"" },
+      notice: "The CLIs labelled server uploaded their key (encrypted) and are now bound tools; this does not enable server-side execution. The local-tier CLIs registered <b>secret-less</b> - \"inject nothing, just run the program the member is logged into.\"" },
 
     { part: "Part 1 · Auto-import", who: "you", title: "Confirm a local-tier CLI runs",
       explain: "A local-tier tool needs no credential at all - treg runs the program you're already logged into, and records the run.",
@@ -330,7 +330,7 @@
       explain: "<code>--status</code> lists the catalog CLIs you do <b>not</b> have, with the install command for each. <code>--add BIN</code> registers an installed CLI that isn't in the catalog at all - it asks for the env var the CLI reads its key from and the API base URL.",
       cmd: `treg scan clis --status\ntreg upload clis --add mycli --env MYCLI_TOKEN --base-url https://api.mycli.com`,
       out: `In the catalog, not installed here:\n  glab          brew install glab\n  render        brew install render-oss/render/render\n  neonctl       npm i -g neonctl\n  …`,
-      notice: "<code>--add</code> also prints a catalog-entry snippet you can share. An off-catalog CLI isn't on the server's allow-list, so it runs <b>locally</b> until an admin allow-lists its program name." },
+      notice: "<code>--add</code> also prints a catalog-entry snippet you can share. CLI execution is <b>local</b>; adding a program to the server's allow-list does not enable server execution." },
 
     { part: "Part 2 · Shell mode", who: "you", title: "Start the shell",
       explain: "Typing <code>treg run</code> before every command is friction. <code>treg shell start</code> opens a subshell where every <b>registered</b> CLI runs with the team credential injected automatically - you just type <code>stripe</code>, <code>gh</code>, <code>gcloud</code> as normal.",
@@ -356,11 +356,11 @@
       out: `▚ treg shell closed.\n/opt/homebrew/bin/gh`,
       notice: "<code>which gh</code> points at the real binary again. Nothing is left behind." },
 
-    { part: "Part 2 · Shell mode", who: "you", title: "Route one CLI to the server; set a time limit",
-      explain: "<code>--server-for &lt;tools&gt;</code> makes those CLIs run <b>on the registry</b> (the key never touches your machine); <code>--ttl &lt;minutes&gt;</code> closes the shell automatically.",
-      cmd: `treg shell start --server-for stripe --ttl 60\n# inside the shell:\nstripe --version      # runs on the server; output streamed back\nexit\ntreg runs --limit 1`,
-      out: `[\n  { "tool": "stripe", "argv": ["--version"], "exit_code": 0, "duration_ms": 92, "where": "server" }\n]`,
-      notice: "<code>stripe</code> is marked <code>(server)</code> in the banner and its run is logged with <code>\"where\": \"server\"</code> - it executed on the registry, not your laptop." },
+    { part: "Part 2 · Shell mode", who: "you", title: "Set a time limit for a local shell",
+      explain: "<code>--ttl &lt;minutes&gt;</code> closes the shell automatically. Registered CLIs run locally with the same tool and member permissions as <code>treg run</code>.",
+      cmd: `treg shell start --ttl 60\n# inside the shell:\ngh --version      # runs locally\nexit`,
+      out: `▸ gh · audit #60\ngh version 2.72.0 (2025-04-30)\nhttps://github.com/cli/cli/releases/tag/v2.72.0`,
+      notice: "Server-side execution is disabled. Existing <code>--server-for</code> requests warn and fall back to local because no tool is advertised as <code>server_runnable</code>." },
 
     { part: "Part 3 · The security sandbox", who: "sys", title: "Set it up (once, as admin)",
       explain: "A local run puts a shared team key on a member's machine for the length of one command. That is only safe if the member cannot capture the key. <code>sudo treg setup-local-run</code> (Linux and macOS) builds a sandbox with three layers.",
@@ -396,7 +396,7 @@
   // Prose twin: src/treg/web/tutorial-access.md (served at /tutorial-access.md).
   const ACCESS = [
     { part: "Setup", who: "sys", title: "Two dials, two people",
-      explain: "Every member has two independent dials: <b>tool access</b> (<code>tool_access</code>: which tools they may touch - default <b>all</b>) and <b>local execution</b> (<code>local_run_enabled</code>: may they run a CLI on their own machine - default <b>on</b>). A withheld tool is closed through <i>every</i> door - proxy call, server run, local run. The <b>owner</b> is never restricted. We play two people on one machine: <b>Tom</b> (owner) and <b>Sam</b> (the new teammate we restrict).",
+      explain: "Every member has two independent dials: <b>tool access</b> (<code>tool_access</code>: which tools they may touch - default <b>all</b>) and <b>local execution</b> (<code>local_run_enabled</code>: may they run a CLI on their own machine - default <b>on</b>). A withheld tool is closed through both proxy calls and local runs. The <b>owner</b> is never restricted by these dials. Server runs are disabled for everyone. We play two people on one machine: <b>Tom</b> (owner) and <b>Sam</b> (the new teammate we restrict).",
       cmd: `for u in tom sam; do\n  mkdir -p ~/.treg-personas/$u\n  HOME=~/.treg-personas/$u treg config --base-url https://treg.to\ndone`,
       out: `# each persona now points at the registry`,
       notice: "Prefix a command with <code>HOME=~/.treg-personas/&lt;name&gt;</code> to act as that person. In real life each person is on their own machine and drops the prefix." },
@@ -405,7 +405,7 @@
       explain: "Tom invites Sam but grants access to <b>only</b> the <code>gh</code> tool and turns <b>local runs off</b>. The access travels with the invite and lands on Sam's membership the moment he accepts.",
       cmd: `HOME=~/.treg-personas/tom treg org invite sam@superdesign.dev --tools gh --local-run off`,
       out: `{\n  "code": "<one-time-invite-code>",\n  "email": "sam@superdesign.dev",\n  "role": "member",\n  "org_id": 44,\n  "expires_at": "2026-07-21T…"\n}`,
-      notice: "<code>--tools gh</code> is the allow-list (comma-separated for several); <code>--local-run off</code> means server-only. <code>--all-tools</code> grants everything explicitly." },
+      notice: "<code>--tools gh</code> is the allow-list (comma-separated for several); <code>--local-run off</code> blocks local CLI execution while permitted HTTP calls remain available. <code>--all-tools</code> grants everything explicitly." },
 
     { part: "Part 1 · Invite with tailored access", who: "tom", title: "(Alternative) let treg ask",
       explain: "Run the invite <b>without</b> the access flags and treg asks interactively - \"give access to all tools?\" - and, on no, shows a checklist of every tool (all pre-ticked) to uncheck the ones to withhold.",
@@ -429,13 +429,13 @@
       explain: "<code>stripe</code> is <b>not</b> on Sam's list. Every door to it is closed - here, the proxy.",
       cmd: `HOME=~/.treg-personas/sam treg call stripe v1/balance`,
       out: `{\n  "detail": "you don't have access to the tool 'stripe' in this team — an admin can grant it (dashboard → Team, or \`treg org access <you> --tools …\`)"\n}`,
-      notice: "The message tells Sam exactly how to get access. <code>treg run stripe</code> and <code>treg run --server stripe</code> are refused the same way - no side path." },
+      notice: "The message tells Sam exactly how to get access. <code>treg run stripe</code> is also refused by tool access; <code>treg run --server stripe</code> returns HTTP 503 because server execution is disabled for everyone." },
 
     { part: "Part 2 · The walls", who: "sam", title: "Local execution is off",
-      explain: "<code>gh</code> is allowed, but Sam's <code>local_run_enabled</code> is <b>off</b>, so he cannot run it on his own machine. treg points him at the server tier instead.",
+      explain: "<code>gh</code> is allowed, but Sam's <code>local_run_enabled</code> is <b>off</b>, so he cannot run it on his own machine. He must ask an admin to enable local runs; server execution is disabled.",
       cmd: `HOME=~/.treg-personas/sam treg run gh -- --version`,
       out: `treg: local execution is disabled for you — run on the server instead (\`treg run --server\`), or ask an admin to enable local runs for your account`,
-      notice: "This is the <i>local</i> wall, separate from tool access - <code>treg run --server gh …</code> (the key stays on the registry) is allowed." },
+      notice: "This is the <i>local</i> wall, separate from tool access. The legacy error text still suggests <code>--server</code>, but that option returns HTTP 503; ask an admin to enable local runs." },
 
     { part: "Part 2 · The walls", who: "sam", title: "A member can't manage the team",
       explain: "Access control is an admin power. Sam (a member) cannot list or change anyone's access.",

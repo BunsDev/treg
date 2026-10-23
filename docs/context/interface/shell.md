@@ -44,10 +44,11 @@ and handles `SIGTERM`/`SIGHUP` by stopping the child — so `stop_session` (whic
 a closed terminal both return control for teardown, no orphan. An optional `--ttl` arms a daemon timer that
 closes the session after N minutes. `cmd_shell_start` / `cmd_shell_stop` (in `cli.py`) wire the command.
 
-## Routing (`--server-for`) + tiers
-By default every shimmed CLI runs **local** (`treg run <tool>`). `--server-for stripe,render` routes those to
-`treg run --server` — the key never touches the machine, output is streamed back — but only for a tool that is
-`server_runnable`; a requested tool that isn't falls back to local with a warning. `--ttl` sets a hard cap.
+## Local execution and `--server-for`
+Every shimmed CLI runs **local** (`treg run <tool>`). Server-side CLI execution is disabled, and tool
+listings set `server_runnable` to false. The existing `--server-for` option therefore warns and falls back
+to local execution, still subject to local permissions; it does not run the command on the registry.
+Direct `treg run --server` requests return HTTP 503. `--ttl` sets a hard cap on the shell session.
 
 ## `--proxy`: the other half of interception
 **Note the sibling.** `treg <command>` (`cmd_with`, see [local-proxy](../architecture/local-proxy.md))

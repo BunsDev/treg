@@ -240,10 +240,9 @@ hold the key or log in:
 ```bash
 treg run stripe -- get /v1/balance
 treg run gh -- pr list
-treg run --server agentmail-cli inboxes list   # runs on the registry server: the key never reaches you
 ```
 
-`--local` (default) runs on your machine; `--server` runs on the registry and streams output back.
+`--local` (default) runs on your machine. Server-side CLI execution (`--server`) is disabled globally.
 For a whole session, `treg shell start` opens a subshell where every registered CLI injects
 automatically — just use `stripe`, `gh`, … normally; `exit` reverts. `treg runs` is the audit log.
 

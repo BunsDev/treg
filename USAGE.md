@@ -333,9 +333,8 @@ skill (e.g. a `stripe-cli` SKILL.md) auto-becomes runnable — `treg upload` rec
 provider catalog and wires the credential, so `treg run` works with no `treg.json`.
 
 The tool owner opts in per tool for **local** runs (the key reaches the member's machine): the
-dashboard `⌘ run` toggle, or `treg tool update <id> --local-run on|off`. **Server** runs need no
-opt-in — the key never leaves the registry, and the server's bin allow-list gates what may execute.
-One `cli` profile on the tool drives both tiers (`bin`, `inject`, `deny`, `enabled`).
+dashboard `⌘ run` toggle, or `treg tool update <id> --local-run on|off`. **Server** runs are disabled
+globally. The tool's `cli` profile (`bin`, `inject`, `deny`, `enabled`) configures local execution.
 
 | Command | Options | What it does |
 |---|---|---|
@@ -351,14 +350,12 @@ One `cli` profile on the tool drives both tiers (`bin`, `inject`, `deny`, `enabl
   with a warning). A member may run a tool whose key **they own**; a **shared** (teammate/admin) key
   requires the isolated runner **and** the server's `TREG_RUN_PROOF` (pass it as `--run-proof` at
   setup).
-- `--server` — runs on the registry **server** (Tier 0); only catalog-known CLIs (or ones in
-  `TREG_RUN_ALLOWED_BINS`) may execute; stdout/stderr + exit code are streamed back. Use this when
-  the key must never reach the machine at all.
+- `--server` — disabled globally; `POST /run` returns 503 for every caller. `TREG_RUN_ALLOWED_BINS`
+  cannot re-enable server execution.
 
 ```bash
 treg run stripe -- get /v1/balance          # local: CLI runs here, key injected, never held
 treg run gh -- pr list
-treg run --server agentmail-cli inboxes list # server-side: key never leaves the registry
 sudo treg setup-local-run --run-proof "$TREG_RUN_PROOF"   # Linux admin, once
 treg runs --limit 20
 ```

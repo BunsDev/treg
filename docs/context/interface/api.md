@@ -518,26 +518,16 @@ shared HTTP client. `/auth/logout` remains an HTTP-only cookie action.
   client then scrubs the injected value from the CLI's output (see [local-run](../architecture/local-run.md)).
   `report_local_run` (`POST /tools/{name}/run-report`) takes the client's verdict enum (never raw output);
   `credential_invalid` marks the injected secret(s) invalid via the health fields, skipping `param` kind.
-- **Server runs (`treg run --server`):** `POST /run` accepts `{tool, args, timeout_s}` and
-  executes the org-scoped tool's `Tool.cli` profile through `runner.run_tool`. Secrets enter a
-  scrubbed child environment, argv is an array, and the process gets its own temporary home.
-  A profile is server-runnable without local-run opt-in, but tool/project ACL, deny rules, member
-  usage caps, global/per-user concurrency limits and the executable allowlist still apply.
-  `runner.resolve_exec_bin` is shared by validation and execution; allowed commands come from
-  the catalog or `TREG_RUN_ALLOWED_BINS`. The sandbox cannot run commands.
+- **Server runs (`treg run --server`):** `POST /run` unconditionally returns 503 with
+  `Server-side CLI execution is disabled`. The handler has no body, authentication or database
+  dependencies and cannot reach the runner. This applies to every caller, including ordinary teams
+  and sandbox visitors; CLI profiles and `TREG_RUN_ALLOWED_BINS` cannot re-enable it. `_tool_view`
+  reports `server_runnable: false` for every tool. Scrubbed environments and resource limits are not
+  a filesystem/process isolation boundary.
 
-  The response is `{stdout, stderr, exit_code, timed_out}`; a nonzero child exit is a normal 200,
-  startup/configuration errors are 4xx, and exhausted run slots return 429. `RunRecord.bundle_name`
-  stores the tool name for compatibility. `GET /runs` merges server records with local grants,
-  tagged `where=server|local` and `s|l`-prefixed ids. Run settings are managed through
-  `Tool.cli`, not bundle runtime metadata. See [local-run](../architecture/local-run.md).
-  - **Resource-limit sandbox (`runner.py`, the DoS half of the server-run sandbox):** every server-run
-    child is spawned with POSIX rlimits via a `preexec_fn` (`_spawn_preexec`/`_rlimit_preexec`) - a
-    CPU-seconds cap, a max-file-size cap, and core dumps disabled (a core would spill the injected secret
-    to disk). Env-gated (`TREG_RUN_RLIMITS` on by default; `TREG_RUN_CPU_SECONDS`, `TREG_RUN_FSIZE_MB`),
-    a no-op where `resource` is unavailable. Deliberately **no** address-space or process-count cap - a
-    virtual-memory cap crashes Go CLIs (gh/stripe/doctl) and `RLIMIT_NPROC` is per-uid, shared with the
-    server. Full **filesystem/network** isolation needs a container deploy and is a planned follow-up.
+  `GET /runs` still merges historical server records with local grants, tagged `where=server|local`
+  and `s|l`-prefixed ids. `RunRecord.bundle_name` stores the tool name for compatibility. Local grants
+  and execution retain their existing authorization. See [local-run](../architecture/local-run.md).
 - **Meta:** `meta` (`GET /meta`, open) → `{public_url, github, google, app_version, treg_version,
   posthog_key/posthog_host, intercom_app_id, hub, referral, paused_providers}` for the dashboard.
   `paused_providers` is `{service: {display_name, message}}` for `TREG_PAUSED_PROVIDERS`, empty by default. `referral` carries the
