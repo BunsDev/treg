@@ -721,7 +721,9 @@ async def _resolve_org(client: httpx.AsyncClient) -> tuple[int | None, str | Non
     r = await client.get("/orgs")
     if r.status_code == 401 or me.status_code == 401:
         return None, None, {"error": "not signed in, or this token is invalid or expired",
-                            "hint": f"copy a fresh token from {get_settings().public_url.rstrip('/')}"}
+                            "hint": ("sign in again with `treg login`, then run `treg mcp install` to "
+                                     "update this server's token, or configure a current key from "
+                                     f"{get_settings().public_url.rstrip('/')}")}
     if r.status_code != 200:
         return None, None, {"error": "could not read the teams for this token"}
     orgs = _body(r) or []

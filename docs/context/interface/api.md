@@ -345,8 +345,10 @@ with the names of the colliding usable tools and the explicit `/call/<name>/<pat
 `require_member()` reads the `X-Treg-Token` header, hashes it
 (`crypto.hash_token`), looks up the
 `Membership` by `token_hash`, and returns a `Caller` (`membership, user, org` + `org_id`/`email`/`role`);
-401 on missing/invalid. Every scoped endpoint depends on it **except** `POST /users` + `POST
-/invites/accept` (open, self-registering) and `GET /oauth/callback` (browser-hit, protected by `state`).
+401 on missing/invalid; that body keeps its `detail` and adds a top-level `hint` (sign in with
+`treg login`, or use a current key), because scripts and older CLIs print it verbatim. Every scoped
+endpoint depends on it **except** `POST /users` + `POST /invites/accept` (open, self-registering)
+and `GET /oauth/callback` (browser-hit, protected by `state`).
 Each successful identity dependency commits its read-only transaction before the handler runs, so an
 application use case can open its own session without waiting behind the request's pool slot. The
 dependency-cached session remains usable because every session maker sets `expire_on_commit=False`.
