@@ -162,8 +162,11 @@ with no deep link or hash) or the platform, provider or run page a deep link ope
 says "We made your team <name>. Rename it any time." once, linking to Team. Declining an invite on
 first run goes through `autoTeam` too.
 
-Getting started carries what the old four-step welcome modal did: the agent picker, the per-agent
-setup line with the team's key, and the Try it out cards. A use-case landing's CTA (`/app?ref=grokbot`
+When `autoTeam` made the team (`created: true`), the welcome modal (`WelcomeDialog.vue`) opens over
+that view with three steps: pick your agent (`onboarding_agent_picked`), the per-agent setup line with
+the team's key, and the Try it out cards (a first prompt to copy). Skip or Escape fires
+`onboarding_finished` with the step and lands on Getting started unless the user is on a platform page.
+Getting started carries the same agent picker, setup line and Try it out cards for anyone who skipped. A use-case landing's CTA (`/app?ref=grokbot`
 from `/grokbot`'s "Setup treg") **preselects that agent**: the `ref` param is stashed in
 `localStorage` (`treg-ref`) because sign-in reloads the page, and `_welcomeAgentFromRef` consumes it
 when `autoTeam` runs (unknown refs are ignored). The picked agent itself persists as `treg-agent` (a

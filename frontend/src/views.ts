@@ -85,6 +85,7 @@ export const dialogs = {
   ExtraCredentialDialog: lazy(() => import('./dialogs/ExtraCredentialDialog.vue')),
   EditToolDialog: lazy(() => import('./dialogs/EditToolDialog.vue')),
   AcceptInvitesDialog: lazy(() => import('./dialogs/AcceptInvitesDialog.vue')),
+  WelcomeDialog: lazy(() => import('./dialogs/WelcomeDialog.vue')),
   CopyToolDialog: lazy(() => import('./dialogs/CopyToolDialog.vue')),
   ImportSkillDialog: lazy(() => import('./dialogs/ImportSkillDialog.vue')),
   RequestToolDialog: lazy(() => import('./dialogs/RequestToolDialog.vue')),

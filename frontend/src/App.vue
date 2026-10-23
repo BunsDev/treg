@@ -154,6 +154,9 @@ export default { ...controller, components: { ...controller.components, ...dialo
          users already in other teams. Decline → create-your-own (first run) or just close. -->
     <AcceptInvitesDialog v-if="inviteChoice && pendingInvites.length" />
 
+    <!-- FIRST-RUN WELCOME: pick your agent → the setup line → a first prompt (the team is already made) -->
+    <WelcomeDialog v-if="welcome.on" />
+
     <!-- CREATE TEAM -->
     <div class="scrim" role="dialog" aria-labelledby="new-team-title" aria-modal="true" v-if="newOrg" v-dialog="() => { newOrg=false }" @click.self="newOrg=false">
       <div class="modal" style="width:min(440px,92vw)"><div class="hd"><b id="new-team-title">Create a team</b><button class="btn sm" @click="newOrg=false" aria-label="Close">✕</button></div>
