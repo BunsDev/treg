@@ -7133,10 +7133,10 @@
     },
     "/demo/sandbox": {
       "post": {
-        "description": "Mint a login-free, short-lived sandbox TEAM for the landing-page studio: a throwaway org + a\nstarter secret + a starter endpoint + a member token, returned so the browser (and the visitor's\nterminal) can register more, call them, and export a skill — all with no account. Sandbox calls\nnever touch the network (see call_tool → sandbox.synthesize); rate-limited per IP; GC'd after the\nTTL. No auth — this is the anonymous front door.",
+        "description": "The landing sandbox is closed: no new sandbox is minted.",
         "operationId": "demo_sandbox_mint_demo_sandbox_post",
         "responses": {
-          "200": {
+          "410": {
             "content": {
               "application/json": {
                 "schema": {

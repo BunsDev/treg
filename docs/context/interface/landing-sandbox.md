@@ -1,6 +1,6 @@
 ---
-title: Landing sandbox backend - front-end entry removed
-status: shipped
+title: Landing sandbox backend - closed
+status: closed
 sources:
   - src/treg/sandbox.py
   - src/treg/sandbox_identity.py
@@ -11,6 +11,7 @@ sources:
   - src/treg/api.py
   - src/treg/routers/onboard.py
   - src/treg/routers/web.py
+  - src/treg/domain/identity/access.py
   - frontend/src/state/boot.js
   - frontend/src/components/SignedOutPage.vue
   - src/treg/web/install.sh
@@ -30,8 +31,18 @@ related:
 > key-leak explanation and footer CTA it used to render were dropped from this component along with
 > the sandbox studio; that marketing content now lives on the public landing page (`/`) instead.
 
-The sections below document backend behavior that is still shipped but has no visitor-facing mint
-path in the Dashboard components. Provisioning, export, samples, and garbage collection remain in
+> **Closed.** `POST /demo/sandbox` returns 410 and mints nothing. Authentication refuses every
+> `@sandbox.treg.local` visitor with 403 ("the demo sandbox is closed"), centrally in
+> `domain/identity/access.py`: `_membership_by_token` checks the token's user, and
+> `_user_from_identity_token` / `_user_from_session` check theirs, so `require_member`,
+> `require_identity` and every direct resolver inherit it. The sandbox was an anonymous identity on
+> production guarded by per-route exceptions; one missed route (`POST /onboard/demo`) let a visitor
+> mint a real team. Since nothing mints, `gc` (which only ran from the mint) no longer runs on its
+> own; leftover sandbox orgs are cleaned up deliberately. The code below stays until a separate
+> removal change deletes it.
+
+The sections below document backend behavior that is still in the tree but unreachable: no mint path
+and no accepted visitor token. Provisioning, export, samples, and garbage collection remain in
 `application/onboard/sandbox.py`; the call-side sandbox engine remains in `sandbox.py`; and the routes
 remain in `routers/onboard.py`. Their removal is intentionally deferred to the backend follow-up.
 

@@ -11,10 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ... import crypto
 from ...domain.governance.teams import cascade_delete_org
+from ...domain.identity.access import SANDBOX_DOMAIN
 from ...models import Membership, Org, Secret, Tool, User
 from ...sandbox_identity import visitor_name
 
-SANDBOX_DOMAIN = "sandbox.treg.local"     # throwaway visitor identities live here (can never log in)
 SANDBOX_TTL_MIN = 60
 MAX_TOOLS = 3                              # a sandbox visitor may register at most this many endpoints
 MAX_SECRETS = 3
