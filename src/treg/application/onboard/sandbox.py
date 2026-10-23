@@ -215,7 +215,13 @@ def install_script(name: str, base: str, token: str | None = None) -> str:
 
 async def gc(db: AsyncSession) -> int:
     """Reap sandboxes older than the TTL - the throwaway user, its org, and every org-scoped row.
-    Runs opportunistically each time a new sandbox is minted. Commits itself."""
+    Runs opportunistically each time a new sandbox is minted. Commits itself.
+
+    Only landing sandbox orgs (`is_sandbox`) are reaped. A visitor that also belongs to any other
+    org is left whole, user and every org, for a person to look at: that should not exist, and
+    deleting it would erase the only record of how it came to."""
+    from ... import sandbox as sandbox_runtime
+
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=SANDBOX_TTL_MIN)
     visitors = (await db.execute(
         select(User).where(User.email.like(f"visitor-%@{SANDBOX_DOMAIN}")))).scalars().all()
@@ -231,10 +237,13 @@ async def gc(db: AsyncSession) -> int:
         nested = await db.begin_nested()
         try:
             mems = (await db.execute(select(Membership).where(Membership.user_id == u.id))).scalars().all()
-            for m in mems:
-                org = await db.get(Org, m.org_id)
-                if org is None:
-                    continue
+            orgs = [org for m in mems if (org := await db.get(Org, m.org_id)) is not None]
+            if not all(sandbox_runtime.is_sandbox(org) for org in orgs):
+                await nested.rollback()
+                logging.getLogger("treg").warning(
+                    "sandbox user %s belongs to a non-sandbox org; kept for review", u.id)
+                continue
+            for org in orgs:
                 # The shared cascade, never a private table list.
                 await cascade_delete_org(org, db)
             await db.delete(u)

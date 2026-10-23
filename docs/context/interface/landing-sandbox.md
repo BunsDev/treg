@@ -54,8 +54,11 @@ onboarding demo teams (also `demo`, but team-named).
 
 `is_sandbox_user(user)` is the companion check on the **visitor** (email ends in `@sandbox.treg.local`,
 `SANDBOX_DOMAIN`). Such a login-free visitor may act ONLY inside its own sandbox org — it can **never
-create a real team** (`POST /orgs` → `create_org` returns 403: "sign in with GitHub, Google, or email")
-nor otherwise graduate to a real account. Escaping the sandbox requires a real sign-in door.
+create a real team** (`POST /orgs` → `create_org` and `POST /onboard/demo` → `provision_demo` both
+return 403: "sign in with GitHub, Google, or email") nor otherwise graduate to a real account. The
+demo seeder needs its own check: the visitor is a `member` of its sbx-* team, not an owner, so
+`existing_demo_org` misses it and the seeder would mint a second team whose slug `is_sandbox` never
+matches. Escaping the sandbox requires a real sign-in door.
 
 ## Safety: sandbox calls never touch the network (except the one live wire)
 `application.call.service` checks `demo_sandbox.is_sandbox(caller.org)` and, for a sandbox, short-circuits to
@@ -110,7 +113,9 @@ a deploy without the secret exposes no unauthenticated POST surface. Design poin
 
 Bounds: `MAX_TOOLS`/`MAX_SECRETS` (3) are enforced by `domain/governance/sandbox.py` on
 `POST /tools|/secrets`; `SANDBOX_TTL_MIN` (60) + `gc(db)` reaps expired visitors (their org + all
-org-scoped rows), run opportunistically on each mint. The reaper deletes the org through the ONE shared
+org-scoped rows), run opportunistically on each mint. It deletes only orgs `is_sandbox` matches: a
+visitor that also belongs to any other org is kept whole (user and every org) and logged for review,
+since that membership should not exist and deleting it would erase the only record of it. The reaper deletes the org through the ONE shared
 `cascade_delete_org` (`domain/governance/teams.py`) - it must never keep its own list of org-scoped
 tables. It once did, the copy never learned about `IdempotentCall`, and on 2026-09-02 Postgres refused
 the membership delete on every mint. `mint_sandbox` now also isolates the reaper: a gc failure is

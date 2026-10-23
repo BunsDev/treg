@@ -54,8 +54,15 @@ async def _user(user_id: int, db: AsyncSession) -> User:
 
 
 async def provision_demo(*, user_id: int, team_name: str) -> dict:
+    from ... import sandbox as sandbox_runtime
+
     async with session_maker() as db:
-        response = await demo_seed.provision(db, await _user(user_id, db), team_name)
+        user = await _user(user_id, db)
+        # A landing sandbox visitor is a member, not an owner, of its sbx-* team, so provision would
+        # mint it a second team that is_sandbox never recognises. Same rule as POST /orgs.
+        if sandbox_runtime.is_sandbox_user(user):
+            raise OnboardError("sandbox_user")
+        response = await demo_seed.provision(db, user, team_name)
         await db.commit()
         return response
 
