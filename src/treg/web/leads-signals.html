@@ -641,6 +641,17 @@
     .strip .cur { animation: none; }
     .hw { opacity: 1; transform: none; }
   }
+
+  /* ---------- launch video: hero play pill + lightbox ---------- */
+  .pill.play { gap: 9px; padding: 7px 18px 7px 7px; font-family: inherit; }
+  .pill.play .pi { width: 26px; height: 26px; border-radius: 50%; background: var(--green); display: grid; place-items: center; }
+  .pill.play .pi svg { width: 10px; height: 10px; margin-left: 2px; fill: #fff; }
+  .pill.play .dur { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .vbox { border: 0; padding: 0; background: transparent; width: min(1100px, 92vw); max-width: none; overflow: visible; }
+  .vbox::backdrop { background: rgba(10,10,10,.82); backdrop-filter: blur(4px); }
+  .vbox video { display: block; width: 100%; aspect-ratio: 16/9; border-radius: 14px; background: #000; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+  .vbox .x { position: absolute; top: -44px; right: 0; width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(255,255,255,.14); color: #fff; font-size: 20px; line-height: 1; cursor: pointer; }
+  .vbox .x:hover { background: rgba(255,255,255,.26); }
 </style>
 <script src="/captcha.js" defer></script>
 </head>
@@ -660,8 +671,14 @@
   <div class="ctas">
     <a class="pill dark" href="/app?ref=leads-signals" id="ctaHero">Setup treg</a>
     <a class="pill" href="#pricing">Pricing: pay per check</a>
+    <button type="button" class="pill play" id="playLaunch"><span class="pi"><svg viewBox="0 0 10 12" aria-hidden="true"><path d="M0 0l10 6-10 6z"/></svg></span>Watch the launch <span class="dur">1:15</span></button>
   </div>
 </header>
+<dialog class="vbox" id="vbox" aria-label="Launch video">
+  <form method="dialog"><button class="x" aria-label="Close">×</button></form>
+  <video src="media/leads-signals/launch.mp4" poster="media/leads-signals/launch-poster.jpg" controls playsinline preload="none"></video>
+</dialog>
+
 
 <div class="demo-wrap">
   <div class="stage" id="heroStage" aria-label="Demo: the agent monitors a topic, reads the hottest thread, scores companies and finds decision makers">
@@ -1548,5 +1565,15 @@
 <script src="/adtrack.js"></script>
 <script src="/gtag.js"></script>
 <script src="/media/signin-sso.js" defer></script>
+<script>
+(function () {
+  var box = document.getElementById('vbox'), v = box.querySelector('video');
+  document.getElementById('playLaunch').addEventListener('click', function () {
+    box.showModal(); v.play().catch(function () {});
+  });
+  box.addEventListener('close', function () { v.pause(); });
+  box.addEventListener('click', function (e) { if (e.target === box) box.close(); });
+})();
+</script>
 </body>
 </html>
