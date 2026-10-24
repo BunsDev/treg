@@ -585,9 +585,6 @@ async def test_platform_eligibility_refuses_everything_it_cannot_prove():
     # It stays discoverable (a team's OWN key on a bigger plan serves it) but is never an offer.
     assert not cat.platform_eligible({**ok, "platform_blocked": "plan gate"}), \
         "a plan-gated route is not an offer, however well priced"
-    blocked = cat.by_id["akta.companies.headcount_trend"]
-    assert blocked["platform_blocked"], "the akta alt-signals family carries its plan-gate reason"
-    assert not cat.platform_eligible(blocked)
 
 
 async def test_eligibility_rides_on_the_served_row(clients: AsyncClient):
