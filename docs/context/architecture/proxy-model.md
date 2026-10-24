@@ -108,6 +108,9 @@ incl. duplicates, headers, cookies, body bytes):
    This is semantic JSON relay, not byte-faithful relay: formatting changes, non-ASCII text is
    emitted as UTF-8, and duplicate keys fail closed. Never use a JSON binding where the upstream
    signs or hashes the caller's raw body bytes.
+   On a connection to treg's own Meta app the credential includes an `appsecret_proof` query
+   parameter (HMAC of the injected token with the app secret) that replaces any caller value; see
+   auth-secrets.md for when one is owed.
 
    **Every JSON re-encode goes through `treg/jsontext.py`.** `json.loads` accepts an escaped lone
    UTF-16 surrogate (`"\ud835"`, a JavaScript scraper cutting a LinkedIn post mid-pair) and a plain
