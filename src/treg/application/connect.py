@@ -867,6 +867,12 @@ async def _connection_for_upstream(
         return secret, crypto.decrypt(secret.value)
 
 
+def _with_appsecret_proof(provider, client_id: str, token: str, url: str) -> str:
+    """`url` with Meta's `appsecret_proof` appended when treg's app requires one for `token`."""
+    proof = oauth_providers.appsecret_proof(provider, client_id, token, url)
+    return f"{url}{'&' if '?' in url else '?'}appsecret_proof={proof}" if proof else url
+
+
 async def list_connection_resources(
     *, secret_id: int, org_id: int, client_factory,
 ) -> dict:
@@ -884,6 +890,7 @@ async def list_connection_resources(
             "no_resource_discovery",
             f"{secret.provider or 'this provider'} has nothing to choose between — it acts on your whole account",
         )
+    client_id = ""
     if provider.uses_pasted_secret:
         token = raw
         disc_headers = {provider.token_header: provider.token_format.format(secret=raw)}
@@ -891,12 +898,14 @@ async def list_connection_resources(
         blob = json.loads(raw)
         token = blob.get("access_token") or blob.get("token")
         disc_headers = {"Authorization": f"Bearer {token}"}
+        client_id = str(blob.get("client_id") or "")
     if provider.needs_extra_credential:
         disc_headers[provider.extra_credential_header] = provider.platform_extra_credential
 
     # All provider I/O is outside a database session, including optional enrichment.
+    disc_url = f"{provider.discovery_base.rstrip('/')}{provider.discover_path}"
     resp = await client.get(
-        f"{provider.discovery_base.rstrip('/')}{provider.discover_path}", headers=disc_headers,
+        _with_appsecret_proof(provider, client_id, token, disc_url), headers=disc_headers,
     )
     try:
         body = resp.json()
@@ -927,9 +936,9 @@ async def list_connection_resources(
         ]
     if provider.discover_extra_path:
         try:
+            extra_url = f"{provider.discovery_base.rstrip('/')}{provider.discover_extra_path}"
             extra = await client.get(
-                f"{provider.discovery_base.rstrip('/')}{provider.discover_extra_path}",
-                headers=disc_headers,
+                _with_appsecret_proof(provider, client_id, token, extra_url), headers=disc_headers,
             )
             if extra.status_code < 400:
                 for holder in (extra.json().get(provider.discover_key) or []):
@@ -1073,8 +1082,10 @@ async def _resolve_resource_call_token(
 
     async def fetch(path: str, *, required: bool) -> list[dict]:
         try:
+            url = f"{provider.discovery_base.rstrip('/')}{path}"
             resp = await client.get(
-                f"{provider.discovery_base.rstrip('/')}{path}", headers=headers)
+                _with_appsecret_proof(provider, str(blob.get("client_id") or ""), root_token, url),
+                headers=headers)
             body = resp.json()
         except Exception as exc:
             if not required:
@@ -1115,6 +1126,7 @@ async def _resolve_resource_call_token(
             fields[name] = str(value)
     await _run_resource_setup(
         provider, granted_scopes, resource_ref, fields, str(call_token), client,
+        client_id=str(blob.get("client_id") or ""),
     )
     return fields
 
@@ -1152,7 +1164,7 @@ async def _upgrade_resource_call_bindings(provider, secret: Secret, db: AsyncSes
 
 async def _run_resource_setup(
     provider, granted_scopes: str, resource_ref: str, context: dict[str, str],
-    call_token: str, client,
+    call_token: str, client, *, client_id: str = "",
 ) -> None:
     """Run a provider-declared setup request when the selected grant permits it.
 
@@ -1186,11 +1198,14 @@ async def _run_resource_setup(
         kwargs["data"] = payload
     else:
         kwargs["params"] = payload
+    url = f"{provider.base_url.rstrip('/')}{path}"
+    if proof := oauth_providers.appsecret_proof(provider, client_id, call_token, url):
+        if "params" in kwargs:  # httpx's params= would replace a query placed on the URL
+            kwargs["params"]["appsecret_proof"] = proof
+        else:
+            url = f"{url}{'&' if '?' in url else '?'}appsecret_proof={proof}"
     try:
-        response = await client.request(
-            provider.resource_setup_method,
-            f"{provider.base_url.rstrip('/')}{path}", **kwargs,
-        )
+        response = await client.request(provider.resource_setup_method, url, **kwargs)
     except Exception as exc:
         raise ConnectError(
             "resource_setup_failed",

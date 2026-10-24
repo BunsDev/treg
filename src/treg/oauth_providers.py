@@ -16,6 +16,9 @@ the user, and it asks for authority the capability doesn't need.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 from dataclasses import dataclass, replace
 from urllib.parse import urlsplit
 
@@ -181,6 +184,10 @@ class OAuthProvider:
     # Instagram Login uses a different long-lived exchange and a renewable 60-day access token.
     # Empty keeps the standard provider behavior; "instagram" snapshots that protocol on PendingOAuth.
     long_lived_exchange_style: str = ""
+    # Meta apps with "Require App Secret" refuse every server call whose token is not paired with
+    # `appsecret_proof` = HMAC-SHA256(app secret, token). Declared on the profiles that ride treg's
+    # Meta app; `appsecret_proof()` below decides when one is owed.
+    appsecret_proof: bool = False
     # One logical catalog provider can expose explicit, separate grants. Each method selects a
     # protocol profile without changing the provider id or duplicating its endpoint catalog.
     authorization_methods: tuple[OAuthAuthorizationMethod, ...] = ()
@@ -973,6 +980,7 @@ FACEBOOK = OAuthProvider(
     },
     client_id_setting="meta_client_id",
     client_secret_setting="meta_client_secret",
+    appsecret_proof=True,
     category="Social media",
     summary=(
         "Your Pages' posts, comments and reach — and publishing to them."
@@ -1127,6 +1135,7 @@ INSTAGRAM = OAuthProvider(
                 ("auth_uri", _META_AUTH), ("token_uri", _META_TOKEN),
                 ("client_id_setting", "meta_client_id"),
                 ("client_secret_setting", "meta_client_secret"),
+                ("appsecret_proof", True),
                 ("base_url", _META_BASE),
                 ("docs_url", "https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-facebook-login"),
                 ("consent_notice", _META_CONSENT_NOTICE), ("auth_params", {}),
@@ -1188,6 +1197,7 @@ META_ADS = OAuthProvider(
     },
     client_id_setting="meta_client_id",
     client_secret_setting="meta_client_secret",
+    appsecret_proof=True,
     category="Advertising",
     summary=(
         "Ad accounts, campaigns and performance across Facebook and Instagram, with full campaign management."
@@ -4105,6 +4115,42 @@ def platform_refresh_blob(service: str, method: str, blob: dict) -> dict | None:
     if not (client_id and client_secret) or blob.get("client_id") != client_id:
         return None
     return {**blob, "client_secret": client_secret, "token_uri": profile.token_uri}
+
+
+def appsecret_proof(profile: OAuthProvider, client_id: str, token: str, url: str) -> str | None:
+    """Meta's `appsecret_proof` for `token`, or None when none is owed.
+
+    Only for a profile that declares it, a token issued to treg's own configured app (a team's own
+    app keeps its own rules), and a request to that profile's own API hosts, so a blob or custom tool
+    a team controls can never have a proof computed for another destination.
+    """
+    if not (profile.appsecret_proof and client_id and token):
+        return None
+    hosts = {urlsplit(profile.base_url).hostname, urlsplit(profile.discovery_base).hostname}
+    if (urlsplit(str(url)).hostname or "").lower() not in hosts:
+        return None
+    s = get_settings()
+    app_secret = getattr(s, profile.client_secret_setting, "") or ""
+    if not app_secret or client_id != getattr(s, profile.client_id_setting, ""):
+        return None
+    return hmac.new(app_secret.encode(), token.encode(), hashlib.sha256).hexdigest()
+
+
+def connection_appsecret_proof(secret, binding: dict, raw: str, url: str) -> str | None:
+    """`appsecret_proof()` for the token an OAuth `binding` injects from `secret` (decrypted `raw`)."""
+    provider = REGISTRY.get(secret.provider or "")
+    if provider is None or secret.kind != "oauth" or binding.get("injector") != "oauth":
+        return None
+    try:
+        profile = provider.profile_for_authorization(secret.authorization_method or "")
+        blob = json.loads(raw)
+    except ValueError:
+        return None
+    if not isinstance(blob, dict):
+        return None
+    token = blob.get(binding.get("secret_field") or "access_token")
+    return appsecret_proof(profile, str(blob.get("client_id") or ""),
+                           token if isinstance(token, str) else "", url)
 
 
 def is_configured(provider: OAuthProvider) -> bool:

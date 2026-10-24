@@ -293,6 +293,17 @@ blob, including one that merely names treg's `client_id`, refreshes with only wh
 treg app secret is therefore an env change plus a deploy on every service that refreshes; the old
 secret can be deleted at the provider as soon as that deploy is live.
 
+**Meta App Secret Proof.** treg's Meta app requires App Secret Proof, so Graph refuses any server
+call whose user or Page token is not paired with `appsecret_proof` = HMAC-SHA256(app secret, token)
+(400, code 100). Profiles that ride that app declare `appsecret_proof=True` (`facebook`, `meta-ads`,
+Instagram's `facebook-page`), and `oauth_providers.appsecret_proof` computes one only when the
+token's blob names the `client_id` this deployment configures for that profile and the request goes
+to the profile's own API or discovery host. Every request that sends such a token carries it: the
+relay and the health probe (`connection_appsecret_proof`, over the token the binding injects, so a
+Page call is proved with the Page token) and the account picker, Page-token lookup and resource
+setup in `application/connect.py`. Token exchange and refresh send the app secret itself and need no
+proof. A team's own Meta app never gets one computed with treg's secret.
+
 **Connect flow (mint the first token):** `consent_url(pending)` builds the provider consent URL
 (default `access_type=offline` + `prompt=consent` so a refresh token comes back); `exchange_code(pending,
 code, client)` trades the auth code for tokens and returns a self-refreshable blob. Both honor
