@@ -41,7 +41,7 @@ from collections.abc import Awaitable, Callable
 
 import httpx
 
-from ... import crypto, jsontext
+from ... import crypto, jsontext, oauth_providers
 from ...application.call.types import GatewayFailed, UpstreamRequest, UpstreamResponse
 from ...config import TREG_USER_AGENT, get_settings
 from ...models import Secret, Tool
@@ -213,13 +213,17 @@ async def relay(
                     detail=f"credential injection failed: {exc}") from exc
             continue
         secret = secrets[binding["secret_id"]]
+        raw = crypto.decrypt(secret.value)
         try:
-            injectors.inject(headers, params, binding, crypto.decrypt(secret.value),
-                             json_body=json_body)
+            injectors.inject(headers, params, binding, raw, json_body=json_body)
         except ValueError as exc:
             raise GatewayFailed(
                 "injection_failed", status_code=502,
                 detail=f"credential injection failed: {exc}") from exc
+        # Part of the injected credential on treg's Meta app: the HMAC pairing its token with the app.
+        if proof := oauth_providers.connection_appsecret_proof(secret, binding, raw, upstream_url):
+            params[:] = [(k, v) for (k, v) in params if k != "appsecret_proof"]
+            params.append(("appsecret_proof", proof))
 
     # Only carry a body when the caller actually sent one — otherwise passing an (unsized) stream
     # makes httpx frame the request `Transfer-Encoding: chunked`, putting a bogus body-frame on a

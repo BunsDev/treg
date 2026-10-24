@@ -39,8 +39,9 @@ Everything else in this file is guidance; these are the contract, and they win o
 3. A request holds zero database connections while upstream or object-storage I/O is in flight.
    Keep `reserve` and `settle` separate; read archive pointers, close the session, then fetch bytes.
 4. Plain `/call/` is a faithful relay: the injected credential (on treg's shared key, one of treg's
-   accounts for the provider, chosen per call and fixed for anything an account created), the
-   transport headers listed in
+   accounts for the provider, chosen per call and fixed for anything an account created; on a
+   connection to treg's own Meta app it also carries `appsecret_proof`, the HMAC of the injected
+   token with the app secret, replacing any caller value), the transport headers listed in
    `src/treg/infra/upstream/relay.py`, and (on treg's shared key only) the per-org and, for pinned
    agents, per-pin re-scoping of the caller's `Idempotency-Key` and treg's own `User-Agent` in place
    of the caller's are the only rewrites of what the caller sent. One addition is allowed: when the

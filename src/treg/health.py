@@ -73,7 +73,10 @@ async def _probe(tool: Tool, smap: dict[int, Secret], client: httpx.AsyncClient)
             s = smap.get(b["secret_id"])  # a dangling binding (secret deleted) → skip, don't KeyError
             if s is None:
                 continue
-            injectors.inject(headers, params, b, crypto.decrypt(s.value))  # a bad binding must not 500 the run
+            raw = crypto.decrypt(s.value)
+            injectors.inject(headers, params, b, raw)  # a bad binding must not 500 the run
+            if proof := oauth_providers.connection_appsecret_proof(s, b, raw, url):
+                params = [(k, v) for (k, v) in params if k != "appsecret_proof"] + [("appsecret_proof", proof)]
         # Merge onto the URL rather than passing params=: httpx REPLACES a URL's existing query
         # string whenever params is given (even an empty list), which would silently strip a probe
         # path's own query — e.g. YouTube's ?part=id&mine=true — and fail a healthy credential.

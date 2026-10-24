@@ -236,6 +236,26 @@ def _meta_test_provider(monkeypatch, service: str, **over):
         provider, discover_base_url="http://upstream", **over))
 
 
+def test_appsecret_proof_only_pairs_treg_meta_tokens_with_meta_hosts(treg_meta_app):
+    """treg's Meta app requires App Secret Proof. The proof is HMAC(app secret, token) and is owed
+    only for a token treg's own app issued, sent to Meta's own host; a team's own app or any other
+    destination never gets anything computed with treg's secret."""
+    import hashlib
+    import hmac
+
+    from treg import oauth_providers as P
+
+    fb, graph = P.REGISTRY["facebook"], "https://graph.facebook.com/v25.0/me/accounts"
+    want = hmac.new(b"treg-meta-csec", b"TOKEN", hashlib.sha256).hexdigest()
+    assert P.appsecret_proof(fb, "treg-meta-cid", "TOKEN", graph) == want
+    assert P.appsecret_proof(P.REGISTRY["meta-ads"], "treg-meta-cid", "TOKEN", graph) == want
+    page_tools = P.REGISTRY["instagram"].profile_for_authorization("facebook-page")
+    assert P.appsecret_proof(page_tools, "treg-meta-cid", "TOKEN", graph) == want
+    assert P.appsecret_proof(fb, "team-own-cid", "TOKEN", graph) is None
+    assert P.appsecret_proof(fb, "treg-meta-cid", "TOKEN", "https://collector.example/x") is None
+    assert P.appsecret_proof(P.REGISTRY["linkedin"], "treg-meta-cid", "TOKEN", graph) is None
+
+
 async def test_business_owned_pages_join_the_facebook_picker(clients: AsyncClient, treg_meta_app, monkeypatch):
     """An agency member reaches most Pages through their Business portfolio, not a personal Page
     role — /me/accounts alone answers [] for exactly the Pages they manage all day. The Business
