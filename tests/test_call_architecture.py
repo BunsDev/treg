@@ -112,7 +112,7 @@ _DATAPLANE_DERIVED_WRITES = {
     # (Redis, after the DB phase ended) until its answer is read; expiry frees a crashed holder's.
     "provider_concurrency_lease": (
         (service._execute_call, "fair_share.acquire"),
-        (fair_share._dispatch_shared, "provider_concurrency.try_acquire"),
+        (fair_share._Pool._ask, "provider_concurrency.try_acquire"),
         (provider_concurrency.try_acquire, "store.acquire_slot"),
         (provider_concurrency.Lease._renew, "self.store.renew_slot"),
         (provider_concurrency.Lease._release, "self.store.release_slot"),
@@ -231,7 +231,7 @@ _EXPECTED_DERIVED_WRITE_SITES = {
     ("application/call/service.py", "_apply_managed_resource_result",
      "provider_resources.tombstone"),
     ("application/call/service.py", "_execute_call", "fair_share.acquire"),
-    ("domain/capacity/fair_share.py", "_dispatch_shared", "provider_concurrency.try_acquire"),
+    ("domain/capacity/fair_share.py", "_ask", "provider_concurrency.try_acquire"),
     ("infra/provider_concurrency.py", "try_acquire", "store.acquire_slot"),
     ("infra/provider_concurrency.py", "_renew", "self.store.renew_slot"),
     ("infra/provider_concurrency.py", "_release", "self.store.release_slot"),

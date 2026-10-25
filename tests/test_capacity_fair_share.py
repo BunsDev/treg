@@ -98,17 +98,25 @@ class _SharedStore:
         self.down = False
         self.delay = 0.0
         self.acquires = 0
+        self.asking = self.most_asking = 0
+        self.most_held = 0
 
     async def acquire_slot(self, key, token, ttl_ms, limit):
         self.acquires += 1
-        if self.delay:
-            await asyncio.sleep(self.delay)
+        self.asking += 1
+        self.most_asking = max(self.most_asking, self.asking)
+        try:
+            if self.delay:
+                await asyncio.sleep(self.delay)
+        finally:
+            self.asking -= 1
         if self.down:
             return "unavailable"
         owners = self.owners.setdefault(key, set())
         if len(owners) >= limit:
             return "busy"
         owners.add(token)
+        self.most_held = max(self.most_held, len(owners))
         return "acquired"
 
     async def renew_slot(self, key, token, ttl_ms):
@@ -228,6 +236,29 @@ async def test_a_reply_after_the_lease_ran_out_is_never_handed_out(shared, monke
         await gate.acquire("p", 1, 1, max_wait_s=0.2)
     await asyncio.sleep(0.1)
     assert shared.held("p") == 0 and gate._pools["p"].active == 0
+
+
+async def test_free_places_fill_at_once_however_slow_the_store_answers(shared):
+    shared.delay = 0.025                                  # each answer takes a round trip
+    gate = FairShare()
+    slots = await asyncio.gather(*(gate.acquire("p", n % 5, 20, max_wait_s=0.2) for n in range(20)))
+    assert shared.most_held == 20, "one request at a time would need 0.5 s for 20 places"
+    for s in slots:
+        s.release()
+
+
+async def test_a_full_account_is_asked_one_request_at_a_time(shared):
+    one, two = FairShare(), FairShare()
+    elsewhere = [await one.acquire("p", 9, 10) for _ in range(10)]   # the account is full
+    waiting = [asyncio.create_task(two.acquire("p", n, 10, max_wait_s=0.15)) for n in range(10)]
+    await asyncio.sleep(0.01)
+    shared.most_asking = 0
+    shared.delay = 0.005
+    for result in await asyncio.gather(*waiting, return_exceptions=True):
+        assert isinstance(result, ShareBusy)
+    assert shared.most_asking == 1, "ten waiters on a full account must not ask ten times per round"
+    for s in elsewhere:
+        s.release()
 
 
 async def test_no_shared_store_takes_no_lease():

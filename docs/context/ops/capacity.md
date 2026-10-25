@@ -628,11 +628,13 @@ the stream finishes. A wait shows in `X-Treg-Smoothed` as `share_wait=<ms>`. Own
 gated (non-negotiable 1).
 
 The line and the fewest-first choice are per process; the cap is per account across every process.
-With `TREG_KV_URL` set every call queues, and one dispatcher per account in each process asks the
-shared store for a place (`infra/provider_concurrency.py`: one Redis sorted set per account,
-`treg:provider-concurrency:v1:` plus the account key, on the same lease scripts as org concurrency)
-and hands each place it gets to the waiting call rule 2 picks at that moment, so fewest-first holds
-for shared places too. A full account is polled with backoff; a call still waiting at
+With `TREG_KV_URL` set every call queues, and each process asks the shared store for places on the
+account's behalf (`infra/provider_concurrency.py`: one Redis sorted set per account,
+`treg:provider-concurrency:v1:` plus the account key, on the same lease scripts as org concurrency),
+as many requests at once as it has free places and waiting calls, so free places fill in one round
+trip. Each place that lands goes to the waiting call rule 2 picks at that moment, so fewest-first
+holds for shared places too. Once the store says the account is full, the process asks one request
+at a time with backoff until a place lands; a call still waiting at
 `fair_share_wait_s` leaves as `share_busy`. A place that lands after its call left, or a reply that
 arrives after the lease could have expired, goes straight back and is never handed out. A lease
 lasts 30 s and is renewed every 10 s while the call runs, so a crashed process frees its places
