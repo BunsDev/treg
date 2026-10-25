@@ -14,8 +14,9 @@ from treg.application import billing, asynctasks as task_app
 from treg.application.hub import runner as hub_runner
 from treg.application.call import authorize, overflow, reserve, service, settle
 from treg.domain import money
-from treg.domain.capacity import marks as capacity_marks
+from treg.domain.capacity import fair_share, marks as capacity_marks
 from treg.domain.governance import usage as usage_policy
+from treg.infra import provider_concurrency
 
 
 _SRC = Path(__file__).parents[1] / "src" / "treg"
@@ -107,6 +108,15 @@ _DATAPLANE_DERIVED_WRITES = {
         (authorize.authorize_call, "usage_policy.enforce_daily_cap"),
         (usage_policy.enforce_daily_cap, "take_daily_slot"),
     ),
+    # A platform call holds a renewed lease on the provider account's shared concurrency places
+    # (Redis, after the DB phase ended) until its answer is read; expiry frees a crashed holder's.
+    "provider_concurrency_lease": (
+        (service._execute_call, "fair_share.acquire"),
+        (fair_share._Pool._ask, "provider_concurrency.try_acquire"),
+        (provider_concurrency.try_acquire, "store.acquire_slot"),
+        (provider_concurrency.Lease._renew, "self.store.renew_slot"),
+        (provider_concurrency.Lease._release, "self.store.release_slot"),
+    ),
 }
 _EXPECTED_DATAPLANE_WRITES = frozenset({
     "money_admission_lease",
@@ -124,6 +134,7 @@ _EXPECTED_DATAPLANE_WRITES = frozenset({
     "async_resource_ownership",
     "provider_resource_ownership",
     "member_daily_cap_slot",
+    "provider_concurrency_lease",
 })
 _DERIVED_WRITE_FILES = {
     _SRC / "application" / "asynctasks.py": {"money_admission.admit"},
@@ -149,7 +160,12 @@ _DERIVED_WRITE_FILES = {
         "overflow_spend_ledger.reserve_in_transaction",
         "overflow_spend_ledger.release_reservation_in_transaction",
     },
+    _SRC / "domain" / "capacity" / "fair_share.py": {"provider_concurrency.try_acquire"},
+    _SRC / "infra" / "provider_concurrency.py": {
+        "store.acquire_slot", "self.store.renew_slot", "self.store.release_slot",
+    },
     _SRC / "application" / "call" / "service.py": {
+        "fair_share.acquire",
         "archive.record",
         "async_task_app.observe_owned_poll",
         "async_task_app.remember_platform_resources",
@@ -214,6 +230,11 @@ _EXPECTED_DERIVED_WRITE_SITES = {
      "provider_resources.rename"),
     ("application/call/service.py", "_apply_managed_resource_result",
      "provider_resources.tombstone"),
+    ("application/call/service.py", "_execute_call", "fair_share.acquire"),
+    ("domain/capacity/fair_share.py", "_ask", "provider_concurrency.try_acquire"),
+    ("infra/provider_concurrency.py", "try_acquire", "store.acquire_slot"),
+    ("infra/provider_concurrency.py", "_renew", "self.store.renew_slot"),
+    ("infra/provider_concurrency.py", "_release", "self.store.release_slot"),
     ("domain/capacity/marks.py", "strike", "ratestore.kv_put"),
     ("domain/capacity/marks.py", "clear", "ratestore.kv_pop"),
     ("domain/capacity/marks.py", "clear_sweep_state", "ratestore.kv_put"),

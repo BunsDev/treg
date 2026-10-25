@@ -232,7 +232,7 @@ _CONCURRENCY: dict[str, int] = {
     "crawl4ai": 500,
     "hlrlookup": 210,
     # The key status API reports its configured concurrency limit.
-    "litescrape": 25,
+    "litescrape": 100,
     # treg's own conservative setting for the shared account (catalog row `limits`).
     "fishaudio": 5,
 }

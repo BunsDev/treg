@@ -171,8 +171,8 @@ async def _litescrape(c, key):
     if type(raw) is not int or raw < 0:
         raise ValueError("Litescrape status returned an invalid remaining_calls")
     limit = d.get("concurrency_limit")
-    note = (f"key concurrency limit {limit}" if type(limit) is int and limit > 0
-            else "key concurrency limit unavailable")
+    note = (f"concurrency limit {limit}" if type(limit) is int and limit > 0
+            else "concurrency limit unavailable")
     return {"value": raw, "unit": "calls", "note": note}
 
 
