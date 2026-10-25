@@ -14,15 +14,19 @@ The rule is max-min fairness on the places, and it never leaves a place empty wh
    its next provider and a direct call is refused (not charged) with a retry hint.
 
 DB-free on purpose, like the rate limiter (infra/upstream/limiter.py): it runs after the DB phase
-ended and before the relay. The line and the fewest-first choice are per process. The `cap` is
-shared by every process when the shared store is configured: a call holding its process's place
-also takes a lease on the account (infra/provider_concurrency.py), waiting for one within the same
-`max_wait_s`. Without the store, or while it fails, each process enforces `cap` on its own.
+ended and before the relay. The line and the fewest-first choice are per process. With the shared
+store configured (infra/provider_concurrency.py) the `cap` is per account across every process:
+every call queues, and one dispatcher per account in each process asks the store for a place and
+hands each one it gets to the call rule 2 picks at that moment. A place that arrives after its call
+left goes straight back. While the store fails, places are handed out on this process's count
+alone; without the store, each process enforces `cap` on its own.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
+import random
 import time
 from dataclasses import dataclass, field
 
@@ -30,6 +34,11 @@ from ...infra import provider_concurrency
 
 DEFAULT_MAX_WAIT_S = 2.0
 RETRY_AFTER_S = 2
+_FIRST_POLL_S = 0.02
+_MAX_POLL_S = 0.2
+_STORE_DOWN_S = 5.0
+
+log = logging.getLogger("treg.fair_share")
 
 
 class ShareBusy(Exception):
@@ -44,15 +53,20 @@ class ShareBusy(Exception):
 class _Waiter:
     team: int
     future: asyncio.Future
+    contended: bool  # the call met a full provider; only then does its wait show
     since: float = field(default_factory=time.monotonic)
 
 
 @dataclass
 class _Pool:
+    name: str
     cap: int
+    shared: bool = False
     active: int = 0
     by_team: dict[int, int] = field(default_factory=dict)
     line: list[_Waiter] = field(default_factory=list)
+    dispatcher: asyncio.Task | None = None
+    store_down_until: float = 0.0
 
     def take(self, team: int) -> None:
         self.active += 1
@@ -66,16 +80,56 @@ class _Pool:
         else:
             self.by_team.pop(team, None)
 
+    def next_waiter(self) -> _Waiter | None:
+        """The waiting call whose team has the fewest in progress, oldest first; drops cancelled."""
+        self.line = [w for w in self.line if not w.future.done()]
+        if not self.line:
+            return None
+        return min(self.line, key=lambda w: (self.by_team.get(w.team, 0), w.since))
+
+    def hand(self, waiter: _Waiter, lease: provider_concurrency.Lease | None) -> None:
+        self.line.remove(waiter)
+        self.take(waiter.team)
+        waiter.future.set_result(lease)
+
     def dispatch(self) -> None:
         """Hand every free place to the waiting call whose team has the fewest in progress."""
-        while self.active < self.cap and self.line:
-            best = min(range(len(self.line)),
-                       key=lambda i: (self.by_team.get(self.line[i].team, 0), self.line[i].since))
-            w = self.line.pop(best)
-            if w.future.done():  # cancelled while it waited; its place goes to the next one
+        if self.shared:
+            if self.line and self.active < self.cap and (
+                    self.dispatcher is None or self.dispatcher.done()):
+                self.dispatcher = asyncio.get_running_loop().create_task(_dispatch_shared(self))
+            return
+        while self.active < self.cap and (waiter := self.next_waiter()) is not None:
+            self.hand(waiter, None)
+
+
+async def _dispatch_shared(pool: _Pool) -> None:
+    """Ask the store for one place at a time and hand each to the call rule 2 picks when it lands."""
+    poll_s = _FIRST_POLL_S
+    try:
+        while pool.active < pool.cap and pool.next_waiter() is not None:
+            lease = None
+            if time.monotonic() >= pool.store_down_until:
+                outcome = await provider_concurrency.try_acquire(pool.name, pool.cap)
+                if outcome == provider_concurrency.BUSY:
+                    for waiter in pool.line:
+                        waiter.contended = True
+                    await asyncio.sleep(poll_s * random.uniform(0.5, 1.0))
+                    poll_s = min(poll_s * 2, _MAX_POLL_S)
+                    continue
+                if outcome is None:  # skip the store for a while instead of waiting on it per call
+                    pool.store_down_until = time.monotonic() + _STORE_DOWN_S
+                else:
+                    lease = outcome
+            poll_s = _FIRST_POLL_S
+            waiter = pool.next_waiter() if pool.active < pool.cap else None
+            if waiter is None:  # every caller left (or the cap fell) while the store answered
+                if lease is not None:
+                    lease.release()
                 continue
-            self.take(w.team)
-            w.future.set_result(None)
+            pool.hand(waiter, lease)
+    except Exception:  # waiters time out into ShareBusy; the next release starts a new dispatcher
+        log.exception("fair_share dispatcher for %s stopped", pool.name)
 
 
 class Slot:
@@ -84,9 +138,9 @@ class Slot:
     __slots__ = ("_gate", "_provider", "_team", "waited_ms", "lease")
 
     def __init__(self, gate: "FairShare | None", provider: str = "", team: int = 0,
-                 waited_ms: int = 0) -> None:
+                 waited_ms: int = 0, lease: provider_concurrency.Lease | None = None) -> None:
         self._gate, self._provider, self._team, self.waited_ms = gate, provider, team, waited_ms
-        self.lease: provider_concurrency.Lease | None = None
+        self.lease = lease
 
     def release(self) -> None:
         if self.lease is not None:
@@ -113,7 +167,7 @@ class FairShare:
     def _pool(self, provider: str, cap: int) -> _Pool:
         pool = self._pools.get(provider)
         if pool is None:
-            pool = self._pools[provider] = _Pool(cap)
+            pool = self._pools[provider] = _Pool(provider, cap, shared=provider_concurrency.enabled())
         elif pool.cap != cap:  # a changed limit applies at once; a raise frees waiting calls
             pool.cap = cap
             pool.dispatch()
@@ -121,32 +175,15 @@ class FairShare:
 
     async def acquire(self, provider: str, team: int, cap: int, *,
                       max_wait_s: float = DEFAULT_MAX_WAIT_S) -> Slot:
-        """Take a place for `team` on `provider`, waiting at most `max_wait_s` (rule 3) for this
-        process's place and the account's shared lease together."""
+        """Take a place for `team` on `provider`, waiting at most `max_wait_s` (rule 3)."""
         if cap <= 0:
             return NO_SLOT
-        started = time.monotonic()
-        slot = await self._acquire_local(provider, team, cap, max_wait_s)
-        try:
-            slot.lease = await provider_concurrency.acquire(
-                provider, cap, wait_s=max(0.0, max_wait_s - (time.monotonic() - started)))
-        except provider_concurrency.Busy:
-            slot.release()
-            active = self._pools[provider].by_team.get(team, 0)
-            raise ShareBusy(provider, team, active, time.monotonic() - started) from None
-        except BaseException:
-            slot.release()
-            raise
-        if slot.lease is not None and slot.lease.waited:
-            slot.waited_ms = _ms_since(started)
-        return slot
-
-    async def _acquire_local(self, provider: str, team: int, cap: int, max_wait_s: float) -> Slot:
         pool = self._pool(provider, cap)
-        if pool.active < pool.cap and not pool.line:
+        full = pool.active >= pool.cap or bool(pool.line)
+        if not pool.shared and not full:
             pool.take(team)
             return Slot(self, provider, team)
-        waiter = _Waiter(team, asyncio.get_running_loop().create_future())
+        waiter = _Waiter(team, asyncio.get_running_loop().create_future(), contended=full)
         pool.line.append(waiter)
         pool.dispatch()  # the newcomer may outrank a heavier team for a place that is free now
         try:
@@ -154,7 +191,7 @@ class FairShare:
         except asyncio.TimeoutError:
             if waiter.future.done() and not waiter.future.cancelled():
                 # handed a place in the same instant the wait ran out: keep it
-                return Slot(self, provider, team, _ms_since(waiter.since))
+                return self._slot(provider, waiter)
             waiter.future.cancel()
             if waiter in pool.line:
                 pool.line.remove(waiter)
@@ -163,13 +200,17 @@ class FairShare:
         except BaseException:
             # the caller went away while waiting: return a place it may have been handed
             if waiter.future.done() and not waiter.future.cancelled():
-                self._release(provider, team)
+                self._slot(provider, waiter).release()
             else:
                 waiter.future.cancel()
                 if waiter in pool.line:
                     pool.line.remove(waiter)
             raise
-        return Slot(self, provider, team, _ms_since(waiter.since))
+        return self._slot(provider, waiter)
+
+    def _slot(self, provider: str, waiter: _Waiter) -> Slot:
+        return Slot(self, provider, waiter.team,
+                    _ms_since(waiter.since) if waiter.contended else 0, waiter.future.result())
 
     def _release(self, provider: str, team: int) -> None:
         pool = self._pools.get(provider)
@@ -179,6 +220,9 @@ class FairShare:
         pool.dispatch()
 
     def reset(self) -> None:
+        for pool in self._pools.values():
+            if pool.dispatcher is not None:
+                pool.dispatcher.cancel()
         self._pools.clear()
 
 

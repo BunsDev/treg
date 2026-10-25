@@ -628,15 +628,19 @@ the stream finishes. A wait shows in `X-Treg-Smoothed` as `share_wait=<ms>`. Own
 gated (non-negotiable 1).
 
 The line and the fewest-first choice are per process; the cap is per account across every process.
-A call holding its process's place also takes a lease on the account in the shared store
-(`infra/provider_concurrency.py`: one Redis sorted set per account, `treg:provider-concurrency:v1:`
-plus the account key, on the same lease scripts as org concurrency). When every lease is taken it
-polls with backoff inside the same `fair_share_wait_s`, then leaves as `share_busy` and returns its
-process place. A lease lasts 30 s and is renewed every 10 s while the call runs, so a crashed process
-frees its places within one lease; expiry cannot stop a request already sent. Without
-`TREG_KV_URL`, or while the store fails, a call takes no lease and each process enforces the cap on
-its own, which is exact for one process. `share_wait` includes time spent waiting for a lease.
-Choosing an account (`keyslots`) still reads only this process's places.
+With `TREG_KV_URL` set every call queues, and one dispatcher per account in each process asks the
+shared store for a place (`infra/provider_concurrency.py`: one Redis sorted set per account,
+`treg:provider-concurrency:v1:` plus the account key, on the same lease scripts as org concurrency)
+and hands each place it gets to the waiting call rule 2 picks at that moment, so fewest-first holds
+for shared places too. A full account is polled with backoff; a call still waiting at
+`fair_share_wait_s` leaves as `share_busy`. A place that lands after its call left, or a reply that
+arrives after the lease could have expired, goes straight back and is never handed out. A lease
+lasts 30 s and is renewed every 10 s while the call runs, so a crashed process frees its places
+within one lease; expiry cannot stop a request already sent. When the store fails the dispatcher
+hands places out on this process's count and skips the store for 5 s; without `TREG_KV_URL` each
+process enforces the cap on its own, which is exact for one process. `share_wait` appears only for
+a call that met a full provider. Choosing an account (`keyslots`) still reads only this process's
+places.
 
 ## Overflow, the child cycle (step E) — off by default
 

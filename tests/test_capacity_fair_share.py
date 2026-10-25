@@ -90,13 +90,19 @@ async def test_free_places_are_never_left_empty_while_a_call_waits():
 # ---- the cap across processes -------------------------------------------------------------------
 
 class _SharedStore:
-    """The slot half of the shared store, in memory; `down` makes every command fail."""
+    """The slot half of the shared store, in memory; `down` makes every command fail and `delay`
+    holds every acquire reply that long."""
 
     def __init__(self) -> None:
         self.owners: dict[str, set[str]] = {}
         self.down = False
+        self.delay = 0.0
+        self.acquires = 0
 
     async def acquire_slot(self, key, token, ttl_ms, limit):
+        self.acquires += 1
+        if self.delay:
+            await asyncio.sleep(self.delay)
         if self.down:
             return "unavailable"
         owners = self.owners.setdefault(key, set())
@@ -179,12 +185,56 @@ async def test_a_failing_store_falls_back_to_the_process_count(shared):
         s.release()
 
 
+async def test_a_failing_store_is_skipped_for_a_while_not_asked_per_call(shared):
+    shared.down = True
+    gate = FairShare()
+    for team in (1, 2, 3):
+        (await gate.acquire("p", team, 5)).release()
+    assert shared.acquires == 1
+
+
+async def test_a_freed_shared_place_goes_to_the_team_with_the_fewest_calls_in_progress(shared):
+    one, two = FairShare(), FairShare()
+    elsewhere = await one.acquire("p", 9, 2)
+    heavy = await two.acquire("p", 1, 2)                      # the account is full
+    heavy_again = asyncio.create_task(two.acquire("p", 1, 2, max_wait_s=1))  # queues first...
+    await asyncio.sleep(0.05)
+    light = asyncio.create_task(two.acquire("p", 2, 2, max_wait_s=1))        # ...the light team after
+    await asyncio.sleep(0.05)
+    elsewhere.release()                                       # a place frees in the OTHER process
+    slot = await asyncio.wait_for(light, 1)
+    assert not heavy_again.done(), "the light team gets the shared place first"
+    for s in (heavy, slot):
+        s.release()
+    (await asyncio.wait_for(heavy_again, 1)).release()
+    await _turns()
+    assert shared.held("p") == 0
+
+
+async def test_a_place_that_lands_after_its_call_left_goes_straight_back(shared):
+    shared.delay = 0.08
+    gate = FairShare()
+    with pytest.raises(ShareBusy):
+        await gate.acquire("p", 1, 1, max_wait_s=0.01)
+    await asyncio.sleep(0.15)
+    assert shared.held("p") == 0 and gate._pools["p"].active == 0
+
+
+async def test_a_reply_after_the_lease_ran_out_is_never_handed_out(shared, monkeypatch):
+    monkeypatch.setattr(provider_concurrency, "_LEASE_S", 0.02)  # shorter than the reply
+    shared.delay = 0.05
+    gate = FairShare()
+    with pytest.raises(ShareBusy):
+        await gate.acquire("p", 1, 1, max_wait_s=0.2)
+    await asyncio.sleep(0.1)
+    assert shared.held("p") == 0 and gate._pools["p"].active == 0
+
+
 async def test_no_shared_store_takes_no_lease():
-    assert not kv.configured()
+    assert not provider_concurrency.enabled()
     slot = await FairShare().acquire("p", 1, 1)
     assert slot.lease is None and slot.waited_ms == 0
     slot.release()
-    assert await provider_concurrency.acquire("p", 1, wait_s=0) is None
 
 
 # ---- the call path ------------------------------------------------------------------------------
