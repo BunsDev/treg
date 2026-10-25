@@ -3423,6 +3423,7 @@ _SITEMAP_PAGES: tuple[tuple[str, str, str], ...] = (
     ("/blog", "", "0.7"),
     ("/blog/work-email-finding-bench", "", "0.6"),
     ("/blog/people-search-bench", "", "0.6"),
+    ("/blog/security-incident-2026-10-23", "", "0.6"),
     ("/vendor-listing", "vendor-listing.md", "0.5"),
     ("/support", "support.html", "0.4"),
     ("/connectors/claude", "claude-connector.html", "0.6"),
@@ -4125,6 +4126,8 @@ _BLOG_LAUNCHES: list[tuple[str, str, str, str]] = [
 # have their own top-level routes), but they sit prominently on the /blog index above launches.
 _BLOG_POSTS: list[tuple[str, str, str, str]] = [
     # (slug under /blog/, title, date, one-line blurb)
+    ("security-incident-2026-10-23", "23 Oct 2026 Treg security incident report", "2026-10-25",
+     "What happened, what may be affected, and what to rotate. Investigation ongoing."),
     ("work-email-finding-bench", "Work Email Finding: a 292 Person Receipt", "2026-09-16",
      "Quality tie across vendors. Cost is the gap: $0.0056 vs $0.0395 per correct."),
     ("people-search-bench", "#1 on People Search Bench", "2026-09-14",
@@ -4253,6 +4256,27 @@ async def blog_people_search_bench():
                  "treg.to scores 80.0% on recruiting, 78.2% on B2B prospecting on People Search Bench "
                  "by LessieAI. 119 real tasks, same agent with and without the plugin.",
                  "/blog/people-search-bench", body, ld)
+
+
+@app.get("/blog/security-incident-2026-10-23", include_in_schema=False)
+async def blog_security_incident_2026_10_23():
+    """Customer-facing incident report. The body lives in its own HTML file so the report can be
+    updated without touching route code."""
+    if not _hosted():
+        raise HTTPException(status_code=404, detail="not found")
+    base = get_settings().public_url.rstrip("/")
+    slug = "security-incident-2026-10-23"
+    title = next(p[1] for p in _BLOG_POSTS if p[0] == slug)
+    body = (_WEB_DIR / f"blog-{slug}.html").read_text(encoding="utf-8")
+    ld = [_blog_posting_ld(slug, base),
+          {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "treg.to", "item": base + "/"},
+        {"@type": "ListItem", "position": 2, "name": "Blog", "item": base + "/blog"},
+        {"@type": "ListItem", "position": 3, "name": title, "item": f"{base}/blog/{slug}"}]}]
+    return _page(f"{title} | treg.to",
+                 "On October 23, 2026 we confirmed unauthorized access to part of treg's production "
+                 "systems. What may be affected, what we have done, and what you need to do.",
+                 f"/blog/{slug}", body, ld)
 
 
 @app.get("/blog/work-email-finding-bench", include_in_schema=False)
