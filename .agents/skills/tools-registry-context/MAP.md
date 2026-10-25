@@ -490,6 +490,7 @@ Regenerate via `scripts/build-map.py`.
 | `src/treg/infra/org_concurrency.py` | architecture/org-concurrency.md |
 | `src/treg/infra/org_flow_control.py` | architecture/org-flow-control.md |
 | `src/treg/infra/org_traffic.py` | architecture/org-traffic.md |
+| `src/treg/infra/provider_concurrency.py` | ops/capacity.md |
 | `src/treg/infra/stripe.py` | architecture/money.md |
 | `src/treg/infra/structured_logging.py` | architecture/org-flow-control.md, architecture/org-traffic.md |
 | `src/treg/infra/turnstile.py` | architecture/multi-tenancy.md |
@@ -735,6 +736,7 @@ Regenerate via `scripts/build-map.py`.
 | `tests/test_platform_accounts.py` | architecture/proxy-model.md |
 | `tests/test_policy.py` | architecture/policy-extensions.md |
 | `tests/test_postgres_reset.py` | architecture/data-model.md |
+| `tests/test_provider_concurrency_redis.py` | ops/capacity.md |
 | `tests/test_redundant_index_migration.py` | architecture/data-model.md |
 | `tests/test_relay_content_length.py` | architecture/proxy-model.md |
 | `tests/test_released_cli_compat.py` | interface/cli.md |
@@ -809,6 +811,6 @@ Regenerate via `scripts/build-map.py`.
 | `interface/skill-openai-tool-justifications.md` | _(no source files — narrative/reference)_ |
 | `interface/skill.md` | `skill.md`, `integrate.md`, `SKILL.md`, `SKILL.md`, `SKILL.md`, `SKILL.md`, `SKILL.md`, `jev-memory.mjs`, `web.py`, `mcp_install.py`, `build_plugin.py`, `plugin.json`, `marketplace.json`, `plugin.json`, `plugin.json`, `package.json`, `cordis.patch.yml`, `index.js`, `plugin.json`, `minimax_plugin.py` |
 | `interface/web-arena.md` | `web_arena.py`, `web_arena_scores.py`, `web_arena.py`, `web_arena_quality.py`, `web_arena_publications.py`, `web_arena_calls.py`, `web_arena.py`, `enterprise_sso.py`, `models.py`, `0057_web_arena.py`, `0058_web_arena_call_stats.py`, `0059_web_arena_seed_start.py`, `0060_web_arena_seed_progress.py`, `config.py`, `bootstrap.py`, `worker.py`, `web-arena.html`, `arena.js`, `arena.css`, `test_web_arena.py`, `test_web_arena_calls.py` |
-| `ops/capacity.md` | `__init__.py`, `capacity_notice.py`, `test_capacity_notice.py`, `collectors.py`, `policy.py`, `sweep.py`, `view.py`, `routes.py`, `signatures.py`, `verify.py`, `marks.py`, `events.py`, `test_capacity_protect.py`, `limiter.py`, `overflow_spend.py`, `routes_view.py`, `overflow.py`, `0007_overflow_spend.py`, `test_capacity_overflow.py`, `test_capacity_overflow_spend.py`, `0008_org_platform_overflow_disabled.py`, `test_capacity_smoothing.py`, `fair_share.py`, `test_capacity_fair_share.py`, `overflow_seed.json`, `__init__.py`, `orthogonal.py`, `monid.py`, `catalogs.py`, `0006_overflow_route.py`, `test_capacity_overflow_routes.py`, `test_influencersclub_overflow.py`, `worker.py`, `provider_balances.py`, `0005_capacity_policy_snapshot.py`, `test_capacity_know.py`, `test_capacity_collectors.py`, `test_financialdatasets.py`, `test_tinyfish.py` |
+| `ops/capacity.md` | `__init__.py`, `capacity_notice.py`, `test_capacity_notice.py`, `collectors.py`, `policy.py`, `sweep.py`, `view.py`, `routes.py`, `signatures.py`, `verify.py`, `marks.py`, `events.py`, `test_capacity_protect.py`, `limiter.py`, `overflow_spend.py`, `routes_view.py`, `overflow.py`, `0007_overflow_spend.py`, `test_capacity_overflow.py`, `test_capacity_overflow_spend.py`, `0008_org_platform_overflow_disabled.py`, `test_capacity_smoothing.py`, `fair_share.py`, `test_capacity_fair_share.py`, `provider_concurrency.py`, `test_provider_concurrency_redis.py`, `overflow_seed.json`, `__init__.py`, `orthogonal.py`, `monid.py`, `catalogs.py`, `0006_overflow_route.py`, `test_capacity_overflow_routes.py`, `test_influencersclub_overflow.py`, `worker.py`, `provider_balances.py`, `0005_capacity_policy_snapshot.py`, `test_capacity_know.py`, `test_capacity_collectors.py`, `test_financialdatasets.py`, `test_tinyfish.py` |
 | `ops/deploy.md` | `pyproject.toml`, `hatch_build.py`, `build-dashboard.sh`, `build-web.sh`, `frontend-e2e-server.sh`, `__main__.py`, `maintenance.py`, `env.py`, `0034_managed_api_keys.py`, `0035_default_key_generation.py`, `0036_activity_key_indexes.py`, `worker.py`, `selfhost.sh`, `config.py`, `db.py`, `money_admission.py`, `bench_money_admission.py`, `email.py`, `audit.py`, `dev-local.sh`, `render.example.yaml` |
 | `reference/glossary.md` | `2026-06-30-jason-tools-registry.md` |

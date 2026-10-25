@@ -13,9 +13,11 @@ The rule is max-min fairness on the places, and it never leaves a place empty wh
 3. A call that waited `max_wait_s` leaves the line with `ShareBusy`, so a routed job moves to
    its next provider and a direct call is refused (not charged) with a retry hint.
 
-In-process and DB-free on purpose, like the rate limiter (infra/upstream/limiter.py): it runs
-after the DB phase ended and before the relay. Exact for one server process; several processes
-each enforce `cap` on their own, so a multi-process deploy moves the counters to the shared store.
+DB-free on purpose, like the rate limiter (infra/upstream/limiter.py): it runs after the DB phase
+ended and before the relay. The line and the fewest-first choice are per process. The `cap` is
+shared by every process when the shared store is configured: a call holding its process's place
+also takes a lease on the account (infra/provider_concurrency.py), waiting for one within the same
+`max_wait_s`. Without the store, or while it fails, each process enforces `cap` on its own.
 """
 
 from __future__ import annotations
@@ -23,6 +25,8 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
+
+from ...infra import provider_concurrency
 
 DEFAULT_MAX_WAIT_S = 2.0
 RETRY_AFTER_S = 2
@@ -77,13 +81,17 @@ class _Pool:
 class Slot:
     """One place held by one call. `release()` is idempotent; every call path releases."""
 
-    __slots__ = ("_gate", "_provider", "_team", "waited_ms")
+    __slots__ = ("_gate", "_provider", "_team", "waited_ms", "lease")
 
     def __init__(self, gate: "FairShare | None", provider: str = "", team: int = 0,
                  waited_ms: int = 0) -> None:
         self._gate, self._provider, self._team, self.waited_ms = gate, provider, team, waited_ms
+        self.lease: provider_concurrency.Lease | None = None
 
     def release(self) -> None:
+        if self.lease is not None:
+            lease, self.lease = self.lease, None
+            lease.release()
         if self._gate is not None:
             gate, self._gate = self._gate, None
             gate._release(self._provider, self._team)
@@ -113,9 +121,27 @@ class FairShare:
 
     async def acquire(self, provider: str, team: int, cap: int, *,
                       max_wait_s: float = DEFAULT_MAX_WAIT_S) -> Slot:
-        """Take a place for `team` on `provider`, waiting at most `max_wait_s` (rule 3)."""
+        """Take a place for `team` on `provider`, waiting at most `max_wait_s` (rule 3) for this
+        process's place and the account's shared lease together."""
         if cap <= 0:
             return NO_SLOT
+        started = time.monotonic()
+        slot = await self._acquire_local(provider, team, cap, max_wait_s)
+        try:
+            slot.lease = await provider_concurrency.acquire(
+                provider, cap, wait_s=max(0.0, max_wait_s - (time.monotonic() - started)))
+        except provider_concurrency.Busy:
+            slot.release()
+            active = self._pools[provider].by_team.get(team, 0)
+            raise ShareBusy(provider, team, active, time.monotonic() - started) from None
+        except BaseException:
+            slot.release()
+            raise
+        if slot.lease is not None and slot.lease.waited:
+            slot.waited_ms = _ms_since(started)
+        return slot
+
+    async def _acquire_local(self, provider: str, team: int, cap: int, max_wait_s: float) -> Slot:
         pool = self._pool(provider, cap)
         if pool.active < pool.cap and not pool.line:
             pool.take(team)

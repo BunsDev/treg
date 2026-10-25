@@ -14,6 +14,7 @@ from treg.application.call import service as call_service
 from treg.config import get_settings
 from treg.domain.capacity.fair_share import FairShare, ShareBusy, fair_share
 from treg.domain.capacity.view import view as capacity_view
+from treg.infra import kv, provider_concurrency
 
 from test_marketplace_call import EP, PLATFORM_KEYS, _balance, _fake_relay, platform_on  # noqa: F401
 
@@ -84,6 +85,106 @@ async def test_free_places_are_never_left_empty_while_a_call_waits():
     assert all(w.done() for w in waiters), "a raised limit hands its new places to the line at once"
     for s in held + [w.result() for w in waiters]:
         s.release()
+
+
+# ---- the cap across processes -------------------------------------------------------------------
+
+class _SharedStore:
+    """The slot half of the shared store, in memory; `down` makes every command fail."""
+
+    def __init__(self) -> None:
+        self.owners: dict[str, set[str]] = {}
+        self.down = False
+
+    async def acquire_slot(self, key, token, ttl_ms, limit):
+        if self.down:
+            return "unavailable"
+        owners = self.owners.setdefault(key, set())
+        if len(owners) >= limit:
+            return "busy"
+        owners.add(token)
+        return "acquired"
+
+    async def renew_slot(self, key, token, ttl_ms):
+        return "unavailable" if self.down else "renewed" if token in self.owners.get(key, ()) else "lost"
+
+    async def release_slot(self, key, token):
+        if self.down:
+            return "unavailable"
+        owners = self.owners.get(key, set())
+        if token not in owners:
+            return "not_owned"
+        owners.discard(token)
+        return "released"
+
+    def held(self, account: str) -> int:
+        return len(self.owners.get(f"treg:provider-concurrency:v1:{account}", ()))
+
+
+@pytest.fixture
+def shared(monkeypatch):
+    store = _SharedStore()
+    monkeypatch.setattr(kv, "configured", lambda: True)
+    monkeypatch.setattr(kv, "store", lambda: store)
+    return store
+
+
+async def test_the_cap_holds_across_processes(shared):
+    one, two = FairShare(), FairShare()                   # two server processes, one account
+    held = [await one.acquire("p", 1, 2), await two.acquire("p", 2, 2)]
+    assert shared.held("p") == 2
+    third = asyncio.create_task(two.acquire("p", 3, 2, max_wait_s=1))
+    await asyncio.sleep(0.05)
+    assert not third.done(), "a place free in its own process is not enough when the account is full"
+    held[0].release()                                      # a place frees in the OTHER process
+    slot = await asyncio.wait_for(third, 1)
+    assert slot.waited_ms > 0 and shared.held("p") == 2
+    for s in (held[1], slot):
+        s.release()
+    await _turns()
+    assert shared.held("p") == 0
+    assert one._pools["p"].active == 0 and two._pools["p"].active == 0
+
+
+async def test_a_full_account_elsewhere_refuses_with_share_busy_and_keeps_no_place(shared):
+    one, two = FairShare(), FairShare()
+    held = await one.acquire("p", 1, 1)
+    with pytest.raises(ShareBusy):
+        await two.acquire("p", 2, 1, max_wait_s=0.05)
+    assert two._pools["p"].active == 0 and shared.held("p") == 1
+    held.release()
+    await _turns()
+    assert shared.held("p") == 0
+
+
+async def test_a_call_cancelled_while_the_account_is_full_returns_both_places(shared):
+    one, two = FairShare(), FairShare()
+    held = await one.acquire("p", 1, 1)
+    waiting = asyncio.create_task(two.acquire("p", 2, 1, max_wait_s=1))
+    await asyncio.sleep(0.05)
+    waiting.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await waiting
+    held.release()
+    await _turns()
+    assert two._pools["p"].active == 0 and shared.held("p") == 0
+
+
+async def test_a_failing_store_falls_back_to_the_process_count(shared):
+    shared.down = True
+    one, two = FairShare(), FairShare()
+    held = [await one.acquire("p", 1, 1), await two.acquire("p", 2, 1)]
+    assert all(s.lease is None for s in held), "each process enforces the cap on its own"
+    for s in held:
+        s.release()
+
+
+async def test_no_shared_store_takes_no_lease():
+    assert not kv.configured()
+    slot = await FairShare().acquire("p", 1, 1)
+    assert slot.lease is None and slot.waited_ms == 0
+    slot.release()
+    assert await provider_concurrency.acquire("p", 1, wait_s=0) is None
 
 
 # ---- the call path ------------------------------------------------------------------------------

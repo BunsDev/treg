@@ -26,6 +26,8 @@ sources:
   - tests/test_capacity_smoothing.py
   - src/treg/domain/capacity/fair_share.py
   - tests/test_capacity_fair_share.py
+  - src/treg/infra/provider_concurrency.py
+  - tests/test_provider_concurrency_redis.py
   - src/treg/domain/capacity/overflow_seed.json
   - src/treg/infra/upstream/aggregators/__init__.py
   - src/treg/infra/upstream/aggregators/orthogonal.py
@@ -623,8 +625,18 @@ after the DB phase ended and around the relay (`application/call/service.py`, pl
 The place is held until the answer is read (metered and owned-poll bodies), released in the relay
 block's `finally` on every path. A streamed free answer releases when the relay block ends, before
 the stream finishes. A wait shows in `X-Treg-Smoothed` as `share_wait=<ms>`. Own keys are never
-gated (non-negotiable 1). The counters are per process: exact for one server process; a
-multi-process deploy moves them to the shared store (`infra/kv.py`).
+gated (non-negotiable 1).
+
+The line and the fewest-first choice are per process; the cap is per account across every process.
+A call holding its process's place also takes a lease on the account in the shared store
+(`infra/provider_concurrency.py`: one Redis sorted set per account, `treg:provider-concurrency:v1:`
+plus the account key, on the same lease scripts as org concurrency). When every lease is taken it
+polls with backoff inside the same `fair_share_wait_s`, then leaves as `share_busy` and returns its
+process place. A lease lasts 30 s and is renewed every 10 s while the call runs, so a crashed process
+frees its places within one lease; expiry cannot stop a request already sent. Without
+`TREG_KV_URL`, or while the store fails, a call takes no lease and each process enforces the cap on
+its own, which is exact for one process. `share_wait` includes time spent waiting for a lease.
+Choosing an account (`keyslots`) still reads only this process's places.
 
 ## Overflow, the child cycle (step E) — off by default
 
