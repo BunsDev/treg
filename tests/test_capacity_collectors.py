@@ -285,7 +285,9 @@ async def test_litescrape_capacity_uses_free_key_status():
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(probe)) as client:
         row = await collectors._litescrape(client, "test")
-    assert row == {"value": 75765, "unit": "calls", "note": "key concurrency limit 25"}
+    assert row == {"value": 75765, "unit": "calls", "note": "concurrency limit 25"}
+    assert not any(word in row["note"].lower() for word in sweep._FORBIDDEN_IN_NOTE), \
+        "the sweep withholds a note that looks like a credential"
 
 
 @pytest.mark.parametrize("balance", [None, True, "100", -1])
