@@ -1157,6 +1157,15 @@
       "GET",
       "HEAD"
     ],
+    "name": "blog_security_incident_2026_10_23",
+    "path": "/blog/security-incident-2026-10-23"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
     "name": "blog_work_email_finding_bench",
     "path": "/blog/work-email-finding-bench"
   },
