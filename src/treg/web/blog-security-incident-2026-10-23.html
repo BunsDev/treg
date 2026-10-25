@@ -38,6 +38,7 @@
   <section>
     <h2>Summary</h2>
     <p>On October 23, 2026, we confirmed that an attacker had gained unauthorized access to part of treg's production systems. The attacker exploited a vulnerability in a server-side feature. We have disabled that feature entirely.</p>
+    <p>We believe this is part of a series of attacks recently targeting platform companies, with the aim of stealing keys for AI inference providers. We have notified affected upstream providers and asked them to proactively revoke exposed keys, and we are treating this incident with the utmost seriousness.</p>
   </section>
 
   <section>
@@ -95,7 +96,6 @@
   <section>
     <h2>Indicator of compromise</h2>
     <ul>
-      <li>Requests with the user agent <code>Python-urllib/3.14</code>. The attacker's scripts sent it, and it is uncommon in normal traffic.</li>
       <li>Requests from IP addresses you don't use, especially hosting or commercial proxy ranges. The attacker rotated through a proxy pool, so a single address will not identify them.</li>
       <li>Usage spikes, new models or endpoints you don't call, or calls at hours your team isn't working.</li>
     </ul>
