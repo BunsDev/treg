@@ -22,6 +22,9 @@
 .incident details{border-bottom:1px solid var(--line);padding:12px 0}
 .incident summary{cursor:pointer;font-weight:600}
 .incident details p{margin-top:8px}
+.incident details.guide{background:var(--surface);border:1px solid var(--line);border-radius:var(--rb);padding:14px 20px}
+.incident .guide-body{display:grid;gap:12px;margin-top:14px}
+.incident .guide-body h3{font-size:17px;margin:10px 0 0}
 .incident .contact{font-family:var(--mono);font-size:16px}
 </style>
 <main class="wrap incident">
@@ -75,7 +78,7 @@
       <li><strong>Closed the entry point.</strong> The vulnerable feature was disabled for all users on October 23 and will not return in its original form.</li>
       <li><strong>Rotated treg's own credentials</strong>, including the database, every AI and data provider key, payment and email service credentials, and the OAuth credentials of every application treg uses.</li>
       <li><strong>Reset every treg access token and login session.</strong></li>
-      <li><strong>Revoked exposed connections wherever the provider allowed it.</strong> This covers connected Slack, LinkedIn and Meta (Facebook, Instagram, Meta Ads) accounts. They now show as needing to be reconnected.</li>
+      <li><strong>Revoked exposed connections wherever the provider allowed it.</strong> This covers connected Slack, LinkedIn, Facebook and Meta Ads accounts. They now show as needing to be reconnected. Instagram does not let us fully remove access on your behalf; see <a href="#instagram">If you connected an Instagram account</a>.</li>
       <li><strong>Contacted every affected team</strong> and reported the incident to upstream provider partners. We are continuing to notify the remaining providers.</li>
       <li><strong>Banned the accounts</strong> used for the attack and for related probing.</li>
     </ul>
@@ -89,8 +92,52 @@
         <li><strong>Review your provider usage for all of October</strong>, not only after October 23. Set spending limits on your new keys where the provider supports it.</li>
         <li><strong>Reconnect</strong> any connected account that treg shows as needing reconnection.</li>
         <li><strong>Sign in to treg again and copy a new token</strong> into your agent's configuration. Old tokens no longer work.</li>
+        <li><strong>If you connected an Instagram account</strong>, remove treg's access in Instagram itself, as described below.</li>
       </ol>
     </div>
+  </section>
+
+  <section id="instagram">
+    <h2>If you connected an Instagram account</h2>
+    <p>Our tests show that an exposed Instagram connection can no longer publish posts or send messages. It can still read your account data until you remove treg's access in Instagram. Instagram does not let us do this on your behalf, so please follow the steps below.</p>
+    <details class="guide">
+      <summary>Show how to fully remove treg's access to your Instagram account</summary>
+      <div class="guide-body">
+        <p>We have found no clear signs that your Instagram connection was misused. To be safe, we still ask you to remove treg's access in Instagram yourself.</p>
+        <p>Removing treg from your treg dashboard alone is <strong>not enough</strong>. It deletes our copy of the connection, but the permission you granted stays active at Instagram until you remove it there.</p>
+
+        <h3>1. Remove treg from Instagram</h3>
+        <p><strong>Instagram app (iPhone / Android)</strong></p>
+        <ol>
+          <li>Go to your profile and tap the menu (☰) in the top right.</li>
+          <li>Tap <strong>Website permissions</strong> (under <em>Your app and media</em>).</li>
+          <li>Tap <strong>Apps and websites</strong>, then the <strong>Active</strong> tab.</li>
+          <li>Find <strong>treg</strong>, tap <strong>Remove</strong>, and confirm.</li>
+        </ol>
+        <p><strong>instagram.com on a computer</strong></p>
+        <ol>
+          <li>Click <strong>More</strong> (☰) in the bottom left, then <strong>Settings</strong>.</li>
+          <li>Under <em>Your app and media</em>, click <strong>Website permissions</strong>.</li>
+          <li>Click <strong>Apps and websites</strong>, then <strong>Active</strong>.</li>
+          <li>Click <strong>Remove</strong> next to <strong>treg</strong>.</li>
+        </ol>
+        <p>Older app versions put this under <strong>Settings &gt; Security &gt; Apps and websites</strong>. If you manage several Instagram accounts, repeat for each one: the permission is per account.</p>
+        <p><strong>Check it worked:</strong> treg should now appear under the <strong>Removed</strong> tab and no longer under <strong>Active</strong>. Do not rely on the <strong>Expired</strong> tab. Business tools may keep access past the usual 90-day expiry, so an app that looks inactive can still have access.</p>
+
+        <h3>2. After removing access</h3>
+        <p>Removing access stops new API calls. It does not undo anything already done. Please also:</p>
+        <ul>
+          <li><strong>Look for content you did not post.</strong> Check your posts, Reels, the <strong>Story archive</strong> (profile &gt; ☰ &gt; <em>Archive</em> &gt; <em>Stories archive</em>) and recent DMs, including sent messages.</li>
+          <li><strong>Check where you are logged in.</strong> Accounts Center &gt; <em>Password and security</em> &gt; <em>Where you're logged in</em>. Log out any session you do not recognise.</li>
+          <li><strong>Turn on two-factor authentication</strong> if it is not already on (Accounts Center &gt; <em>Password and security</em> &gt; <em>Two-factor authentication</em>).</li>
+          <li><strong>Review other connected apps</strong> in the same Apps and websites list and remove anything you no longer use.</li>
+        </ul>
+
+        <h3>3. Reconnecting later</h3>
+        <p>If you want to use treg with Instagram again, connect it again from your treg dashboard after removing it. That creates a brand-new permission; nothing from the old one carries over.</p>
+        <p>If something looks wrong, or any step above does not match what you see, email us at jason@treg.to and tell us which device and app version you are on.</p>
+      </div>
+    </details>
   </section>
 
   <section>
@@ -137,7 +184,7 @@
       </details>
       <details>
         <summary>Do I need to reconnect all my connected accounts?</summary>
-        <p>Slack, LinkedIn and Meta connections were revoked and need to be reconnected. Other connections keep working. For extra assurance, revoke treg's access in that provider's security settings, reconnect, and remove any authorized apps you don't recognize.</p>
+        <p>Slack, LinkedIn, Facebook and Meta Ads connections were revoked and need to be reconnected. Instagram connections need one extra step from you: see <a href="#instagram">If you connected an Instagram account</a>. Other connections keep working. For extra assurance, revoke treg's access in that provider's security settings, reconnect, and remove any authorized apps you don't recognize.</p>
       </details>
       <details>
         <summary>Is my treg balance safe?</summary>
