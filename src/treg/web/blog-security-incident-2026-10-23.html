@@ -24,7 +24,8 @@
 .incident details p{margin-top:8px}
 .incident details.guide{background:var(--surface);border:1px solid var(--line);border-radius:var(--rb);padding:14px 20px}
 .incident .guide-body{display:grid;gap:12px;margin-top:14px}
-.incident .guide-body h3{font-size:17px;margin:10px 0 0}
+.incident .sub{font-size:18px;margin:12px 0 0}
+.incident .guide-body h4{font-size:16px;margin:10px 0 0}
 .incident .contact{font-family:var(--mono);font-size:16px}
 </style>
 <main class="wrap incident">
@@ -95,10 +96,7 @@
         <li><strong>If you connected an Instagram account</strong>, remove treg's access in Instagram itself, as described below.</li>
       </ol>
     </div>
-  </section>
-
-  <section id="instagram">
-    <h2>If you connected an Instagram account</h2>
+    <h3 class="sub" id="instagram">If you connected an Instagram account</h3>
     <p>Our tests show that an exposed Instagram connection can no longer publish posts or send messages. It can still read your account data until you remove treg's access in Instagram. Instagram does not let us do this on your behalf, so please follow the steps below.</p>
     <details class="guide">
       <summary>Show how to fully remove treg's access to your Instagram account</summary>
@@ -106,7 +104,7 @@
         <p>We have found no clear signs that your Instagram connection was misused. To be safe, we still ask you to remove treg's access in Instagram yourself.</p>
         <p>Removing treg from your treg dashboard alone is <strong>not enough</strong>. It deletes our copy of the connection, but the permission you granted stays active at Instagram until you remove it there.</p>
 
-        <h3>1. Remove treg from Instagram</h3>
+        <h4>1. Remove treg from Instagram</h4>
         <p><strong>Instagram app (iPhone / Android)</strong></p>
         <ol>
           <li>Go to your profile and tap the menu (☰) in the top right.</li>
@@ -124,7 +122,7 @@
         <p>Older app versions put this under <strong>Settings &gt; Security &gt; Apps and websites</strong>. If you manage several Instagram accounts, repeat for each one: the permission is per account.</p>
         <p><strong>Check it worked:</strong> treg should now appear under the <strong>Removed</strong> tab and no longer under <strong>Active</strong>. Do not rely on the <strong>Expired</strong> tab. Business tools may keep access past the usual 90-day expiry, so an app that looks inactive can still have access.</p>
 
-        <h3>2. After removing access</h3>
+        <h4>2. After removing access</h4>
         <p>Removing access stops new API calls. It does not undo anything already done. Please also:</p>
         <ul>
           <li><strong>Look for content you did not post.</strong> Check your posts, Reels, the <strong>Story archive</strong> (profile &gt; ☰ &gt; <em>Archive</em> &gt; <em>Stories archive</em>) and recent DMs, including sent messages.</li>
@@ -133,7 +131,7 @@
           <li><strong>Review other connected apps</strong> in the same Apps and websites list and remove anything you no longer use.</li>
         </ul>
 
-        <h3>3. Reconnecting later</h3>
+        <h4>3. Reconnecting later</h4>
         <p>If you want to use treg with Instagram again, connect it again from your treg dashboard after removing it. That creates a brand-new permission; nothing from the old one carries over.</p>
         <p>If something looks wrong, or any step above does not match what you see, email us at jason@treg.to and tell us which device and app version you are on.</p>
       </div>
