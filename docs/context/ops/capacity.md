@@ -80,7 +80,7 @@ the row is `no_api`.
 Litescrape's internal collector reads the free `GET /api/keys/status` route with the platform
 Bearer key. It accepts a nonnegative integer `remaining_calls` as the prepaid call balance and
 records the key's reported concurrency limit as an informational note. The policy is
-`requests / manual / api`; the 25 concurrent requests observed on the configured key are not
+`requests / manual / api`; the reported concurrency limit (`_CONCURRENCY`) is not
 a per-second rate, so no token-bucket rate is inferred. The status route stays out of the catalog.
 
 Fetchin capacity is `credits / manual / api`. `collectors._fetchinio` calls the free internal

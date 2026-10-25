@@ -4,7 +4,7 @@ source:
   openapi: https://api.litescrape.com/api/openapi.json
   curated: '2026-09-29'
 pricing_url: https://litescrape.com/pricing
-limits: The key status API reports a configured concurrency limit (25 on the tested key). No hourly, daily, monthly
+limits: The key status API reports a configured concurrency limit (100 on the funded key). No hourly, daily, monthly
   or per-second cap is published. Failed calls are unbilled.
 proposed_capabilities:
   google.serp.ads: Find sponsored ads on a Google results page
