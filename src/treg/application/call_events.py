@@ -64,6 +64,13 @@ _ROLE_LOCALS = frozenset({
 _VALUE_MAX = 64
 _COUNTRY_ALIASES = {"usa": "us", "u.s.": "us", "u.s.a.": "us", "united states of america": "us",
                     "england": "gb", "scotland": "gb", "wales": "gb", "uae": "ae"}
+# A country's formal title, dropped before matching: `Republic of Ireland`, `Kingdom of Saudi Arabia`.
+_COUNTRY_TITLE = re.compile(r"^(the )?((federal |islamic |people's |democratic |united )*(republic|kingdom|"
+                            r"state|commonwealth|sultanate|emirate) of (the )?)")
+# A word that makes the country name after it part of a place name: `Port of Spain`, `West Jordan`.
+_PLACE_PREFIXES = frozenset({"of", "de", "del", "da", "do", "dos", "das", "di", "du", "la", "le", "el", "al",
+                             "new", "west", "east", "north", "south", "port", "fort", "san", "santa",
+                             "saint", "st", "st.", "lake", "mount", "upper", "lower"})
 _US_STATE_CODES = frozenset(
     "al ak az ar ca co ct de dc fl ga hi id il in ia ks ky la me md ma mi mn ms mo mt ne nv nh nj nm "
     "ny nc nd oh ok or pa ri sc sd tn tx ut vt va wa wv wi wy".split())
@@ -140,25 +147,32 @@ def country_of(place: Any) -> str | None:
 
     Adapters build places with `join` (spaces) as often as providers send commas, so the last one
     to four words of each comma part are read, last part first and longest first (`United States`
-    before `States`; a trailing region such as `Northern America` is passed over). A US state stops the
-    search: `Boston MA`, `Atlanta, Georgia` and `Newark New Jersey` name no country, and a
-    two-letter word counts only when it is not also a state code (`US`, `GB` yes; `CA`, `DE` no).
-    The whole value is the exception: a provider's bare `CA` or `Georgia` is the country."""
+    before `States`; a trailing region such as `Northern America` is passed over).
+
+    What looks like a country but is not one gives nothing:
+    - a US state, by name or code, stops the search: `Boston MA`, `Atlanta, Georgia`, `Newark New
+      Jersey`;
+    - after a city, a two-letter word counts only as `US`, `UK` or `GB`: elsewhere it is as often a
+      region (`Monterrey, NL` is Nuevo Leon, `Charlottetown, PE` Prince Edward Island, `Vitoria, ES`
+      Espirito Santo);
+    - a country name inside a place name (`Port of Spain`, `West Jordan`) is the place.
+    The whole value is the exception: a provider's bare `CA`, `NL` or `Georgia` is the country."""
     if not isinstance(place, str) or not place.strip():
         return None
-    whole = place.strip().lower()
+    whole = _COUNTRY_TITLE.sub("", place.strip().lower())
     if whole in _COUNTRY_ALIASES or (code := P._country_code(whole)) is not None:
         return _COUNTRY_ALIASES.get(whole) or code
-    # Segments from the end, so a trailing region (`..., United States, Northern America`) is skipped.
     for segment in reversed(whole.split(",")):
-        words = [w for w in segment.strip(" .").split() if not w.isdigit()]
+        words = [w for w in _COUNTRY_TITLE.sub("", segment.strip(" .")).split() if not w.isdigit()]
         for n in range(min(4, len(words)), 0, -1):
             tail = " ".join(words[-n:])
             if tail in _US_STATES or (n == 1 and tail in _US_STATE_CODES):
                 return None
-            if tail in _COUNTRY_ALIASES:
-                return _COUNTRY_ALIASES[tail]
-            if (code := P._country_code(tail)) is not None:
+            code = _COUNTRY_ALIASES.get(tail) or (
+                P._country_code(tail) if len(tail) > 2 or tail in ("us", "uk", "gb") else None)
+            if code is not None:
+                if len(words) > n and words[-n - 1] in _PLACE_PREFIXES:
+                    break  # `Port of Spain`: this part is a place, try the part before it
                 return code
     return None
 

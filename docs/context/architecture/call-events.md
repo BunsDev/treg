@@ -112,8 +112,10 @@ The stream has no map type; they travel as JSON objects (`json` columns):
   (64 characters at most), and for `analytics: country` only the lower-case ISO 3166 code the
   place names (`country_of`: `Berlin, Germany` and the `join`-built `Berlin Germany` -> `de`,
   reading the last words of each comma part, longest first; a US state name or code stops it, so
-  `Boston MA` and `Atlanta, Georgia` give nothing; a bare `Georgia` or `CA` is the country). A city
-  or street never leaves.
+  `Boston MA` and `Atlanta, Georgia` give nothing; after a city only `US`, `UK` or `GB` count as
+  two-letter codes, since `Monterrey, NL` is Nuevo Leon; a country name inside a place name such as
+  `Port of Spain` is the place; a bare `Georgia`, `CA` or `NL` is the country). A city or street
+  never leaves.
 - `answer_flags` — derived from email-shaped keys: `is_role`, `free_mail`, and `domain_match`
   when the input named a domain (prefixed `<field>_` for a field other than `email`).
 

@@ -297,7 +297,7 @@ def test_country_of_names_a_country_never_a_state():
     assert ev.country_of("Berlin Germany") == "de" and ev.country_of("London United Kingdom") == "gb"
     assert ev.country_of("San Francisco CA United States") == "us" and ev.country_of("Redmond US") == "us"
     assert ev.country_of("South San Francisco United States of America") == "us"
-    assert ev.country_of("Boston, Massachusetts, US") == "us" and ev.country_of("Paris, FR") == "fr"
+    assert ev.country_of("Boston, Massachusetts, US") == "us" and ev.country_of("Paris, France") == "fr"
     assert ev.country_of("South San Francisco, California, United States, Northern America, Americas") == "us"
     # a US state, by name or code, names no country, even one that shares a country's name
     assert ev.country_of("Boston MA") is None and ev.country_of("Boston MA 02110") is None
@@ -305,8 +305,18 @@ def test_country_of_names_a_country_never_a_state():
     assert ev.country_of("Atlanta Georgia") is None and ev.country_of("Atlanta, Georgia") is None
     assert ev.country_of("Newark New Jersey") is None and ev.country_of("Santa Fe New Mexico") is None
     assert ev.country_of("Mexico City Mexico") == "mx" and ev.country_of("St Helier Jersey") == "je"
-    # a bare value is the provider's country field: `Georgia` the country, `CA` Canada
-    assert ev.country_of("Georgia") == "ge" and ev.country_of("CA") == "ca"
+    # after a city a two-letter word is as often a region elsewhere: only US / UK / GB count
+    assert ev.country_of("Monterrey, NL") is None and ev.country_of("Monterrey NL") is None  # Nuevo Leon
+    assert ev.country_of("Charlottetown, PE") is None and ev.country_of("Vitoria, ES") is None
+    assert ev.country_of("London UK") == "gb" and ev.country_of("Amsterdam, Netherlands") == "nl"
+    assert ev.country_of("Paris, FR") is None  # the price of never reading NL or PE as a country
+    # a country name inside a place name is the place; a country's formal title is not
+    assert ev.country_of("Port of Spain") is None and ev.country_of("West Jordan") is None
+    assert ev.country_of("Port of Spain, Trinidad and Tobago") == "tt"
+    assert ev.country_of("Republic of Ireland") == "ie" and ev.country_of("Kingdom of Saudi Arabia") == "sa"
+    assert ev.country_of("Cape Town South Africa") == "za" and ev.country_of("Auckland New Zealand") == "nz"
+    # a bare value is the provider's country field: `Georgia` the country, `CA` Canada, `NL`
+    assert ev.country_of("Georgia") == "ge" and ev.country_of("CA") == "ca" and ev.country_of("NL") == "nl"
 
 
 @pytest.mark.parametrize("endpoint_id,field,code", [
