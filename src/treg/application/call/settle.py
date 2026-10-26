@@ -7,6 +7,7 @@ import json
 import logging
 import math
 import tempfile
+import time
 import weakref
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from collections.abc import Callable
@@ -1215,7 +1216,7 @@ async def _platform_settle(
         mk.deferred.append(DeferredSettle(
             call_id=call_id, billable=billable, actual_micro=actual, archive_use=archive_use,
             payer_org_id=mk.payer_org_id, reserved_micro=mk.reserved_micro,
-            reason=reason or f"not_billable_{status_code}",
+            reserved_at=mk.reserved_at, reason=reason or f"not_billable_{status_code}",
             meta={"provider": mk.provider, "status_code": status_code, "cost_type": mk.cost_type,
                   "cost_source": ("provider" if observed is not None else
                                   mk.settlement_basis.get("amount", {}).get("kind", "estimate")),
@@ -1242,7 +1243,8 @@ async def _platform_settle(
     async def _close() -> int:
         with observe_money("close", call_id=call_id) as timing:
             async with (
-                money_admission.admit(admission_orgs, operation=admission_operation),
+                money_admission.admit(admission_orgs, operation=admission_operation,
+                                      max_wait_s=hold_admission_wait_s([mk.reserved_at])),
                 money_session(session_maker()) as db,
             ):
                 mark_money(db, "close", call_id=call_id)
@@ -1308,6 +1310,17 @@ class DeferredSettle:
     meta: dict
     payer_org_id: int | None = None
     reserved_micro: int | None = None
+    reserved_at: float | None = None
+
+
+def hold_admission_wait_s(reserved_at: list[float | None]) -> float | None:
+    """What the oldest of these holds can still spend waiting for admission and leave half the
+    reaper's grace for the settlement session: past `hold_ttl_s()` another reserve may reap it."""
+    known = [at for at in reserved_at if at is not None]
+    if not known:
+        return None
+    age = time.monotonic() - min(known)
+    return ledger.hold_ttl_s() - age - get_settings().hold_grace_s / 2
 
 
 async def close_deferred(items: list[DeferredSettle], *, charge: bool, why: str = "") -> int:
@@ -1329,7 +1342,9 @@ async def close_deferred(items: list[DeferredSettle], *, charge: bool, why: str 
         admission_orgs = money_admission.require_balance_orgs([d.payer_org_id for d in pending])
         with observe_money("deferred", batch_size=len(pending)) as timing:
             async with (
-                money_admission.admit(admission_orgs, operation=admission_operation),
+                money_admission.admit(
+                    admission_orgs, operation=admission_operation,
+                    max_wait_s=hold_admission_wait_s([d.reserved_at for d in pending])),
                 money_session(session_maker()) as db,
             ):
                 mark_money(db, "deferred", batch_size=len(pending))
@@ -1401,7 +1416,8 @@ async def _finish_cancelled_call(
                 # Upstream close already finished above. The lease covers only this balance session.
                 async with (
                     money_admission.admit(
-                        money_admission.require_balance_orgs([release_org]), operation="release"),
+                        money_admission.require_balance_orgs([release_org]), operation="release",
+                        max_wait_s=hold_admission_wait_s([mk.reserved_at])),
                     money_session(session_maker()) as cleanup_db,
                 ):
                     # The parent hold AND the overflow child's (`{call_ref}:overflow`): each release is a
