@@ -107,7 +107,8 @@ The stream has no map type; they travel as JSON objects (`json` columns):
 - `input_meta` — non-sensitive segments: `domain_class` (`company`, `webmail`, `edu`, `gov`) and
   `tld` of the input domain (or the email's), plus any filter declared `analytics: value`.
 - `answer_keys` — `{field: hmac}` for output fields declared `analytics: key`.
-- `answer_values` — `{field: value}` for output fields declared `analytics: value`, as strings.
+- `answer_values` — `{field: value}` for output fields declared `analytics: value`, as strings
+  (256 characters at most), exactly as the adapter produced them.
 - `answer_flags` — derived from email-shaped keys: `is_role`, `free_mail`, and `domain_match`
   when the input named a domain (prefixed `<field>_` for a field other than `email`).
 
@@ -121,6 +122,19 @@ output:
 
 The parser refuses any other word, and a filter can never be a `key`. The public catalog contract
 does not show the annotation.
+
+Segment fields (2026-10): company `industry`, `employees`, `founded` and HQ `location`; the
+company's domain or website as a key, so a `companies.enrich` answer joins a find on the same
+domain; a person's `location` and company domain; phone country and line type; the search
+`country` filters. Values are stored as the provider wrote them and not parsed here: country,
+region and size buckets are derived at analysis time (data-lake ETL), so a better parser can
+re-read old events.
+
+**Privacy.** Identifiers (email, name, domain, phone, URL, LinkedIn handle) leave only as HMAC
+keys. `answer_values` is not identifier-free: a person's `location` can name a city, and next to
+that person's keys it is personal data. It is kept on purpose for analysis. Never annotated as a
+value: names, company names, descriptions, `about` text, follower counts, lists. Iceberg
+retention for `analytics.call_events` must be set and documented before this grows further.
 
 Normalization before hashing: emails lower-cased; domains without scheme, path or `www.`;
 LinkedIn URLs and handles reduced to the lower-cased handle; other text case-folded with spaces

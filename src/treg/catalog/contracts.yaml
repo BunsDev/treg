@@ -150,8 +150,8 @@ contracts:
     filters: {}
     output:
       phone: {type: str, required: true, note: "as the provider formats it; E.164 when it offers one, and +1 added to a 10-digit number the provider marks US or CA"}
-      line_type: {type: str}
-      country_code: {type: str}
+      line_type: {type: str, analytics: value}
+      country_code: {type: str, analytics: value}
     miss: "phone == null"
     idempotent: true
     one_subject: true           # every variant names one person: cost per hit ranks first
@@ -185,10 +185,10 @@ contracts:
     filters:
       country_code: {type: str, note: "ISO-2 country context for parsing a national-format number, e.g. US; unnecessary for an international number"}
     output:
-      valid: {type: bool, required: true, note: "numbering-plan validity, not proof the line is active"}
+      valid: {type: bool, required: true, note: "numbering-plan validity, not proof the line is active", analytics: value}
       phone: {type: str}
-      country_code: {type: str}
-      line_type: {type: str}
+      country_code: {type: str, analytics: value}
+      line_type: {type: str, analytics: value}
       carrier: {type: str}
     miss: "valid == null"
     idempotent: true
@@ -230,9 +230,9 @@ contracts:
       last_name: {type: str}
       title: {type: str}
       company: {type: str}
-      company_domain: {type: str}
+      company_domain: {type: str, analytics: key}
       linkedin_url: {type: str}
-      location: {type: str}
+      location: {type: str, analytics: value}
     miss: "full_name == null"
     idempotent: true
 
@@ -327,7 +327,7 @@ contracts:
       - {title: str}
       - {full_name: str}
     filters:
-      country: {type: str, default: null, note: "ISO country code, where the provider supports it"}
+      country: {type: str, default: null, note: "ISO country code, where the provider supports it", analytics: value}
       location: {type: str, default: null, note: "free-text place ('London, United Kingdom', 'Greater Phoenix') passed through to providers that take one; finer than country, never normalised"}
       limit: {type: int, default: 10, note: "rows to return — THE price dial: most providers bill per row"}
       keywords: {type: list, default: null, note: "skills, topics or domain terms the person must match ('microservices', 'match analysis') — the SUBSTANCE of most briefs; a provider with no keyword field answers a looser question and ranks below one that has it"}
@@ -362,13 +362,13 @@ contracts:
     filters: {}
     output:
       name: {type: str, required: true}
-      domain: {type: str}
+      domain: {type: str, analytics: key}
       website: {type: str}
       description: {type: str}
-      industry: {type: str}
-      employees: {type: str, note: "headcount or a range, as the provider states it"}
-      founded: {type: int}
-      location: {type: str}
+      industry: {type: str, analytics: value}
+      employees: {type: str, note: "headcount or a range, as the provider states it", analytics: value}
+      founded: {type: int, analytics: value}
+      location: {type: str, analytics: value}
       linkedin_url: {type: str}
     miss: "name == null"
     idempotent: true
@@ -393,7 +393,7 @@ contracts:
       - {technology: str}
       - {domain: str}
     filters:
-      country: {type: str, default: null, note: "ISO country code, where the provider supports it"}
+      country: {type: str, default: null, note: "ISO country code, where the provider supports it", analytics: value}
       limit: {type: int, default: 10, note: "rows to return — THE price dial: most providers bill per row"}
     output:
       companies: {type: list, required: true, note: "the provider's own company rows (name, domain, industry, size, location…) — shapes differ per provider; raw is the same body"}
@@ -443,7 +443,7 @@ contracts:
       first_name: {type: str}
       last_name: {type: str}
       headline: {type: str}
-      location: {type: str}
+      location: {type: str, analytics: value}
       followers: {type: int}
       connections: {type: int}
       about: {type: str}
@@ -771,10 +771,10 @@ contracts:
     output:
       name: {type: str, required: true}
       description: {type: str}
-      website: {type: str}
+      website: {type: str, analytics: key}
       followers: {type: int}
-      employees: {type: str}
-      location: {type: str}
+      employees: {type: str, analytics: value}
+      location: {type: str, analytics: value}
       linkedin_url: {type: str}
     miss: "name == null"
     idempotent: true
