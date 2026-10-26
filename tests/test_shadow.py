@@ -2,7 +2,6 @@
 import json
 
 import httpx
-import pytest
 from sqlalchemy import select
 
 from treg.application import shadow as service

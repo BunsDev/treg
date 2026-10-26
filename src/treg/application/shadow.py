@@ -43,7 +43,7 @@ def _served_endpoints(sp: rules.Spec) -> dict[str, str]:
     """Served endpoint id → capability, for every routed adapter of a capability the spec names."""
     cat = store.load()
     out = {}
-    for eid, adapter in cat.adapters.items():
+    for eid in cat.adapters:
         ep = cat.by_id.get(eid)
         if ep is not None and ep.get("capability") in sp.targets and ep.get("provider") != "treg":
             out[eid] = ep["capability"]
@@ -124,7 +124,7 @@ async def collect(*, max_seconds: float = 110.0, session_factory=session_maker,
             evidence = await _evidence(picked, session_factory) if picked else {}
             pairs: list[ShadowPair] = []
 
-            async def one(r):
+            async def one(r, evidence=evidence, pairs=pairs):
                 cap = served[r.endpoint_id]
                 target = sp.targets[cap]
                 got = evidence.get(r.id)
