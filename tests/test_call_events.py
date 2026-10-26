@@ -293,6 +293,40 @@ def test_country_of_names_a_country_never_a_state():
     assert ev.country_of("Austin, Texas, USA") == "us" and ev.country_of("London, England") == "gb"
     assert ev.country_of("Boston, MA") is None and ev.country_of("Greater Phoenix") is None
     assert ev.country_of("") is None and ev.country_of(None) is None and ev.country_of(42) is None
+    # `join` builds places with spaces: the trailing words, longest first
+    assert ev.country_of("Berlin Germany") == "de" and ev.country_of("London United Kingdom") == "gb"
+    assert ev.country_of("San Francisco CA United States") == "us" and ev.country_of("Redmond US") == "us"
+    assert ev.country_of("South San Francisco United States of America") == "us"
+    assert ev.country_of("Boston, Massachusetts, US") == "us" and ev.country_of("Paris, FR") == "fr"
+    assert ev.country_of("South San Francisco, California, United States, Northern America, Americas") == "us"
+    # a US state, by name or code, names no country, even one that shares a country's name
+    assert ev.country_of("Boston MA") is None and ev.country_of("Boston MA 02110") is None
+    assert ev.country_of("Ottawa CA") is None and ev.country_of("San Francisco, California") is None
+    assert ev.country_of("Atlanta Georgia") is None and ev.country_of("Atlanta, Georgia") is None
+    assert ev.country_of("Newark New Jersey") is None and ev.country_of("Santa Fe New Mexico") is None
+    assert ev.country_of("Mexico City Mexico") == "mx" and ev.country_of("St Helier Jersey") == "je"
+    # a bare value is the provider's country field: `Georgia` the country, `CA` Canada
+    assert ev.country_of("Georgia") == "ge" and ev.country_of("CA") == "ca"
+
+
+@pytest.mark.parametrize("endpoint_id,field,code", [
+    ("apollo.companies.enrich", "location", "us"),
+    ("apollo.people.enrich", "location", "us"),
+    ("blitzapi.companies.enrich", "location", "us"),
+    ("wiza.companies.enrich", "location", "ca"),
+])
+def test_a_shipped_adapter_answer_lands_its_country(endpoint_id, field, code):
+    # The adapter's own fixture through `from_upstream`, as the builder reads a live answer.
+    cat = catalog_store.load()
+    adapter, ep = cat.adapters[endpoint_id], cat.by_id[endpoint_id]
+    assert adapter.verified, adapter.verify_note
+    output = adapter.from_upstream(json.loads(catalog_store.example_path(endpoint_id).read_text()))
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("TREG_CALL_EVENTS_HMAC_SECRET", SECRET)
+        get_settings.cache_clear()
+        cols = ev.answer_columns(cat.contracts[ep["capability"]], output)
+    get_settings.cache_clear()
+    assert cols["answer_values"][field] == code
 
 
 def test_company_segments_land_as_values_and_the_domain_joins_the_find():

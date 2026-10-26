@@ -64,6 +64,17 @@ _ROLE_LOCALS = frozenset({
 _VALUE_MAX = 64
 _COUNTRY_ALIASES = {"usa": "us", "u.s.": "us", "u.s.a.": "us", "united states of america": "us",
                     "england": "gb", "scotland": "gb", "wales": "gb", "uae": "ae"}
+_US_STATE_CODES = frozenset(
+    "al ak az ar ca co ct de dc fl ga hi id il in ia ks ky la me md ma mi mn ms mo mt ne nv nh nj nm "
+    "ny nc nd oh ok or pa ri sc sd tn tx ut vt va wa wv wi wy".split())
+_US_STATES = frozenset({
+    "alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut", "delaware",
+    "district of columbia", "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa",
+    "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan", "minnesota",
+    "mississippi", "missouri", "montana", "nebraska", "nevada", "new hampshire", "new jersey",
+    "new mexico", "new york", "north carolina", "north dakota", "ohio", "oklahoma", "oregon",
+    "pennsylvania", "rhode island", "south carolina", "south dakota", "tennessee", "texas", "utah",
+    "vermont", "virginia", "washington", "west virginia", "wisconsin", "wyoming"})
 _fingerprints: dict[int, tuple[Adapter, str]] = {}
 
 
@@ -125,21 +136,30 @@ def _stringify(value: Any) -> str | None:
 
 def country_of(place: Any) -> str | None:
     """The ISO 3166 alpha-2 code (lower case) a place names: `DE`, `Germany`, `Berlin, Germany`,
-    `San Francisco, CA, United States`. None when nothing in it is a country.
+    `Berlin Germany`, `San Francisco CA United States`, `Redmond US`. None when it names no country.
 
-    A two-letter code counts only as the whole value: after a comma it is as often a US state
-    (`Boston, MA` is not Morocco), so a part must spell the country out."""
+    Adapters build places with `join` (spaces) as often as providers send commas, so the last one
+    to four words of each comma part are read, last part first and longest first (`United States`
+    before `States`; a trailing region such as `Northern America` is passed over). A US state stops the
+    search: `Boston MA`, `Atlanta, Georgia` and `Newark New Jersey` name no country, and a
+    two-letter word counts only when it is not also a state code (`US`, `GB` yes; `CA`, `DE` no).
+    The whole value is the exception: a provider's bare `CA` or `Georgia` is the country."""
     if not isinstance(place, str) or not place.strip():
         return None
     whole = place.strip().lower()
     if whole in _COUNTRY_ALIASES or (code := P._country_code(whole)) is not None:
         return _COUNTRY_ALIASES.get(whole) or code
-    for part in reversed(whole.split(",")[1:]):
-        part = part.strip()
-        if part in _COUNTRY_ALIASES:
-            return _COUNTRY_ALIASES[part]
-        if len(part) > 3 and (code := P._country_code(part)) is not None:
-            return code
+    # Segments from the end, so a trailing region (`..., United States, Northern America`) is skipped.
+    for segment in reversed(whole.split(",")):
+        words = [w for w in segment.strip(" .").split() if not w.isdigit()]
+        for n in range(min(4, len(words)), 0, -1):
+            tail = " ".join(words[-n:])
+            if tail in _US_STATES or (n == 1 and tail in _US_STATE_CODES):
+                return None
+            if tail in _COUNTRY_ALIASES:
+                return _COUNTRY_ALIASES[tail]
+            if (code := P._country_code(tail)) is not None:
+                return code
     return None
 
 

@@ -110,8 +110,10 @@ The stream has no map type; they travel as JSON objects (`json` columns):
 - `answer_keys` — `{field: hmac}` for output fields declared `analytics: key`.
 - `answer_values` — `{field: value}` for output fields declared `analytics: value`, as strings
   (64 characters at most), and for `analytics: country` only the lower-case ISO 3166 code the
-  place names (`country_of`: `Berlin, Germany` -> `de`; a two-letter part after a comma, often a
-  US state, never counts). A city or street never leaves.
+  place names (`country_of`: `Berlin, Germany` and the `join`-built `Berlin Germany` -> `de`,
+  reading the last words of each comma part, longest first; a US state name or code stops it, so
+  `Boston MA` and `Atlanta, Georgia` give nothing; a bare `Georgia` or `CA` is the country). A city
+  or street never leaves.
 - `answer_flags` — derived from email-shaped keys: `is_role`, `free_mail`, and `domain_match`
   when the input named a domain (prefixed `<field>_` for a field other than `email`).
 
