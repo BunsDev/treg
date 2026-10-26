@@ -131,10 +131,12 @@ The parser refuses any other word (`ANALYTICS_MODES` in `routing/contracts.py`),
 never be a `key`. An unknown word fails the routing load, so a new mode lands in the parser in the
 same change as its first use. The public catalog contract does not show the annotation.
 
-Segment fields (2026-10): company `industry`, `employees`, `founded` and HQ country; the company's
-domain or website as a key, so a `companies.enrich` answer joins a find on the same domain; person
-and phone country; the search `country` filters. Never a company name, description, person name,
-person city or a list.
+Segment fields (2026-10): company `industry`, `employees`, `founded` and HQ `location` as the
+provider wrote it (company data, capped at 64 characters, parsed into a country at analysis time so
+a better parser can re-read old events); the company's domain or website as a key, so a
+`companies.enrich` answer joins a find on the same domain; a person's place only as its country
+(`analytics: country`, a person's city never leaves); phone country; the search `country` filters.
+Never a company name, description, person name, person city or a list.
 
 Normalization before hashing: emails lower-cased; domains without scheme, path or `www.`;
 LinkedIn URLs and handles reduced to the lower-cased handle; other text case-folded with spaces

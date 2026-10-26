@@ -368,7 +368,7 @@ contracts:
       industry: {type: str, analytics: value}
       employees: {type: str, note: "headcount or a range, as the provider states it", analytics: value}
       founded: {type: int, analytics: value}
-      location: {type: str, analytics: country}
+      location: {type: str, analytics: value}
       linkedin_url: {type: str}
     miss: "name == null"
     idempotent: true
@@ -774,7 +774,7 @@ contracts:
       website: {type: str, analytics: key}
       followers: {type: int}
       employees: {type: str, analytics: value}
-      location: {type: str, analytics: country}
+      location: {type: str, analytics: value}
       linkedin_url: {type: str}
     miss: "name == null"
     idempotent: true

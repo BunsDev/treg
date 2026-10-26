@@ -320,10 +320,14 @@ def test_country_of_names_a_country_never_a_state():
 
 
 @pytest.mark.parametrize("endpoint_id,field,code", [
-    ("apollo.companies.enrich", "location", "us"),
+    # a person's place leaves as its country only
     ("apollo.people.enrich", "location", "us"),
-    ("blitzapi.companies.enrich", "location", "us"),
-    ("wiza.companies.enrich", "location", "ca"),
+    ("blitzapi.people.enrich", "location", "us"),
+    ("datagma.people.enrich", "location", "us"),
+    ("fetchinio.linkedin.user.profile", "location", "us"),
+    # a company's HQ leaves as the provider wrote it (capped), for analysis to parse
+    ("apollo.companies.enrich", "location", "South San Francisco United States"),
+    ("wiza.companies.enrich", "location", "Toronto, Ontario, Canada"),
 ])
 def test_a_shipped_adapter_answer_lands_its_country(endpoint_id, field, code):
     # The adapter's own fixture through `from_upstream`, as the builder reads a live answer.
@@ -355,13 +359,18 @@ def test_company_segments_land_as_values_and_the_domain_joins_the_find():
         find, _ = ev.input_columns(cat.contracts["people.email.find"],
                                    {"full_name": "A Person", "domain": "acme.example"})
         search, _ = ev.input_columns(cat.contracts["companies.search"], {"q": "robots", "country": "Germany"})
+        person = ev.answer_columns(cat.contracts["people.enrich"], {
+            "full_name": "A Person", "location": "Berlin, Germany", "company_domain": "acme.example"})
     get_settings.cache_clear()
+    # a company's HQ is company data, kept as written so analysis can re-parse it; a person's is not
     assert cols["answer_values"] == {"industry": "Software", "employees": "51-200", "founded": "2010",
-                                     "location": "us"}
+                                     "location": "San Francisco, CA, United States"}
     # the company's name, description and URLs never leave; its domain only as the shared key
     assert set(cols["answer_keys"]) == {"domain"}
     assert cols["answer_keys"]["domain"] == page["answer_keys"]["website"] == find["input_keys"]["domain"]
-    assert page["answer_values"] == {"employees": "51-200", "location": "us"}
+    assert page["answer_values"] == {"employees": "51-200",
+                                     "location": "San Francisco, California, United States"}
+    assert person["answer_values"] == {"location": "de"}
     assert search["input_meta"]["country"] == "de"
 
 
