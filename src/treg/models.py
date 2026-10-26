@@ -2201,6 +2201,20 @@ class EndpointDayStat(SQLModel, table=True):
         default=False, sa_column=Column(Boolean, nullable=False, server_default=text("false")))
 
 
+class RankingsSnapshot(SQLModel, table=True):
+    """The public /rankings boards, built from `EndpointDayStat` by `application.rankings.refresh`
+    (the `treg-worker rankings refresh` cron), which is this table's only writer. One row
+    (`id = "current"`), replaced whole on each run; the page and `/rankings/data/*` read only it, so
+    no web process adds up the day buckets. It holds counts, rates and durations per tool and
+    endpoint, never a team, a key or money.
+    """
+
+    id: str = Field(primary_key=True)
+    through: str = Field(default="")   # YYYY-MM-DD, the newest complete UTC day the boards cover
+    body: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    built_at: NaiveUTC = Field(default_factory=_now)
+
+
 class EndpointStatDirty(SQLModel, table=True):
     """An audit-corrected endpoint/day whose reliability bucket needs a recount.
 

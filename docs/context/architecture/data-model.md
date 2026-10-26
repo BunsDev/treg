@@ -64,6 +64,7 @@ sources:
   - src/treg/alembic/versions/0083_enterprise_sso_safety.py
   - src/treg/alembic/versions/0084_enterprise_workos_cleanup.py
   - src/treg/alembic/versions/0085_enterprise_sso_blocks.py
+  - src/treg/alembic/versions/0087_rankings_snapshot.py
   - src/treg/timeutil.py
   - src/treg/infra/db.py
   - src/treg/infra/money_timing.py
@@ -1019,6 +1020,14 @@ length-capped click fields, and `created_at`/`updated_at` use naive UTC. Authent
 submit observations of proven emails; cookie-less signup uses observations from the last 90 days.
 Signup deletes the row once its team holds the click, and `treg-worker admin purge-ad-clicks`
 deletes rows past 90 days. No analytics or audit emission is involved. See [ads conversions](ads-conversions.md).
+
+## Rankings
+
+Additive revision `0087`: `rankingssnapshot`, one row (`id = "current"`) holding every /rankings
+board as JSON, the newest complete UTC day it covers (`through`) and when it was built. Written only
+by `application.rankings.refresh` (the `treg-worker rankings refresh` cron), which replaces the row
+whole; the page reads it. It holds counts, rates and durations per tool and endpoint, never a team,
+a key or money, so team deletion has nothing to remove. See [catalog](catalog.md).
 
 ## Showcase leaderboard and pictures
 
