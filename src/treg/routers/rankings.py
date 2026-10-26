@@ -3,8 +3,9 @@
 The page is one bundled file (`web/rankings.html`) with the first board (most used tools and its
 daily chart) written into it as JSON, so a crawler and a link preview read the headline numbers
 without a second request. Every other board is fetched from `/rankings/data/{board}` when the
-reader scrolls near it, as OpenRouter's rankings do. All of them come from one computation in
-`application.rankings` (the folded day buckets, cached an hour per process).
+reader scrolls near it, as OpenRouter's rankings do. All of them come from
+`application.rankings.boards`: the one row the `treg-worker rankings refresh` cron saves, which each
+process keeps five minutes.
 """
 import hashlib
 import json

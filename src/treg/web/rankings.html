@@ -763,6 +763,10 @@
   // ---------- the daily chart: follows the list's window, and draws that list's leaders ----------
   // The Usage card's tooltip rule: beside the hovered bar (right of it, left near the right edge),
   // at the pointer's height clamped inside the plot.
+  // Whether the bars stack an "Others" block (every tool past the top 10). Off: when traffic is
+  // spread over many tools that block is most of each bar and hides the race between the leaders;
+  // the tooltip still lists Others and the day's full total either way.
+  const SHOW_OTHERS_IN_BARS = false;
   const tip = $("tip"), bars = $("bars"), chartBox = $("chart");
   const slot = (s, k) => s.provider ? k : COLORS.length - 1;
   const color = (s, k) => COLORS[slot(s, k)];
@@ -775,15 +779,20 @@
     const { days, series: S } = D.chart[win];
     const blank = !days.length || !S.length;
     chartBox.classList.toggle("blank", blank);
-    $("chart-sub").textContent = `Successful calls per tool, every day for the last ${win === "7d" ? 7 : 30} days.`;
+    $("chart-sub").textContent = SHOW_OTHERS_IN_BARS
+      ? `Successful calls per tool, every day for the last ${win === "7d" ? 7 : 30} days.`
+      : `Successful calls of the top 10 tools, every day for the last ${win === "7d" ? 7 : 30} days.`;
     hovered = -1; tip.hidden = true;
     if (blank) { C = null; bars.innerHTML = $("axis").innerHTML = $("grid").innerHTML = ""; return; }
-    const totals = days.map((_, i) => S.reduce((a, s) => a + s.values[i], 0));
+    // the parts a bar stacks, each with its colour slot; `all` is the day's full total
+    const drawn = S.map((s, k) => ({ s, k })).filter(({ s }) => SHOW_OTHERS_IN_BARS || s.provider);
+    const totals = days.map((_, i) => drawn.reduce((a, { s }) => a + s.values[i], 0));
+    const all = days.map((_, i) => S.reduce((a, s) => a + s.values[i], 0));
     const peak = niceTop(Math.max(...totals, 1));   // a round top, so the guides read 500K and 1M
-    C = { days, S, totals };
+    C = { days, S, all };
     $("grid").innerHTML = [1, 0.5, 0].map((f) => `<span style="top:${(1 - f) * 100}%"><b>${f ? esc(compact(peak * f)) : "0"}</b></span>`).join("");
     bars.innerHTML = days.map((d, i) => `<div class="col" data-i="${i}"><div class="bar" style="height:${Math.max(totals[i] / peak * 100, totals[i] ? 1.5 : 0)}%">` +
-      S.map((s, k) => s.values[i] ? `<span data-p="${esc(s.provider)}" style="height:${s.values[i] / totals[i] * 100}%;background:${color(s, k)};--strong:${STRONG[slot(s, k)]}"></span>` : "").join("") + `</div></div>`).join("");
+      drawn.map(({ s, k }) => s.values[i] ? `<span data-p="${esc(s.provider)}" style="height:${s.values[i] / totals[i] * 100}%;background:${color(s, k)};--strong:${STRONG[slot(s, k)]}"></span>` : "").join("") + `</div></div>`).join("");
     // a week names every day; a month names one day a week, counted back from the newest
     const each = days.length <= 8, n = days.length;
     const ticks = days.map((_, i) => i).filter((i) => each || (n - 1 - i) % 7 === 0);
@@ -794,10 +803,12 @@
     const i = +col.dataset.i, n = C.days.length;
     if (i !== hovered) {
       bars.children[hovered]?.classList.remove("hover"); col.classList.add("hover"); hovered = i;
-      const rows = C.S.map((s, k) => ({ s, k })).filter(({ s }) => s.values[i]).sort((a, b) => b.s.values[i] - a.s.values[i]);
+      // the named tools, biggest first, then Others (which may not be in the bar), then the full total
+      const rows = C.S.map((s, k) => ({ s, k })).filter(({ s }) => s.values[i])
+        .sort((a, b) => (!a.s.provider) - (!b.s.provider) || b.s.values[i] - a.s.values[i]);
       tip.innerHTML = `<b>${esc(fmtDay(C.days[i], { weekday: "short" }))}</b>` +
         rows.map(({ s, k }) => `<span><i><s style="background:${color(s, k)}"></s>${esc(s.label)}</i><em>${compact(s.values[i])}</em></span>`).join("") +
-        `<span class="total"><i>Total</i><em>${compact(C.totals[i])}</em></span>`;
+        `<span class="total"><i>Total</i><em>${compact(C.all[i])}</em></span>`;
       const center = (i + 0.5) / n, half = 0.5 / n, flip = center > 0.62;
       tip.classList.toggle("flip", flip);
       tip.style.left = ((flip ? center - half : center + half) * 100) + "%";
