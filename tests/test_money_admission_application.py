@@ -224,7 +224,7 @@ async def test_paid_entry_waits_before_checkout_and_releases_after_session_clean
     try:
         await asyncio.wait_for(probe.requested.wait(), 5)
         assert probe.calls == [(kind, [org_id])]
-        assert probe.max_waits == [task_app.ADMISSION_WAIT_S if kind == "async" else None]
+        assert probe.max_waits == [None]
         assert probe.checkouts == 0, "queued settlement must not consume a database connection"
         probe.allow.set()
         assert await asyncio.wait_for(task, 5) == expected

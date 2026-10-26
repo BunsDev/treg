@@ -317,18 +317,18 @@ async def _release_safely(gate: _Gate) -> None:
 def _wait_budget(operation: str, settings, max_wait_s: float | None) -> float:
     if operation == "reserve":
         return settings.money_admission_wait_s
-    budget = max(settings.money_admission_wait_s,
-                 _SETTLE_WAIT_LEASES * settings.money_admission_lease_s)
+    budget = min(max(settings.money_admission_wait_s,
+                     _SETTLE_WAIT_LEASES * settings.money_admission_lease_s),
+                 settings.hold_grace_s / 2)
     if max_wait_s is not None:
-        budget = min(budget, max(max_wait_s, settings.money_admission_wait_s))
-    return budget
+        budget = min(budget, max_wait_s)
+    return max(0.0, budget)
 
 
 @asynccontextmanager
 async def admit(org_ids: Iterable[int | None], *, operation: str,
                 max_wait_s: float | None = None) -> AsyncIterator[None]:
-    """`max_wait_s` caps a non-reserve wait for a caller with its own deadline; never below the
-    configured reserve wait."""
+    """`max_wait_s` caps a non-reserve wait for a caller with its own deadline."""
     raw = list(org_ids)
     if operation in _BALANCE_OPS and (not raw or any(_invalid_org(org_id) for org_id in raw)):
         # Do not yield. `async with admit(), session()` must not open the session.

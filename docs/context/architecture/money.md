@@ -358,10 +358,12 @@ Waiting for admission holds no database connection.
 `max(money_admission_wait_s, 2 * money_admission_lease_s)`: a holder that dies keeps its lease for
 at most one TTL, and two cover that plus one live session. A reserve can shed load with a 429;
 a settlement cannot, and one that enters the database without the lease queues on the payer's
-CreditBlock row lock while holding a pooled connection. A caller with its own deadline passes
-`max_wait_s`, which caps the wider budget but never goes below `money_admission_wait_s`; the
-asynchronous worker caps it so a poll, the admission wait and the settlement session all fit
-inside one row's processing timeout.
+CreditBlock row lock while holding a pooled connection. That wait never exceeds half of
+`hold_grace_s`: the reaper returns a hold older than `call_timeout_s + hold_grace_s`, so a call that
+finishes at its upstream timeout must still settle inside the grace, and the other half is left for
+the settlement session. A caller with its own deadline passes `max_wait_s`, a hard cap on the
+wait (zero or less falls back at once). The asynchronous worker passes what remains of the row's
+processing deadline (started before the claim) minus the time it keeps for the settlement session.
 One acquisition deadline covers local-lock waiting and all Redis acquisition attempts; reaching
 Redis does not restart the budget. This is a per-admission wait, not a total call deadline: a
 request can reserve and later settle through separate admission scopes. Cleanup and database

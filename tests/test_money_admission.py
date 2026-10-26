@@ -85,7 +85,7 @@ class LeaseStore:
 def gate(monkeypatch):
     settings = SimpleNamespace(
         money_admission_enabled=True, money_admission_org_ids=[],
-        money_admission_wait_s=0.5, money_admission_lease_s=0.15)
+        money_admission_wait_s=0.5, money_admission_lease_s=0.15, hold_grace_s=60)
     store = LeaseStore()
     monkeypatch.setattr(admission, "get_settings", lambda: settings)
     monkeypatch.setattr(kv, "configured", lambda: True)
@@ -862,15 +862,29 @@ async def test_non_reserve_wait_is_never_shorter_than_the_reserve_wait(gate):
         assert time.monotonic() - started >= 0.2
 
 
-@pytest.mark.parametrize("max_wait_s, floor", [(0.05, 0.05), (0.001, 0.02)])
-async def test_caller_cap_bounds_the_extended_wait_but_not_below_the_reserve_wait(gate, max_wait_s, floor):
+@pytest.mark.parametrize("max_wait_s, floor", [(0.05, 0.05), (0.001, 0), (-3, 0)])
+async def test_caller_cap_is_a_hard_bound_on_the_extended_wait(gate, max_wait_s, floor):
     settings, store = gate
-    settings.money_admission_wait_s = 0.02
+    settings.money_admission_wait_s = 0.1
     store.values["money-admission:org:7"] = ("another-owner", time.monotonic() + 10)
     started = time.monotonic()
     async with admission.admit([7], operation="async", max_wait_s=max_wait_s):
         elapsed = time.monotonic() - started
-    assert floor <= elapsed < 2 * settings.money_admission_lease_s
+    assert floor <= elapsed < settings.money_admission_wait_s
+    [row] = completed()
+    assert row["mode"] == "fallback" and row["fallback_wait_timeout"] == 1
+
+
+async def test_settlement_wait_leaves_half_the_hold_grace_for_the_session(gate):
+    settings, store = gate
+    settings.money_admission_wait_s = 0.02
+    settings.money_admission_lease_s = 30
+    settings.hold_grace_s = 0.2
+    store.values["money-admission:org:7"] = ("another-owner", time.monotonic() + 10)
+    started = time.monotonic()
+    async with admission.admit([7], operation="close"):
+        elapsed = time.monotonic() - started
+    assert 0.1 <= elapsed < 0.2
     [row] = completed()
     assert row["mode"] == "fallback" and row["fallback_wait_timeout"] == 1
 
