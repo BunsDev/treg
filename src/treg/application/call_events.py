@@ -18,7 +18,7 @@ Every identifier is HMAC-SHA256 under `call_events_hmac_secret`, after one norma
 (emails lower-cased, domains without scheme or `www.`, LinkedIn URLs reduced to the handle), so
 a find's `answer_keys['email']` equals a later verify's `input_keys['email']`. No raw email,
 name, domain, phone or URL is ever emitted. `answer_values` does carry raw segment text as the
-provider wrote it (at most 64 characters): a company's industry, size and HQ location, and a
+provider wrote it (at most 256 characters): a company's industry, size and HQ location, and a
 person's `location`, which can name a city. That is personal data next to the person's keys, kept
 on purpose so analysis can derive country and region later; Iceberg retention bounds it.
 
@@ -64,7 +64,7 @@ _ROLE_LOCALS = frozenset({
     "inquiries", "jobs", "mail", "marketing", "no-reply", "noreply", "office", "press", "sales",
     "support", "team", "webmaster",
 })
-_VALUE_MAX = 64
+_VALUE_MAX = 256
 _fingerprints: dict[int, tuple[Adapter, str]] = {}
 
 

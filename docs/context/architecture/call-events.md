@@ -108,7 +108,7 @@ The stream has no map type; they travel as JSON objects (`json` columns):
   `tld` of the input domain (or the email's), plus any filter declared `analytics: value`.
 - `answer_keys` — `{field: hmac}` for output fields declared `analytics: key`.
 - `answer_values` — `{field: value}` for output fields declared `analytics: value`, as strings
-  (64 characters at most), exactly as the adapter produced them.
+  (256 characters at most), exactly as the adapter produced them.
 - `answer_flags` — derived from email-shaped keys: `is_role`, `free_mail`, and `domain_match`
   when the input named a domain (prefixed `<field>_` for a field other than `email`).
 

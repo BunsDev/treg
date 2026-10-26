@@ -335,8 +335,8 @@ def test_company_segments_land_as_values_and_the_domain_joins_the_find():
 
 def test_a_long_value_is_capped():
     contract = catalog_store.load().contracts["companies.enrich"]
-    cols = ev.answer_columns(contract, {"name": "Acme", "location": "x" * 500})
-    assert cols["answer_values"]["location"] == "x" * 64
+    cols = ev.answer_columns(contract, {"name": "Acme", "location": "x" * 1000})
+    assert cols["answer_values"]["location"] == "x" * 256
 
 
 def test_the_public_contract_does_not_carry_the_event_mapping():
