@@ -250,6 +250,20 @@ def test_derived_names_give_one_input_id():
     assert a["input_meta"] == {"domain_class": "company", "tld": "example"}
 
 
+def test_an_array_body_identity_reads_back_through_a_bare_expression():
+    cat = catalog_store.load()
+    adapter = cat.adapters["brightdata.linkedin.user.profile"]
+    contract = cat.contracts[cat.by_id["brightdata.linkedin.user.profile"]["capability"]]
+    assert adapter.in_expr == {"body.url": "linkedin_url"} and not adapter.in_map
+    body = json.dumps([{"url": "https://www.linkedin.com/in/aperson/"}]).encode()
+    given = ev.vendor_identity(adapter, contract, [("dataset_id", "x"), ("format", "json")], body)
+    assert given == {"linkedin_url": "https://www.linkedin.com/in/aperson/"}
+    # A computed expression (`e164_digits(phone)`) is not inverted.
+    hlr = cat.adapters["hlrlookup.people.phone.verify"]
+    body = json.dumps({"telephone_number": "15550100"}).encode()
+    assert ev.vendor_identity(hlr, cat.contracts["people.phone.live"], [], body) == {}
+
+
 def test_ref_parts():
     assert ev.ref_parts("abc") == (None, None, None)
     assert ev.ref_parts("abc:r2") == ("abc", "r2", 2)

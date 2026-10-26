@@ -171,6 +171,13 @@ def vendor_identity(adapter: Adapter, contract: Contract, query_items: Iterable[
             v = v[0]
         if v not in (None, ""):
             given[field_name] = v
+    # An expression that is just an identity field (`body.url: linkedin_url`, used where the
+    # body is an array) reads back like a plain `in` entry; computed ones cannot be inverted.
+    for target, expr in (adapter.in_expr or {}).items():
+        if isinstance(expr, str) and expr in contract.identity_types and expr not in given:
+            v = P.get_path(doc, target)
+            if isinstance(v, (str, int)) and not isinstance(v, bool) and v != "":
+                given[expr] = v
     # A provider often takes more shapes than the adapter sends: the router sends `full_name`,
     # while a direct caller of the same finder may send `first_name` + `last_name`. A request
     # parameter named exactly like an identity field means that field; derivation then joins
