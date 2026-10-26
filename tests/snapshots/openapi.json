@@ -3467,6 +3467,71 @@
         "summary": "Admin Referrals"
       }
     },
+    "/admin/shadow": {
+      "get": {
+        "description": "The shadow provider report (application.shadow): per capability and served endpoint, how often\neach side answered, how often they agree, the candidate's speed and cost. Counts only.",
+        "operationId": "admin_shadow_admin_shadow_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "maximum": 30,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-treg-token",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Treg-Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "treg_session",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Treg Session",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Admin Shadow Admin Shadow Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Admin Shadow"
+      }
+    },
     "/admin/share": {
       "get": {
         "description": "Who served each job over the last `minutes` (at most 360). `requests` counts what callers\nasked (direct calls and routed parents, never a routed attempt). `by_provider` credits the\nanswer a caller actually got: a direct call's 2xx that its adapter did not judge a miss\n(`CallRecord.hit` False), and, for a routed call, only the LAST attempt of a parent that\nsucceeded - the attempt whose answer the job returned. An earlier attempt the job moved on\nfrom is not credited, whatever its status: a free provider's body is often streamed without\na `hit` verdict, so its empty 200s would otherwise count. Two reads over an id range.\n\n`teams` counts the same answers per team, so one heavy team cannot stand for the market:\n`total` teams with an answer, `by_provider` teams a provider served, `weighted` each\nprovider's share averaged over teams (every team one vote), and `direct` / `routed` the same\nteam counts for calls that named a provider and for calls treg's job served.",

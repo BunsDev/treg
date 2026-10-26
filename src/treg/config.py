@@ -433,6 +433,20 @@ class Settings(BaseSettings):
     # /catalog/find) to most callers and the same two pure holdouts. Any value here is also the
     # kill switch: a bad judge is one env change from off.
     search_experiment: str = "off"
+    # The shadow provider (application.shadow, `treg-worker shadow collect`): a candidate asked the
+    # same question as served calls, after the fact and never on the request path, to measure how
+    # often it answers and agrees. The JSON names the candidate's base URL and, per capability, an
+    # adapter in the routing YAML's shape (domain.catalog.shadow). Empty = off; it is also the kill
+    # switch. The key is the candidate's own credential, never a team's.
+    shadow_provider: str = ""
+    shadow_provider_key: str = ""
+    shadow_salt: str = ""
+    # Candidate calls at once, per second, and the per-call time limit.
+    shadow_concurrency: int = 16
+    shadow_per_second: float = 20.0
+    shadow_timeout_s: float = 3.0
+    # Pair rows older than this are deleted by each run.
+    shadow_retention_days: int = 7
     # Per-caller share (each) of the two pure arms in `interleave` and `v2` mode; the rest is
     # interleaved, or served v2.
     search_experiment_holdout_percent: int = 10

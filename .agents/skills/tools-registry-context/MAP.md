@@ -181,6 +181,7 @@ Regenerate via `scripts/build-map.py`.
 | `src/treg/alembic/versions/0083_enterprise_sso_safety.py` | architecture/data-model.md, architecture/multi-tenancy.md |
 | `src/treg/alembic/versions/0084_enterprise_workos_cleanup.py` | architecture/data-model.md, architecture/multi-tenancy.md |
 | `src/treg/alembic/versions/0085_enterprise_sso_blocks.py` | architecture/data-model.md, architecture/multi-tenancy.md |
+| `src/treg/alembic/versions/0086_shadow_pairs.py` | architecture/shadow.md |
 | `src/treg/analytics.py` | architecture/data-model.md |
 | `src/treg/api.py` | architecture/archive.md, architecture/money.md, architecture/multi-tenancy.md, architecture/proxy-model.md, architecture/super-admin.md, interface/api.md, interface/landing-sandbox.md, interface/seo.md |
 | `src/treg/application/__init__.py` | architecture/import-boundaries.md |
@@ -238,6 +239,7 @@ Regenerate via `scripts/build-map.py`.
 | `src/treg/application/provider_resources.py` | architecture/catalog.md, architecture/multi-tenancy.md, interface/api.md |
 | `src/treg/application/referrals.py` | architecture/money.md, interface/api.md |
 | `src/treg/application/search_experiment.py` | architecture/search-experiment.md |
+| `src/treg/application/shadow.py` | architecture/shadow.md |
 | `src/treg/application/showcase.py` | architecture/showcase.md |
 | `src/treg/application/signup.py` | architecture/ads-conversions.md, architecture/money.md, architecture/multi-tenancy.md, architecture/policy-extensions.md, interface/api.md |
 | `src/treg/application/table.py` | architecture/table.md |
@@ -422,6 +424,7 @@ Regenerate via `scripts/build-map.py`.
 | `src/treg/domain/catalog/routing/paths.py` | architecture/catalog.md |
 | `src/treg/domain/catalog/routing/plan.py` | architecture/catalog.md |
 | `src/treg/domain/catalog/routing/synthetic.py` | architecture/catalog.md |
+| `src/treg/domain/catalog/shadow.py` | architecture/shadow.md |
 | `src/treg/domain/catalog/stats.py` | architecture/catalog.md |
 | `src/treg/domain/catalog/store.py` | architecture/catalog.md, architecture/instagram-oauth.md, interface/api.md |
 | `src/treg/domain/connections/__init__.py` | architecture/auth-secrets.md, architecture/import-boundaries.md |
@@ -746,6 +749,7 @@ Regenerate via `scripts/build-map.py`.
 | `tests/test_search_agent_bench.py` | architecture/search-experiment.md |
 | `tests/test_search_experiment.py` | architecture/search-experiment.md |
 | `tests/test_search_queries.py` | architecture/find.md |
+| `tests/test_shadow.py` | architecture/shadow.md |
 | `tests/test_showcase_leaderboard.py` | architecture/showcase.md |
 | `tests/test_ssrf_public_addresses.py` | architecture/proxy-model.md |
 | `tests/test_table.py` | architecture/table.md |
@@ -791,6 +795,7 @@ Regenerate via `scripts/build-map.py`.
 | `architecture/policy-extensions.md` | `policy.py`, `bootstrap.py`, `signup.py`, `promotions.py`, `test_policy.py` |
 | `architecture/proxy-model.md` | `relay.py`, `jsontext.py`, `ssrf.py`, `api.py`, `authorize.py`, `idempotency.py`, `intake.py`, `resolve.py`, `reserve.py`, `settle.py`, `evidence.py`, `service.py`, `types.py`, `asynctasks.py`, `keyslots.py`, `0069_platform_key_slot.py`, `test_platform_accounts.py`, `client_identity.py`, `call_surface.py`, `sandbox_identity.py`, `access.py`, `publicdemo.py`, `usage.py`, `call.py`, `limits.py`, `test_ssrf_public_addresses.py`, `test_call_application_contract.py`, `test_call_cancellation.py`, `test_call_response_limits.py`, `test_error_capture.py`, `test_marketplace_call.py`, `test_oauth_billed.py`, `test_passthrough.py`, `test_tag_billing.py`, `test_tag_billing_adversarial.py`, `test_call_architecture.py`, `test_asynctasks.py`, `test_relay_content_length.py` |
 | `architecture/search-experiment.md` | `catalog_search.py`, `search_experiment.py`, `interleave.py`, `judge.py`, `0041_searchlog.py`, `0056_searchlog_verdict.py`, `search_experiment_report.sql`, `search_agent_bench.py`, `test_search_experiment.py`, `test_catalog_search.py`, `test_search_agent_bench.py` |
+| `architecture/shadow.md` | `shadow.py`, `shadow.py`, `0086_shadow_pairs.py`, `test_shadow.py` |
 | `architecture/showcase.md` | `__init__.py`, `showcase.py`, `showcase.py`, `__init__.py`, `images.py`, `images.py`, `imaging.py`, `media_store.py`, `0076_showcase_and_avatars.py`, `showcase.html`, `test_showcase_leaderboard.py`, `test_images.py` |
 | `architecture/super-admin.md` | `api.py`, `admin.py`, `evidence_retention.py`, `access.py`, `config.py` |
 | `architecture/table.md` | `__init__.py`, `table.py`, `table.py`, `call.py`, `call_surface.py`, `config.py`, `mcp_oauth.py`, `auth.py`, `auth.py`, `test_table.py`, `test_table_oauth.py` |

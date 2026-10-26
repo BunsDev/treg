@@ -323,6 +323,27 @@ async def _arena_insights(args) -> int:
     return 1 if result["failed"] else 0
 
 
+async def _shadow_collect(args) -> int:
+    from .infra.db import verify_db
+    from .application import shadow
+    from .bootstrap import archive_object_store
+
+    async with archive_object_store():
+        await verify_db()
+        result = await shadow.collect(max_seconds=args.max_seconds)
+    print(shadow.dumps(result))
+    return 0
+
+
+async def _shadow_report(args) -> int:
+    from .infra.db import verify_db
+    from .application import shadow
+
+    await verify_db()
+    print(shadow.dumps(await shadow.report(days=args.days)))
+    return 0
+
+
 async def _web_arena_totals(args) -> int:
     from .infra.db import verify_db
     from .application.web_arena_publications import refresh_live
@@ -647,6 +668,14 @@ def main(argv: list[str] | None = None) -> int:
     insights.add_argument("--max-seconds", type=float, default=110.0,
                           help="stop after this long even with backlog left; the next run resumes")
     insights.set_defaults(fn=_arena_insights)
+    sh = sub.add_parser("shadow", help="the shadow provider run (off unless shadow_provider is set)")
+    shsub = sh.add_subparsers(dest="cmd", required=True)
+    shc = shsub.add_parser("collect", help="pair new served calls with the shadow provider's answers")
+    shc.add_argument("--max-seconds", type=float, default=110.0)
+    shc.set_defaults(fn=_shadow_collect)
+    shr = shsub.add_parser("report", help="print the comparison report as JSON")
+    shr.add_argument("--days", type=int, default=1)
+    shr.set_defaults(fn=_shadow_report)
     web_arena = sub.add_parser("web-arena", help="Web Arena saved leaderboard totals")
     websub = web_arena.add_subparsers(dest="cmd", required=True)
     totals = websub.add_parser("totals", help="publish content-free Web provider totals")
