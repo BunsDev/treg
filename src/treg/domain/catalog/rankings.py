@@ -14,7 +14,9 @@ small base cannot make a large percentage:
 - trending ranks only rows with at least `TRENDING_MIN_CALLS` successful calls this week;
 - most reliable ranks tools (all their endpoints together) with at least `RELIABLE_MIN_DECIDED`
   decided calls (2xx plus 5xx, the denominator `stats.publish` uses; a 4xx is the caller's mistake);
-- fastest ranks only endpoints with at least `FASTEST_MIN_TIMED` timed successful calls.
+- fastest ranks only endpoints with at least `FASTEST_MIN_TIMED` timed successful calls;
+- head to head lists, per job (one catalog capability), the providers past the reliability floor,
+  with a median time only past the speed floor, and only jobs with two such providers.
 
 Jobs that finish later (`async` endpoints) are left out of reliability and speed: their bucket's
 duration is the submit, not the job, and their success may still be reconciled.
@@ -32,6 +34,7 @@ RELIABLE_MIN_DECIDED = 100
 FASTEST_MIN_TIMED = 20
 NEW_FIRST = 5            # trending lists at most this many brand-new rows before the risers
 TOP = 20                 # rows per board, and per category on a filterable board: 10, then 10 more
+HEAD_TO_HEAD_JOBS = 40   # jobs offered in the head-to-head menu, busiest first
 CHART_SERIES = 10        # providers drawn by name on the daily chart; the rest is "Others"
 WINDOWS = {"7d": 7, "30d": 30}
 
@@ -199,6 +202,35 @@ def build(rows: list[DayRow], cat: store.Catalog, last_day: date) -> dict:
             if p50 is not None:
                 fastest.append(ep_view(ep_id) | {"p50_ms": p50, "timed": t.latency_seen})
     reliable.sort(key=lambda r: (-r["ok_rate"], -r["decided"], r["provider"]))
+
+    # Head to head: the providers that do the same job (one catalog capability), side by side on
+    # reliability and speed. Speed only compares fairly inside one job. A provider shows once it has
+    # the reliability floor of decided calls; its median time only past the speed floor.
+    by_job: dict[str, dict[str, stats.Tally]] = defaultdict(dict)
+    for ep_id, t in tallies.items():
+        cap = eps[ep_id].get("capability")
+        if cap:
+            by_job[cap].setdefault(eps[ep_id]["provider"], stats.Tally()).merge(t)
+    head_to_head = []
+    for cap, providers in by_job.items():
+        side = []
+        for provider, t in providers.items():
+            decided = t.ok + t.bad
+            if decided < RELIABLE_MIN_DECIDED:
+                continue
+            timed = t.latency_seen >= FASTEST_MIN_TIMED and len(t.latencies) >= stats.MIN_SAMPLES
+            side.append({"provider": provider, "label": label(provider), "calls": t.ok, "decided": decided,
+                         "errors": t.bad, "ok_rate": round(t.ok * 100 / decided, 2),
+                         "p50_ms": t.percentile(0.50) if timed else None})
+        if len(side) < 2:
+            continue
+        side.sort(key=lambda r: (-r["ok_rate"], r["p50_ms"] if r["p50_ms"] is not None else 10**9, -r["calls"]))
+        any_ep = next(eps[e] for e in tallies if eps[e].get("capability") == cap)
+        title = cat.capability_titles.get(cap) or (cat.capabilities.get(cap) or "").split(".")[0].strip() or cap
+        head_to_head.append({"job": cap, "title": title[:70], "category": category(any_ep),
+                             "calls": sum(r["calls"] for r in side), "providers": side[:10]})
+    head_to_head.sort(key=lambda j: (-j["calls"], j["job"]))
+    head_to_head = head_to_head[:HEAD_TO_HEAD_JOBS]
     fastest.sort(key=lambda r: (r["p50_ms"], -r["timed"], r["id"]))
 
     # The daily charts, one per window: that window's leaders by name (the same tools, in the same
@@ -239,4 +271,5 @@ def build(rows: list[DayRow], cat: store.Catalog, last_day: date) -> dict:
         "by_category": by_category,
         "reliable": _keep_per_category(reliable),
         "fastest": _keep_per_category(fastest),
+        "head_to_head": head_to_head,
     }

@@ -133,7 +133,7 @@ async def test_page_serves_the_boards_the_worker_saved(clients: AsyncClient):
         assert board.status_code == 200
         assert board.json()["endpoints"]["7d"][0]["id"] == a["id"]
         for name, key in (("trending", "trending"), ("categories", "by_category"),
-                          ("reliable", "reliable"), ("fastest", "fastest")):
+                          ("reliable", "reliable"), ("fastest", "fastest"), ("headtohead", "head_to_head")):
             assert key in (await clients.get(f"/rankings/data/{name}")).json()
         assert (await clients.get("/rankings/data/nothing")).status_code == 404
         assert "/rankings<" in (await clients.get("/sitemap.xml")).text
@@ -245,3 +245,35 @@ async def test_the_worker_saves_display_names(monkeypatch):
     monkeypatch.setattr(infra_db, "verify_db", no_verify)
     assert await worker._rankings_refresh(None) == 0
     assert seen["label"] == "People Data Labs"
+
+
+def test_head_to_head_compares_providers_within_one_job():
+    by_cap: dict = {}
+    for ep in store.load().endpoints:
+        if store.browsable(ep) and not ep.get("async") and not ep.get("status") and ep.get("capability") \
+                and not ep.get("observed_from"):
+            by_cap.setdefault(ep["capability"], {}).setdefault(ep["provider"], ep)
+    cap, eps = next((c, list(p.values())) for c, p in by_cap.items() if len(p) >= 3)
+    fast, slow, thin = eps[:3]
+    rows = (_rows(fast["id"], {0: 200}, bad=0, latency_seen=200, latencies=[150] * 50)
+            + _rows(slow["id"], {0: 190}, bad=10, latency_seen=190, latencies=[900] * 50)
+            + _rows(thin["id"], {0: 20}, bad=0, latency_seen=20, latencies=[50] * 20))   # under the floor
+    (job,) = [j for j in rankings.build(rows, store.load(), LAST)["head_to_head"] if j["job"] == cap]
+    assert [(p["provider"], p["ok_rate"], p["p50_ms"]) for p in job["providers"]] == [
+        (fast["provider"], 100.0, 150), (slow["provider"], 95.0, 900)]
+    assert job["providers"][1]["errors"] == 10 and job["title"]
+
+
+async def test_a_board_missing_from_an_older_saved_row_is_empty(clients: AsyncClient):
+    """After a deploy that adds a board, the saved row lacks it until the next cron run."""
+    rankings_app.reset_cache()
+    await rankings_app.refresh()
+    async with session_maker() as db:
+        row = await db.get(RankingsSnapshot, rankings_app.SNAPSHOT_ID)
+        row.body = {k: v for k, v in row.body.items() if k != "head_to_head"}
+        await db.commit()
+    try:
+        r = await clients.get("/rankings/data/headtohead")
+        assert r.status_code == 200 and r.json() == {"head_to_head": []}
+    finally:
+        rankings_app.reset_cache()

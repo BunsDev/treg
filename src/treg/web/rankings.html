@@ -363,6 +363,7 @@
     <a href="#categories" data-sec="categories"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg>Top by category</a>
     <a href="#reliable" data-sec="reliable"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>Most reliable</a>
     <a href="#fastest" data-sec="fastest"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>Fastest</a>
+    <a href="#headtohead" data-sec="headtohead"><svg viewBox="0 0 24 24"><path d="M4 7h14M15 3l4 4-4 4M20 17H6M9 13l-4 4 4 4"/></svg>Head to head</a>
   </aside>
 
   <main>
@@ -420,6 +421,14 @@
       <div class="more" data-more="fastest" hidden><button>Show more</button></div>
     </section>
 
+    <section class="board" id="headtohead">
+      <div class="bh">
+        <div><h2>Head to head</h2><p>Providers that do the same job, side by side this week: the share of calls without a provider error, and the typical answer time.</p></div>
+        <div class="ctl"><div class="sm" data-job="headtohead"></div></div>
+      </div>
+      <div class="list" id="headtohead-list"></div>
+    </section>
+
   </main>
 </div>
 
@@ -428,13 +437,13 @@
   <div class="faq">
     <details open><summary>What is measured?</summary><p>Each tool and endpoint is ranked by its successful calls through treg: calls the provider answered with a success. A call counts once, whatever it cost, so a cheap search and an expensive video weigh the same.</p></details>
     <details><summary>Which time periods do the rankings cover?</summary><p>Last 7 days and Last 30 days end with the newest complete day in UTC. Trending compares the last seven days with the seven days before and ranks by the change, among rows with at least <span id="f-trending">1,000</span> successful calls this week. New rows with no calls the week before are listed first, at most five.</p></details>
-    <details><summary>How are reliability and speed measured?</summary><p>Most reliable ranks tools: the share of decided calls (successes and provider errors) that succeeded, across all of a tool's endpoints, for tools with at least <span id="f-reliable">100</span> decided calls this week. A 4xx is the caller's mistake and does not count against the provider. Fastest ranks endpoints, because speed depends on the job: it is the median time to a successful answer, for endpoints with at least <span id="f-fastest">20</span> timed calls. Jobs that finish later, such as video renders, are left out of both: their time is the time to accept the job, not to finish it.</p></details>
+    <details><summary>How are reliability and speed measured?</summary><p>Most reliable ranks tools: the share of decided calls (successes and provider errors) that succeeded, across all of a tool's endpoints, for tools with at least <span id="f-reliable">100</span> decided calls this week. A 4xx is the caller's mistake and does not count against the provider. Head to head compares providers only within one job, such as finding a person's work email, on both. Fastest ranks endpoints, because speed depends on the job: it is the median time to a successful answer, for endpoints with at least <span id="f-fastest">20</span> timed calls. Jobs that finish later, such as video renders, are left out of both: their time is the time to accept the job, not to finish it.</p></details>
     <details><summary>How fresh is the data?</summary><p>The date at the top is the newest complete day the rankings use, not the time the page was built. It moves forward every day.</p></details>
     <details><summary>Do calls made with a team's own API key count?</summary><p>Yes. A team can bring its own key for a tool, and those calls still go through treg. They are real agent calls, so they count like any other.</p></details>
     <details><summary>Does this page show who made the calls, or what they spent?</summary><p>No. It counts calls through treg only: no team, key or amount of money appears on it. Calls made straight to a provider's own API are not visible to us.</p></details>
     <details><summary>How do I get my tool on these rankings?</summary><p>Get it into the treg catalog: see <a href="/vendor-listing">listing your API</a>. Once agents call it through treg, it is counted like every other tool.</p></details>
   </div>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is measured?","acceptedAnswer":{"@type":"Answer","text":"Each tool and endpoint is ranked by its successful calls through treg: calls the provider answered with a success. A call counts once, whatever it cost, so a cheap search and an expensive video weigh the same."}},{"@type":"Question","name":"Which time periods do the rankings cover?","acceptedAnswer":{"@type":"Answer","text":"Last 7 days and Last 30 days end with the newest complete day in UTC. Trending compares the last seven days with the seven days before and ranks by the change, among rows with at least 1,000 successful calls this week. New rows with no calls the week before are listed first, at most five."}},{"@type":"Question","name":"How are reliability and speed measured?","acceptedAnswer":{"@type":"Answer","text":"Most reliable ranks tools: the share of decided calls (successes and provider errors) that succeeded, across all of a tool's endpoints, for tools with at least 100 decided calls this week. A 4xx is the caller's mistake and does not count against the provider. Fastest ranks endpoints, because speed depends on the job: it is the median time to a successful answer, for endpoints with at least 20 timed calls. Jobs that finish later, such as video renders, are left out of both: their time is the time to accept the job, not to finish it."}},{"@type":"Question","name":"How fresh is the data?","acceptedAnswer":{"@type":"Answer","text":"The date at the top is the newest complete day the rankings use, not the time the page was built. It moves forward every day."}},{"@type":"Question","name":"Do calls made with a team's own API key count?","acceptedAnswer":{"@type":"Answer","text":"Yes. A team can bring its own key for a tool, and those calls still go through treg. They are real agent calls, so they count like any other."}},{"@type":"Question","name":"Does this page show who made the calls, or what they spent?","acceptedAnswer":{"@type":"Answer","text":"No. It counts calls through treg only: no team, key or amount of money appears on it. Calls made straight to a provider's own API are not visible to us."}},{"@type":"Question","name":"How do I get my tool on these rankings?","acceptedAnswer":{"@type":"Answer","text":"Get it into the treg catalog: see listing your API. Once agents call it through treg, it is counted like every other tool."}}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is measured?","acceptedAnswer":{"@type":"Answer","text":"Each tool and endpoint is ranked by its successful calls through treg: calls the provider answered with a success. A call counts once, whatever it cost, so a cheap search and an expensive video weigh the same."}},{"@type":"Question","name":"Which time periods do the rankings cover?","acceptedAnswer":{"@type":"Answer","text":"Last 7 days and Last 30 days end with the newest complete day in UTC. Trending compares the last seven days with the seven days before and ranks by the change, among rows with at least 1,000 successful calls this week. New rows with no calls the week before are listed first, at most five."}},{"@type":"Question","name":"How are reliability and speed measured?","acceptedAnswer":{"@type":"Answer","text":"Most reliable ranks tools: the share of decided calls (successes and provider errors) that succeeded, across all of a tool's endpoints, for tools with at least 100 decided calls this week. A 4xx is the caller's mistake and does not count against the provider. Head to head compares providers only within one job, such as finding a person's work email, on both. Fastest ranks endpoints, because speed depends on the job: it is the median time to a successful answer, for endpoints with at least 20 timed calls. Jobs that finish later, such as video renders, are left out of both: their time is the time to accept the job, not to finish it."}},{"@type":"Question","name":"How fresh is the data?","acceptedAnswer":{"@type":"Answer","text":"The date at the top is the newest complete day the rankings use, not the time the page was built. It moves forward every day."}},{"@type":"Question","name":"Do calls made with a team's own API key count?","acceptedAnswer":{"@type":"Answer","text":"Yes. A team can bring its own key for a tool, and those calls still go through treg. They are real agent calls, so they count like any other."}},{"@type":"Question","name":"Does this page show who made the calls, or what they spent?","acceptedAnswer":{"@type":"Answer","text":"No. It counts calls through treg only: no team, key or amount of money appears on it. Calls made straight to a provider's own API are not visible to us."}},{"@type":"Question","name":"How do I get my tool on these rankings?","acceptedAnswer":{"@type":"Answer","text":"Get it into the treg catalog: see listing your API. Once agents call it through treg, it is counted like every other tool."}}]}</script>
 </section>
 
 <section class="cta-final" id="setup">
@@ -659,7 +668,8 @@
   // ---------- boards ----------
   // per board: what is chosen, whether "Show more" was pressed, and whether its data is here
   const state = { tools: { win: "7d", all: false }, endpoints: { win: "7d", cat: "", all: false },
-                  trending: { kind: "providers", all: false }, reliable: { cat: "", all: false }, fastest: { cat: "", all: false } };
+                  trending: { kind: "providers", all: false }, reliable: { cat: "", all: false }, fastest: { cat: "", all: false },
+                  headtohead: { job: "", all: false } };
   function paint(name, rows, render) {
     const list = $(name + "-list"), more = document.querySelector(`[data-more="${name}"]`);
     const st = state[name];
@@ -691,6 +701,14 @@
     },
     reliable() {
       paint("reliable", byCat(D.reliable, state.reliable.cat), (r, i) => row(i, r, toolWho(r), `<b>${num(r.ok_rate).toFixed(num(r.ok_rate) === 100 ? 0 : 1)}%</b><small>${compact(r.decided)} calls</small>`));
+    },
+    headtohead() {
+      const jobs = D.head_to_head || [];
+      const job = jobs.find((j) => j.job === state.headtohead.job) || jobs[0];
+      const pct = (v) => { v = num(v); return v === 100 ? "100%" : (v >= 99 ? v.toFixed(2) : v.toFixed(1)) + "%"; };
+      paint("headtohead", job ? job.providers : [], (r, i) => row(i, r,
+        `<a href="${toolLink(r.provider)}">${esc(r.label)}</a><small>${compact(r.calls)} calls${num(r.errors) ? " · " + compact(r.errors) + " provider errors" : ""}</small>`,
+        `<b>${pct(r.ok_rate)}</b><small>${r.p50_ms == null ? "time not measured" : ms(r.p50_ms)}</small>`));
     },
     fastest() {
       paint("fastest", byCat(D.fastest, state.fastest.cat), (r, i) => row(i, r, epWho(r), `<b>${ms(r.p50_ms)}</b><small>${compact(r.timed)} timed</small>`));
@@ -725,8 +743,15 @@
   }));
 
   // ---------- lazy boards: each loads when the reader comes near it, as OpenRouter's do ----------
-  const KEY = { endpoints: "endpoints", trending: "trending", categories: "by_category", reliable: "reliable", fastest: "fastest" };
+  const KEY = { endpoints: "endpoints", trending: "trending", categories: "by_category", reliable: "reliable", fastest: "fastest",
+                headtohead: "head_to_head" };
   function setUp(name) {
+    if (name === "headtohead") {   // a menu of jobs, busiest first, rather than of categories
+      const jobs = D.head_to_head || [];
+      if (jobs.length) selectMenu(document.querySelector('.sm[data-job="headtohead"]'), "Job",
+        jobs.map((j) => ({ value: j.job, label: j.title })), (v) => { state.headtohead.job = v; draw.headtohead(); });
+      return;
+    }
     const host = document.querySelector(`.sm[data-cat="${name}"]`);
     if (!host) return;
     const source = name === "endpoints" ? D.endpoints["30d"] : D[name];

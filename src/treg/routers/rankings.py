@@ -25,7 +25,7 @@ router = APIRouter()
 # What the page carries itself, and the board name -> key of every board it loads later.
 _FIRST = ("through", "has_change", "floors", "categories", "chart", "tools", "pending")
 _LATER = {"endpoints": "endpoints", "trending": "trending", "categories": "by_category",
-          "reliable": "reliable", "fastest": "fastest"}
+          "reliable": "reliable", "fastest": "fastest", "headtohead": "head_to_head"}
 
 
 def _cached(body: bytes, request: Request, media_type: str) -> Response:
@@ -75,5 +75,6 @@ async def rankings_board(board: str, request: Request, db: AsyncSession = Depend
     if key is None:
         raise HTTPException(status_code=404, detail="no such board")
     boards = await rankings.boards(db)
-    body = json.dumps({key: boards[key]}, separators=(",", ":")).encode()
+    # A board newer than the saved row (the deploy came before the next cron run) is empty, not an error.
+    body = json.dumps({key: boards.get(key, [])}, separators=(",", ":")).encode()
     return _cached(body, request, "application/json")
