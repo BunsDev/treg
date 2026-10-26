@@ -105,9 +105,13 @@ The stream has no map type; they travel as JSON objects (`json` columns):
   give one `input_id`.
 - `input_keys` — `{field: hmac}` for every identity field present after derivation.
 - `input_meta` — non-sensitive segments: `domain_class` (`company`, `webmail`, `edu`, `gov`) and
-  `tld` of the input domain (or the email's), plus any filter declared `analytics: value`.
+  `tld` of the input domain (or the email's), plus any filter declared `analytics: value` or
+  `analytics: country`.
 - `answer_keys` — `{field: hmac}` for output fields declared `analytics: key`.
-- `answer_values` — `{field: value}` for output fields declared `analytics: value`, as strings.
+- `answer_values` — `{field: value}` for output fields declared `analytics: value`, as strings
+  (64 characters at most), and for `analytics: country` only the lower-case ISO 3166 code the
+  place names (`country_of`: `Berlin, Germany` -> `de`; a two-letter part after a comma, often a
+  US state, never counts). A city or street never leaves.
 - `answer_flags` — derived from email-shaped keys: `is_role`, `free_mail`, and `domain_match`
   when the input named a domain (prefixed `<field>_` for a field other than `email`).
 
@@ -119,8 +123,14 @@ output:
   verified: {type: bool, analytics: value}
 ```
 
-The parser refuses any other word, and a filter can never be a `key`. The public catalog contract
-does not show the annotation.
+The parser refuses any other word (`ANALYTICS_MODES` in `routing/contracts.py`), and a filter can
+never be a `key`. An unknown word fails the routing load, so a new mode lands in the parser in the
+same change as its first use. The public catalog contract does not show the annotation.
+
+Segment fields (2026-10): company `industry`, `employees`, `founded` and HQ country; the company's
+domain or website as a key, so a `companies.enrich` answer joins a find on the same domain; person
+and phone country; the search `country` filters. Never a company name, description, person name,
+person city or a list.
 
 Normalization before hashing: emails lower-cased; domains without scheme, path or `www.`;
 LinkedIn URLs and handles reduced to the lower-cased handle; other text case-folded with spaces

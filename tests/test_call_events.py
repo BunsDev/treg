@@ -267,6 +267,60 @@ def test_an_unknown_analytics_mode_fails_the_contract():
             "output": {"email": {"type": "str"}}}}})
 
 
+def test_country_is_a_mode_for_outputs_and_filters():
+    parsed = C.parse_contracts({"contracts": {"x.find": {
+        "identity": [{"q": "str"}], "filters": {"country": {"type": "str", "analytics": "country"}},
+        "output": {"location": {"type": "str", "analytics": "country"}}}}})
+    assert parsed["x.find"].output["location"]["analytics"] == "country"
+
+
+def test_the_shipped_catalog_uses_only_known_modes_and_keeps_its_routes():
+    # An unknown mode raises at load and every `treg.*` capability disappears, so the shipped
+    # file is checked here, not only the parser.
+    cat = catalog_store.load()
+    used = {(s or {}).get("analytics", "skip") for c in cat.contracts.values()
+            for s in [*(c.output or {}).values(), *(c.filters or {}).values()]}
+    assert used <= set(C.ANALYTICS_MODES) and "country" in used
+    for cap in ("people.email.find", "companies.enrich", "linkedin.company.profile", "people.enrich",
+                "people.phone.find", "people.search", "companies.search"):
+        assert f"treg.{cap}" in cat.by_id, cap
+
+
+def test_country_of_names_a_country_never_a_state():
+    assert ev.country_of("DE") == "de" and ev.country_of("Germany") == "de"
+    assert ev.country_of("Berlin, Germany") == "de"
+    assert ev.country_of("San Francisco, CA, United States") == "us"
+    assert ev.country_of("Austin, Texas, USA") == "us" and ev.country_of("London, England") == "gb"
+    assert ev.country_of("Boston, MA") is None and ev.country_of("Greater Phoenix") is None
+    assert ev.country_of("") is None and ev.country_of(None) is None and ev.country_of(42) is None
+
+
+def test_company_segments_land_as_values_and_the_domain_joins_the_find():
+    cat = catalog_store.load()
+    output = {"name": "Acme Example Corp", "domain": "www.acme.example", "website": "https://acme.example",
+              "description": "A long free-text description of what the company does.",
+              "industry": "Software", "employees": "51-200", "founded": 2010,
+              "location": "San Francisco, CA, United States", "linkedin_url": "https://linkedin.com/company/acme"}
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("TREG_CALL_EVENTS_HMAC_SECRET", SECRET)
+        get_settings.cache_clear()
+        cols = ev.answer_columns(cat.contracts["companies.enrich"], output)
+        page = ev.answer_columns(cat.contracts["linkedin.company.profile"],
+                                 {"name": "Acme Example Corp", "website": "acme.example", "employees": "51-200",
+                                  "location": "San Francisco, California, United States", "followers": 1200})
+        find, _ = ev.input_columns(cat.contracts["people.email.find"],
+                                   {"full_name": "A Person", "domain": "acme.example"})
+        search, _ = ev.input_columns(cat.contracts["companies.search"], {"q": "robots", "country": "Germany"})
+    get_settings.cache_clear()
+    assert cols["answer_values"] == {"industry": "Software", "employees": "51-200", "founded": "2010",
+                                     "location": "us"}
+    # the company's name, description and URLs never leave; its domain only as the shared key
+    assert set(cols["answer_keys"]) == {"domain"}
+    assert cols["answer_keys"]["domain"] == page["answer_keys"]["website"] == find["input_keys"]["domain"]
+    assert page["answer_values"] == {"employees": "51-200", "location": "us"}
+    assert search["input_meta"]["country"] == "de"
+
+
 def test_the_public_contract_does_not_carry_the_event_mapping():
     import inspect
     from treg.routers import catalog as catalog_router

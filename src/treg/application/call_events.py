@@ -62,6 +62,8 @@ _ROLE_LOCALS = frozenset({
     "support", "team", "webmaster",
 })
 _VALUE_MAX = 64
+_COUNTRY_ALIASES = {"usa": "us", "u.s.": "us", "u.s.a.": "us", "united states of america": "us",
+                    "england": "gb", "scotland": "gb", "wales": "gb", "uae": "ae"}
 _fingerprints: dict[int, tuple[Adapter, str]] = {}
 
 
@@ -118,6 +120,35 @@ def _stringify(value: Any) -> str | None:
         return json.dumps(value)
     if isinstance(value, str) and value.strip():
         return value.strip()[:_VALUE_MAX]
+    return None
+
+
+def country_of(place: Any) -> str | None:
+    """The ISO 3166 alpha-2 code (lower case) a place names: `DE`, `Germany`, `Berlin, Germany`,
+    `San Francisco, CA, United States`. None when nothing in it is a country.
+
+    A two-letter code counts only as the whole value: after a comma it is as often a US state
+    (`Boston, MA` is not Morocco), so a part must spell the country out."""
+    if not isinstance(place, str) or not place.strip():
+        return None
+    whole = place.strip().lower()
+    if whole in _COUNTRY_ALIASES or (code := P._country_code(whole)) is not None:
+        return _COUNTRY_ALIASES.get(whole) or code
+    for part in reversed(whole.split(",")[1:]):
+        part = part.strip()
+        if part in _COUNTRY_ALIASES:
+            return _COUNTRY_ALIASES[part]
+        if len(part) > 3 and (code := P._country_code(part)) is not None:
+            return code
+    return None
+
+
+def _segment(mode: str | None, value: Any) -> str | None:
+    """What a `value` or `country` field contributes to `input_meta` / `answer_values`."""
+    if mode == "value":
+        return _stringify(value)
+    if mode == "country":
+        return country_of(value)
     return None
 
 
@@ -198,7 +229,7 @@ def input_columns(contract: Contract, given: dict) -> tuple[dict, dict]:
         meta["domain_class"] = domain_class(domain)
         meta["tld"] = domain.rsplit(".", 1)[1]
     for k, spec in (contract.filters or {}).items():
-        if (spec or {}).get("analytics") == "value" and (s := _stringify(identity.get(k))) is not None:
+        if (s := _segment((spec or {}).get("analytics"), identity.get(k))) is not None:
             meta[k] = s
     cols = {
         "input_type": "+".join(variant) if variant else None,
@@ -243,7 +274,7 @@ def answer_columns(contract: Contract, output: dict, input_norm: dict | None = N
                 flags[f"{p}free_mail"] = P.free_mail(dom)
                 if input_domain:
                     flags[f"{p}domain_match"] = dom == input_domain
-        elif mode == "value" and (s := _stringify(v)) is not None:
+        elif (s := _segment(mode, v)) is not None:
             values[field_name] = s
     return {"answer_keys": keys or None, "answer_values": values or None,
             "answer_flags": flags or None}
