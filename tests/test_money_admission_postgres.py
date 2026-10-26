@@ -210,7 +210,8 @@ async def test_admission_timeout_keeps_accounting_safe_but_loses_pool_isolation(
     monkeypatch.setattr(get_settings(), "money_admission_enabled", True)
     monkeypatch.setattr(get_settings(), "money_admission_org_ids", [])
     monkeypatch.setattr(get_settings(), "money_admission_wait_s", 0.05)
-    monkeypatch.setattr(get_settings(), "money_admission_lease_s", 15)
+    # Settlement waits twice the lease before falling back; keep that inside the test's window.
+    monkeypatch.setattr(get_settings(), "money_admission_lease_s", 1)
     money_admission.snapshot()
     # A long-held row outlasts the admission budget. Accounting still completes exactly once,
     # but fallback callers can fill the old pool: availability fallback is not hard isolation.
@@ -372,6 +373,8 @@ async def test_admission_timeout_preserves_foreign_lease_and_settles_once(
     org, [call] = await _funded_holds("admission-timeout", 1)
     key, token = f"money-admission:org:{org}", uuid4().hex
     monkeypatch.setattr(get_settings(), "money_admission_wait_s", 0.05)
+    # The settlement budget (twice the lease) must expire before the foreign lease does.
+    monkeypatch.setattr(get_settings(), "money_admission_lease_s", 1)
     assert await local_redis[1].acquire_lease(key, token, 5000) == "acquired"
     try:
         results = await asyncio.gather(*[
