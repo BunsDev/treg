@@ -105,17 +105,10 @@ The stream has no map type; they travel as JSON objects (`json` columns):
   give one `input_id`.
 - `input_keys` — `{field: hmac}` for every identity field present after derivation.
 - `input_meta` — non-sensitive segments: `domain_class` (`company`, `webmail`, `edu`, `gov`) and
-  `tld` of the input domain (or the email's), plus any filter declared `analytics: value` or
-  `analytics: country`.
+  `tld` of the input domain (or the email's), plus any filter declared `analytics: value`.
 - `answer_keys` — `{field: hmac}` for output fields declared `analytics: key`.
 - `answer_values` — `{field: value}` for output fields declared `analytics: value`, as strings
-  (64 characters at most), and for `analytics: country` only the lower-case ISO 3166 code the
-  place names (`country_of`: `Berlin, Germany` and the `join`-built `Berlin Germany` -> `de`,
-  reading the last words of each comma part, longest first; a US state name or code stops it, so
-  `Boston MA` and `Atlanta, Georgia` give nothing; after a city only `US`, `UK` or `GB` count as
-  two-letter codes, since `Monterrey, NL` is Nuevo Leon; a country name inside a place name such as
-  `Port of Spain` is the place; a bare `Georgia`, `CA` or `NL` is the country). A city or street
-  never leaves.
+  (64 characters at most), exactly as the adapter produced them.
 - `answer_flags` — derived from email-shaped keys: `is_role`, `free_mail`, and `domain_match`
   when the input named a domain (prefixed `<field>_` for a field other than `email`).
 
@@ -127,16 +120,21 @@ output:
   verified: {type: bool, analytics: value}
 ```
 
-The parser refuses any other word (`ANALYTICS_MODES` in `routing/contracts.py`), and a filter can
-never be a `key`. An unknown word fails the routing load, so a new mode lands in the parser in the
-same change as its first use. The public catalog contract does not show the annotation.
+The parser refuses any other word, and a filter can never be a `key`. The public catalog contract
+does not show the annotation.
 
-Segment fields (2026-10): company `industry`, `employees`, `founded` and HQ `location` as the
-provider wrote it (company data, capped at 64 characters, parsed into a country at analysis time so
-a better parser can re-read old events); the company's domain or website as a key, so a
-`companies.enrich` answer joins a find on the same domain; a person's place only as its country
-(`analytics: country`, a person's city never leaves); phone country; the search `country` filters.
-Never a company name, description, person name, person city or a list.
+Segment fields (2026-10): company `industry`, `employees`, `founded` and HQ `location`; the
+company's domain or website as a key, so a `companies.enrich` answer joins a find on the same
+domain; a person's `location` and company domain; phone country and line type; the search
+`country` filters. Values are stored as the provider wrote them and not parsed here: country,
+region and size buckets are derived at analysis time (data-lake ETL), so a better parser can
+re-read old events.
+
+**Privacy.** Identifiers (email, name, domain, phone, URL, LinkedIn handle) leave only as HMAC
+keys. `answer_values` is not identifier-free: a person's `location` can name a city, and next to
+that person's keys it is personal data. It is kept on purpose for analysis. Never annotated as a
+value: names, company names, descriptions, `about` text, follower counts, lists. Iceberg
+retention for `analytics.call_events` must be set and documented before this grows further.
 
 Normalization before hashing: emails lower-cased; domains without scheme, path or `www.`;
 LinkedIn URLs and handles reduced to the lower-cased handle; other text case-folded with spaces

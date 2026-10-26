@@ -232,7 +232,7 @@ contracts:
       company: {type: str}
       company_domain: {type: str, analytics: key}
       linkedin_url: {type: str}
-      location: {type: str, analytics: country}
+      location: {type: str, analytics: value}
     miss: "full_name == null"
     idempotent: true
 
@@ -327,7 +327,7 @@ contracts:
       - {title: str}
       - {full_name: str}
     filters:
-      country: {type: str, default: null, note: "ISO country code, where the provider supports it", analytics: country}
+      country: {type: str, default: null, note: "ISO country code, where the provider supports it", analytics: value}
       location: {type: str, default: null, note: "free-text place ('London, United Kingdom', 'Greater Phoenix') passed through to providers that take one; finer than country, never normalised"}
       limit: {type: int, default: 10, note: "rows to return — THE price dial: most providers bill per row"}
       keywords: {type: list, default: null, note: "skills, topics or domain terms the person must match ('microservices', 'match analysis') — the SUBSTANCE of most briefs; a provider with no keyword field answers a looser question and ranks below one that has it"}
@@ -393,7 +393,7 @@ contracts:
       - {technology: str}
       - {domain: str}
     filters:
-      country: {type: str, default: null, note: "ISO country code, where the provider supports it", analytics: country}
+      country: {type: str, default: null, note: "ISO country code, where the provider supports it", analytics: value}
       limit: {type: int, default: 10, note: "rows to return — THE price dial: most providers bill per row"}
     output:
       companies: {type: list, required: true, note: "the provider's own company rows (name, domain, industry, size, location…) — shapes differ per provider; raw is the same body"}
@@ -443,7 +443,7 @@ contracts:
       first_name: {type: str}
       last_name: {type: str}
       headline: {type: str}
-      location: {type: str, analytics: country}
+      location: {type: str, analytics: value}
       followers: {type: int}
       connections: {type: int}
       about: {type: str}

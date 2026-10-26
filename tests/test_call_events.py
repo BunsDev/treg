@@ -267,70 +267,27 @@ def test_an_unknown_analytics_mode_fails_the_contract():
             "output": {"email": {"type": "str"}}}}})
 
 
-def test_country_is_a_mode_for_outputs_and_filters():
-    parsed = C.parse_contracts({"contracts": {"x.find": {
-        "identity": [{"q": "str"}], "filters": {"country": {"type": "str", "analytics": "country"}},
-        "output": {"location": {"type": "str", "analytics": "country"}}}}})
-    assert parsed["x.find"].output["location"]["analytics"] == "country"
-
-
 def test_the_shipped_catalog_uses_only_known_modes_and_keeps_its_routes():
     # An unknown mode raises at load and every `treg.*` capability disappears, so the shipped
     # file is checked here, not only the parser.
     cat = catalog_store.load()
     used = {(s or {}).get("analytics", "skip") for c in cat.contracts.values()
             for s in [*(c.output or {}).values(), *(c.filters or {}).values()]}
-    assert used <= set(C.ANALYTICS_MODES) and "country" in used
+    assert used <= {"key", "value", "skip"}
     for cap in ("people.email.find", "companies.enrich", "linkedin.company.profile", "people.enrich",
-                "people.phone.find", "people.search", "companies.search"):
+                "linkedin.user.profile", "people.phone.find", "people.search", "companies.search"):
         assert f"treg.{cap}" in cat.by_id, cap
 
 
-def test_country_of_names_a_country_never_a_state():
-    assert ev.country_of("DE") == "de" and ev.country_of("Germany") == "de"
-    assert ev.country_of("Berlin, Germany") == "de"
-    assert ev.country_of("San Francisco, CA, United States") == "us"
-    assert ev.country_of("Austin, Texas, USA") == "us" and ev.country_of("London, England") == "gb"
-    assert ev.country_of("Boston, MA") is None and ev.country_of("Greater Phoenix") is None
-    assert ev.country_of("") is None and ev.country_of(None) is None and ev.country_of(42) is None
-    # `join` builds places with spaces: the trailing words, longest first
-    assert ev.country_of("Berlin Germany") == "de" and ev.country_of("London United Kingdom") == "gb"
-    assert ev.country_of("San Francisco CA United States") == "us" and ev.country_of("Redmond US") == "us"
-    assert ev.country_of("South San Francisco United States of America") == "us"
-    assert ev.country_of("Boston, Massachusetts, US") == "us" and ev.country_of("Paris, France") == "fr"
-    assert ev.country_of("South San Francisco, California, United States, Northern America, Americas") == "us"
-    # a US state, by name or code, names no country, even one that shares a country's name
-    assert ev.country_of("Boston MA") is None and ev.country_of("Boston MA 02110") is None
-    assert ev.country_of("Ottawa CA") is None and ev.country_of("San Francisco, California") is None
-    assert ev.country_of("Atlanta Georgia") is None and ev.country_of("Atlanta, Georgia") is None
-    assert ev.country_of("Newark New Jersey") is None and ev.country_of("Santa Fe New Mexico") is None
-    assert ev.country_of("Mexico City Mexico") == "mx" and ev.country_of("St Helier Jersey") == "je"
-    # after a city a two-letter word is as often a region elsewhere: only US / UK / GB count
-    assert ev.country_of("Monterrey, NL") is None and ev.country_of("Monterrey NL") is None  # Nuevo Leon
-    assert ev.country_of("Charlottetown, PE") is None and ev.country_of("Vitoria, ES") is None
-    assert ev.country_of("London UK") == "gb" and ev.country_of("Amsterdam, Netherlands") == "nl"
-    assert ev.country_of("Paris, FR") is None  # the price of never reading NL or PE as a country
-    # a country name inside a place name is the place; a country's formal title is not
-    assert ev.country_of("Port of Spain") is None and ev.country_of("West Jordan") is None
-    assert ev.country_of("Port of Spain, Trinidad and Tobago") == "tt"
-    assert ev.country_of("Republic of Ireland") == "ie" and ev.country_of("Kingdom of Saudi Arabia") == "sa"
-    assert ev.country_of("Cape Town South Africa") == "za" and ev.country_of("Auckland New Zealand") == "nz"
-    # a bare value is the provider's country field: `Georgia` the country, `CA` Canada, `NL`
-    assert ev.country_of("Georgia") == "ge" and ev.country_of("CA") == "ca" and ev.country_of("NL") == "nl"
-
-
-@pytest.mark.parametrize("endpoint_id,field,code", [
-    # a person's place leaves as its country only
-    ("apollo.people.enrich", "location", "us"),
-    ("blitzapi.people.enrich", "location", "us"),
-    ("datagma.people.enrich", "location", "us"),
-    ("fetchinio.linkedin.user.profile", "location", "us"),
-    # a company's HQ leaves as the provider wrote it (capped), for analysis to parse
-    ("apollo.companies.enrich", "location", "South San Francisco United States"),
-    ("wiza.companies.enrich", "location", "Toronto, Ontario, Canada"),
+@pytest.mark.parametrize("endpoint_id,location", [
+    ("apollo.people.enrich", "San Francisco United States"),
+    ("fetchinio.linkedin.user.profile", "Seattle, Washington, United States"),
+    ("apollo.companies.enrich", "South San Francisco United States"),
+    ("wiza.companies.enrich", "Toronto, Ontario, Canada"),
 ])
-def test_a_shipped_adapter_answer_lands_its_country(endpoint_id, field, code):
-    # The adapter's own fixture through `from_upstream`, as the builder reads a live answer.
+def test_a_shipped_adapter_answer_lands_its_location_as_written(endpoint_id, location):
+    # The adapter's own fixture through `from_upstream`, as the builder reads a live answer:
+    # the place is kept as the provider wrote it, for analysis to parse.
     cat = catalog_store.load()
     adapter, ep = cat.adapters[endpoint_id], cat.by_id[endpoint_id]
     assert adapter.verified, adapter.verify_note
@@ -340,7 +297,7 @@ def test_a_shipped_adapter_answer_lands_its_country(endpoint_id, field, code):
         get_settings.cache_clear()
         cols = ev.answer_columns(cat.contracts[ep["capability"]], output)
     get_settings.cache_clear()
-    assert cols["answer_values"][field] == code
+    assert cols["answer_values"]["location"] == location
 
 
 def test_company_segments_land_as_values_and_the_domain_joins_the_find():
@@ -358,11 +315,11 @@ def test_company_segments_land_as_values_and_the_domain_joins_the_find():
                                   "location": "San Francisco, California, United States", "followers": 1200})
         find, _ = ev.input_columns(cat.contracts["people.email.find"],
                                    {"full_name": "A Person", "domain": "acme.example"})
-        search, _ = ev.input_columns(cat.contracts["companies.search"], {"q": "robots", "country": "Germany"})
+        search, _ = ev.input_columns(cat.contracts["companies.search"], {"q": "robots", "country": "DE"})
         person = ev.answer_columns(cat.contracts["people.enrich"], {
-            "full_name": "A Person", "location": "Berlin, Germany", "company_domain": "acme.example"})
+            "full_name": "A Person", "title": "Head of Sales", "location": "Berlin, Germany",
+            "company_domain": "acme.example"})
     get_settings.cache_clear()
-    # a company's HQ is company data, kept as written so analysis can re-parse it; a person's is not
     assert cols["answer_values"] == {"industry": "Software", "employees": "51-200", "founded": "2010",
                                      "location": "San Francisco, CA, United States"}
     # the company's name, description and URLs never leave; its domain only as the shared key
@@ -370,8 +327,16 @@ def test_company_segments_land_as_values_and_the_domain_joins_the_find():
     assert cols["answer_keys"]["domain"] == page["answer_keys"]["website"] == find["input_keys"]["domain"]
     assert page["answer_values"] == {"employees": "51-200",
                                      "location": "San Francisco, California, United States"}
-    assert person["answer_values"] == {"location": "de"}
-    assert search["input_meta"]["country"] == "de"
+    assert search["input_meta"]["country"] == "DE"
+    # a person's place as written; the person's name and title never leave
+    assert person["answer_values"] == {"location": "Berlin, Germany"}
+    assert person["answer_keys"] == {"company_domain": find["input_keys"]["domain"]}
+
+
+def test_a_long_value_is_capped():
+    contract = catalog_store.load().contracts["companies.enrich"]
+    cols = ev.answer_columns(contract, {"name": "Acme", "location": "x" * 500})
+    assert cols["answer_values"]["location"] == "x" * 64
 
 
 def test_the_public_contract_does_not_carry_the_event_mapping():

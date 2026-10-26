@@ -17,7 +17,10 @@ serves every capability, so the capability-specific part is contract-driven maps
 Every identifier is HMAC-SHA256 under `call_events_hmac_secret`, after one normalization
 (emails lower-cased, domains without scheme or `www.`, LinkedIn URLs reduced to the handle), so
 a find's `answer_keys['email']` equals a later verify's `input_keys['email']`. No raw email,
-name, domain, phone or URL is ever emitted.
+name, domain, phone or URL is ever emitted. `answer_values` does carry raw segment text as the
+provider wrote it (at most 64 characters): a company's industry, size and HQ location, and a
+person's `location`, which can name a city. That is personal data next to the person's keys, kept
+on purpose so analysis can derive country and region later; Iceberg retention bounds it.
 
 The expensive part (reading bodies, hashing) is a builder the sink runs in its flusher; what is
 computed on the call path is a handful of attribute reads.
@@ -62,26 +65,6 @@ _ROLE_LOCALS = frozenset({
     "support", "team", "webmaster",
 })
 _VALUE_MAX = 64
-_COUNTRY_ALIASES = {"usa": "us", "u.s.": "us", "u.s.a.": "us", "united states of america": "us",
-                    "england": "gb", "scotland": "gb", "wales": "gb", "uae": "ae"}
-# A country's formal title, dropped before matching: `Republic of Ireland`, `Kingdom of Saudi Arabia`.
-_COUNTRY_TITLE = re.compile(r"^(the )?((federal |islamic |people's |democratic |united )*(republic|kingdom|"
-                            r"state|commonwealth|sultanate|emirate) of (the )?)")
-# A word that makes the country name after it part of a place name: `Port of Spain`, `West Jordan`.
-_PLACE_PREFIXES = frozenset({"of", "de", "del", "da", "do", "dos", "das", "di", "du", "la", "le", "el", "al",
-                             "new", "west", "east", "north", "south", "port", "fort", "san", "santa",
-                             "saint", "st", "st.", "lake", "mount", "upper", "lower"})
-_US_STATE_CODES = frozenset(
-    "al ak az ar ca co ct de dc fl ga hi id il in ia ks ky la me md ma mi mn ms mo mt ne nv nh nj nm "
-    "ny nc nd oh ok or pa ri sc sd tn tx ut vt va wa wv wi wy".split())
-_US_STATES = frozenset({
-    "alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut", "delaware",
-    "district of columbia", "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa",
-    "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan", "minnesota",
-    "mississippi", "missouri", "montana", "nebraska", "nevada", "new hampshire", "new jersey",
-    "new mexico", "new york", "north carolina", "north dakota", "ohio", "oklahoma", "oregon",
-    "pennsylvania", "rhode island", "south carolina", "south dakota", "tennessee", "texas", "utah",
-    "vermont", "virginia", "washington", "west virginia", "wisconsin", "wyoming"})
 _fingerprints: dict[int, tuple[Adapter, str]] = {}
 
 
@@ -138,51 +121,6 @@ def _stringify(value: Any) -> str | None:
         return json.dumps(value)
     if isinstance(value, str) and value.strip():
         return value.strip()[:_VALUE_MAX]
-    return None
-
-
-def country_of(place: Any) -> str | None:
-    """The ISO 3166 alpha-2 code (lower case) a place names: `DE`, `Germany`, `Berlin, Germany`,
-    `Berlin Germany`, `San Francisco CA United States`, `Redmond US`. None when it names no country.
-
-    Adapters build places with `join` (spaces) as often as providers send commas, so the last one
-    to four words of each comma part are read, last part first and longest first (`United States`
-    before `States`; a trailing region such as `Northern America` is passed over).
-
-    What looks like a country but is not one gives nothing:
-    - a US state, by name or code, stops the search: `Boston MA`, `Atlanta, Georgia`, `Newark New
-      Jersey`;
-    - after a city, a two-letter word counts only as `US`, `UK` or `GB`: elsewhere it is as often a
-      region (`Monterrey, NL` is Nuevo Leon, `Charlottetown, PE` Prince Edward Island, `Vitoria, ES`
-      Espirito Santo);
-    - a country name inside a place name (`Port of Spain`, `West Jordan`) is the place.
-    The whole value is the exception: a provider's bare `CA`, `NL` or `Georgia` is the country."""
-    if not isinstance(place, str) or not place.strip():
-        return None
-    whole = _COUNTRY_TITLE.sub("", place.strip().lower())
-    if whole in _COUNTRY_ALIASES or (code := P._country_code(whole)) is not None:
-        return _COUNTRY_ALIASES.get(whole) or code
-    for segment in reversed(whole.split(",")):
-        words = [w for w in _COUNTRY_TITLE.sub("", segment.strip(" .")).split() if not w.isdigit()]
-        for n in range(min(4, len(words)), 0, -1):
-            tail = " ".join(words[-n:])
-            if tail in _US_STATES or (n == 1 and tail in _US_STATE_CODES):
-                return None
-            code = _COUNTRY_ALIASES.get(tail) or (
-                P._country_code(tail) if len(tail) > 2 or tail in ("us", "uk", "gb") else None)
-            if code is not None:
-                if len(words) > n and words[-n - 1] in _PLACE_PREFIXES:
-                    break  # `Port of Spain`: this part is a place, try the part before it
-                return code
-    return None
-
-
-def _segment(mode: str | None, value: Any) -> str | None:
-    """What a `value` or `country` field contributes to `input_meta` / `answer_values`."""
-    if mode == "value":
-        return _stringify(value)
-    if mode == "country":
-        return country_of(value)
     return None
 
 
@@ -263,7 +201,7 @@ def input_columns(contract: Contract, given: dict) -> tuple[dict, dict]:
         meta["domain_class"] = domain_class(domain)
         meta["tld"] = domain.rsplit(".", 1)[1]
     for k, spec in (contract.filters or {}).items():
-        if (s := _segment((spec or {}).get("analytics"), identity.get(k))) is not None:
+        if (spec or {}).get("analytics") == "value" and (s := _stringify(identity.get(k))) is not None:
             meta[k] = s
     cols = {
         "input_type": "+".join(variant) if variant else None,
@@ -308,7 +246,7 @@ def answer_columns(contract: Contract, output: dict, input_norm: dict | None = N
                 flags[f"{p}free_mail"] = P.free_mail(dom)
                 if input_domain:
                     flags[f"{p}domain_match"] = dom == input_domain
-        elif (s := _segment(mode, v)) is not None:
+        elif mode == "value" and (s := _stringify(v)) is not None:
             values[field_name] = s
     return {"answer_keys": keys or None, "answer_values": values or None,
             "answer_flags": flags or None}
