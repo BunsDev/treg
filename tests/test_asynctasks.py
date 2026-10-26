@@ -270,6 +270,42 @@ async def test_claim_wait_is_inside_processing_deadline(
         assert await db.get(Hold, call_id) is not None
 
 
+async def test_worker_admission_keeps_what_the_claim_and_poll_left_for_the_session(
+    clients: AsyncClient, monkeypatch, replicate_platform,
+):
+    from contextlib import asynccontextmanager
+
+    from treg.infra import money_admission
+
+    await _due_submission(clients, monkeypatch, {"status": "succeeded", "output": ["u"]})
+    monkeypatch.setattr(task_app, "PROCESS_TIMEOUT_S", 2.0)
+    monkeypatch.setattr(task_app, "SETTLEMENT_SESSION_S", 0.5)
+    claim, poll = task_app._claim_due, task_app._poll
+
+    async def slow_claim(*args):
+        await asyncio.sleep(0.4)
+        return await claim(*args)
+
+    async def slow_poll(*args):
+        await asyncio.sleep(0.3)
+        return await poll(*args)
+
+    admit, waits = money_admission.admit, []
+
+    @asynccontextmanager
+    async def recording_admit(org_ids, *, operation, max_wait_s=None):
+        waits.append(max_wait_s)
+        async with admit(org_ids, operation=operation, max_wait_s=max_wait_s):
+            yield
+
+    monkeypatch.setattr(task_app, "_claim_due", slow_claim)
+    monkeypatch.setattr(task_app, "_poll", slow_poll)
+    monkeypatch.setattr(money_admission, "admit", recording_admit)
+    assert (await task_app.settle_due()).settled == 1
+    [wait] = waits
+    assert 0 < wait <= 2.0 - 0.4 - 0.3 - 0.5
+
+
 async def test_expired_worker_cannot_replace_new_claim_backoff(
     clients: AsyncClient, monkeypatch, replicate_platform,
 ):

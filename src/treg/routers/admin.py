@@ -300,6 +300,14 @@ def _error_reason(text: str | None) -> str | None:
     return body[:120] or None
 
 
+@app.get("/admin/shadow")
+async def admin_shadow(days: int = Query(1, ge=1, le=30), _: str = Depends(require_superadmin)) -> dict:
+    """The shadow provider report (application.shadow): per capability and served endpoint, how often
+    each side answered, how often they agree, the candidate's speed and cost. Counts only."""
+    from ..application import shadow
+    return {"enabled": shadow.spec() is not None, **await shadow.report(days=days)}
+
+
 @app.get("/admin/calls")
 async def admin_calls(
     limit: int = 50, since_id: int | None = None, provider: str | None = None,

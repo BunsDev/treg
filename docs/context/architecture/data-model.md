@@ -719,7 +719,9 @@ database path. A reserve acquisition timeout instead records `rejected=1` in mod
 cleanup remains a cancellation, not a rejection or fallback. `reserve_admission` also emits one
 best-effort `money_admission_rejected` WARNING per refusal with the numeric `org_id`, operation,
 reason and jittered `retry_after_s`; org IDs remain out of aggregate dimensions. Release and
-settlement timeouts still record mode `fallback`. A Redis lease serializes admitted same-org
+settlement record mode `fallback` with `fallback_wait_timeout` only when their wider budget
+(twice the lease, at most half the hold grace) expires; a settlement that waited past the reserve budget and then got the lease
+records mode `redis`, its whole wait in `wait_*`. A Redis lease serializes admitted same-org
 balance work; reserve timeout rejection keeps those expired waiters out of the funds transaction.
 
 `money_admission_reporting.emit_snapshot` writes one local JSON record and queues one PostHog event

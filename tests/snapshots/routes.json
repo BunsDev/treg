@@ -2593,6 +2593,15 @@
       "GET",
       "HEAD"
     ],
+    "name": "admin_shadow",
+    "path": "/admin/shadow"
+  },
+  {
+    "kind": "APIRoute",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
     "name": "admin_calls",
     "path": "/admin/calls"
   },

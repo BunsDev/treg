@@ -2475,3 +2475,37 @@ class TableDoc(SQLModel, table=True):
     created_by: str
     created_at: NaiveUTC = Field(default_factory=_now)
     updated_at: NaiveUTC = Field(default_factory=_now)
+
+
+class ShadowCursor(SQLModel, table=True):
+    """Where `application.shadow` has got to in `callrecord`. One row (`id = "callrecord"`); the
+    first run starts at the newest call, so the shadow never reads history."""
+
+    id: str = Field(primary_key=True)
+    cursor_id: int = Field(default=0)             # last consumed CallRecord.id
+    updated_at: NaiveUTC = Field(default_factory=_now)
+
+
+class ShadowPair(SQLModel, table=True):
+    """One served call paired with the shadow provider's answer to the same question
+    (`application.shadow`, its only writer). Holds no names, emails or phone numbers: the subject is
+    a salted hash and each compared field is a yes/no. Rows past `shadow_retention_days` are deleted
+    by the same job; the shadow run ends by dropping the table's rows."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    created_at: NaiveUTC = Field(default_factory=_now, index=True)
+    call_id: int = Field(default=0)
+    capability: str = Field(index=True)
+    endpoint_id: str = Field(default="")          # the served provider's endpoint
+    subject: str = Field(default="")              # salted hash of the normalized identity
+    served_found: bool = Field(default=False)
+    shadow_found: bool = Field(default=False)
+    served_count: int | None = Field(default=None)
+    shadow_count: int | None = Field(default=None)
+    served_with_email: int | None = Field(default=None)
+    shadow_with_email: int | None = Field(default=None)
+    fields: dict = Field(default_factory=dict, sa_column=Column(JSON))  # {field: agreed}
+    shadow_status: int = Field(default=0)         # 0 = no answer (timeout or transport error)
+    shadow_ms: int | None = Field(default=None)
+    shadow_units: float | None = Field(default=None)
+    served_cost_micro: int = Field(default=0)

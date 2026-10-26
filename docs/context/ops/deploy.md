@@ -323,8 +323,9 @@ and rollout settings. No database migration or additional database privileges ar
   The old `TREG_ORG_CONCURRENCY_RETRY_AFTER_S` name remains a validation alias for this money
   setting; migrate any custom value to the money-specific name. It does not configure the
   published concurrency guard, whose contention guidance is fixed at one second.
-  All other operations still fall back
-  to the database path, including settlement and release. Redis infrastructure errors retain
+  All other operations, including settlement and release, keep waiting without a database
+  connection up to `max(TREG_MONEY_ADMISSION_WAIT_S, 2 * TREG_MONEY_ADMISSION_LEASE_S)`, never more
+  than half of `TREG_HOLD_GRACE_S`, and only then fall back to the database path. Redis infrastructure errors retain
   the database fallback for every
   operation. A missing or non-positive
   org on those operations refuses before checkout, and that refusal is not an HTTP 429.
@@ -332,6 +333,8 @@ and rollout settings. No database migration or additional database privileges ar
   its leases and deletes only leases with its token. Expiry, lost renewal or a Redis outage can
   admit overlapping database transactions, so existing database locks remain authoritative.
   The lease starts on acquisition and renews at TTL/3; it need not exceed the pre-acquisition wait.
+  Twice this value is also the settlement admission wait (up to half the hold grace), so raising
+  it lengthens how long a settlement queues for the lease before falling back.
 
 Allowing a 90–120 second admission wait does not guarantee an end-to-end request can wait that
 long. It changes no default or running configuration. Budget for earlier request stages, every
