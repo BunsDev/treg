@@ -218,6 +218,8 @@ _CONTROL_ROUTE_KEYS: frozenset[RouteKey] = frozenset({
     ('/admin/showcase/apps/{app_id}', ('PATCH',), 'staff_edit'),
     ('/admin/showcase/teams/{org_id}/apps', ('POST',), 'staff_create'),
     ('/admin/showcase/teams/{org_id}', ('GET',), 'staff_team'),
+    ('/rankings', ('GET',), 'rankings_page'),
+    ('/rankings/data/{board}', ('GET',), 'rankings_board'),
     ('/admin/images/{kind}', ('POST',), 'staff_upload'),
     ('/admin/images/staging/{key:path}', ('GET',), 'staff_staged_image'),
     ('/images/{kind}', ('POST',), 'upload_image'),

@@ -3437,6 +3437,7 @@ _SITEMAP_PAGES: tuple[tuple[str, str, str], ...] = (
     ("/gpt6", "astra.html", "0.8"),
     ("/ugc", "ugc.html", "0.8"),
     ("/aeo", "aeo.html", "0.8"),
+    ("/rankings", "rankings.html", "0.8"),
     ("/jev", "jev.html", "0.8"),
     ("/terms", "terms.html", "0.2"),
     ("/privacy", "privacy.html", "0.2"),
