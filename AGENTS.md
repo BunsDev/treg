@@ -217,7 +217,7 @@ so parallel runs and side-by-side runs never share one.
 
 ## Working agreement
 
-- Keep the suite green; add tests for new behavior. Conventional Commits (`feat(scope): ...`,
+- Keep the suite green. Conventional Commits (`feat(scope): ...`,
   `fix: ...`, `docs: ...`); one logical change per commit; the PR says what changed and why and
   names the fragments it updated.
 - **Comments only for external constraints and public contracts**: behavior a vendor, platform
