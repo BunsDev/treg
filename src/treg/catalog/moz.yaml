@@ -288,6 +288,7 @@ endpoints:
       currency: unit
       per: 1
       unit: quota_row
+      display: {unit: source, variable: true}
       source: observed
       source_url: https://moz.com/api/pricing
       checked: '2026-07-31'
@@ -327,6 +328,7 @@ endpoints:
       currency: unit
       per: 1
       unit: quota_row
+      display: {unit: result, variable: true}
       source: observed
       source_url: https://moz.com/api/pricing
       checked: '2026-07-31'
