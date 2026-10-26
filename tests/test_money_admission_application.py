@@ -1202,3 +1202,49 @@ async def test_session_cleanup_failure_does_not_replace_original_money_error(cap
     assert caught.value is failure
     assert "money session cleanup failed" in caplog.text
     assert "close failed" in caplog.text
+
+
+def test_hold_admission_wait_leaves_the_oldest_hold_half_its_grace():
+    settings = get_settings()
+    assert call_settle._hold_admission_wait_s([]) is None
+    assert call_settle._hold_admission_wait_s([None]) is None
+    fresh = call_settle._hold_admission_wait_s([time.monotonic()])
+    assert fresh == pytest.approx(ledger.hold_ttl_s() - settings.hold_grace_s / 2, abs=1)
+    aged = call_settle._hold_admission_wait_s(
+        [time.monotonic(), time.monotonic() - ledger.hold_ttl_s() + 10, None])
+    assert aged == pytest.approx(10 - settings.hold_grace_s / 2, abs=1)
+
+
+@pytest.mark.parametrize("kind", ["close", "deferred"])
+async def test_settlement_of_an_aged_hold_does_not_queue_past_its_reaper_age(money_db, monkeypatch, kind):
+    org_id = await _fund(f"aged-{kind}")
+    await _reserve(org_id, f"aged-{kind}")
+    await _reserve(org_id, f"fresh-{kind}")
+    store = _enable_real_admission(monkeypatch, wait_s=0.02)
+    store.values[f"money-admission:org:{org_id}"] = ("another-owner", time.monotonic() + 30)
+    aged_at = time.monotonic() - ledger.hold_ttl_s() + 10
+    started = time.monotonic()
+    if kind == "close":
+        mk = _call(org_id, f"aged-{kind}")
+        mk.reserved_at = aged_at
+        charged = (await call_settle._platform_settle(mk, 200, observed_override=70))[0]
+        assert charged == 70
+        settled_ids = [f"aged-{kind}"]
+    else:
+        pending = [
+            call_settle.DeferredSettle(f"aged-{kind}", True, 70, None, "", {}, org_id, 100, aged_at),
+            call_settle.DeferredSettle(f"fresh-{kind}", True, 70, None, "", {}, org_id, 100,
+                                       time.monotonic()),
+        ]
+        assert await call_settle.close_deferred(pending, charge=True) == 140
+        settled_ids = [f"aged-{kind}", f"fresh-{kind}"]
+    assert time.monotonic() - started < 1, "an aged hold falls back instead of queueing"
+    assert store.values[f"money-admission:org:{org_id}"][0] == "another-owner"
+    [row] = [r for r in money_admission.snapshot() if r["completed"]]
+    assert row["mode"] == "fallback" and row["fallback_wait_timeout"] == 1
+    async with session_maker() as db:
+        for call_id in settled_ids:
+            assert await db.get(Hold, call_id) is None
+        entries = (await db.execute(select(LedgerEntry.call_id).where(
+            LedgerEntry.org_id == org_id, LedgerEntry.kind == "settle"))).scalars().all()
+        assert sorted(entries) == sorted(settled_ids)
