@@ -36,8 +36,9 @@ FASTEST_MIN_TIMED = 20
 NEW_FIRST = 5            # trending lists at most this many brand-new rows before the risers
 TOP = 20                 # rows per board, and per category on a filterable board: 10, then 10 more
 HEAD_TO_HEAD_JOBS = 40   # jobs offered in the head-to-head menu, busiest first
-# The generation platforms the "Top AI models" board ranks, and the type each one is filed under.
-AI_TYPES = {"image-gen": "Image", "video-gen": "Video", "voice-gen": "Audio", "music-gen": "Audio"}
+# The model platforms the "Top AI models" board ranks, and the type each one is filed under.
+AI_TYPES = {"image-gen": "Image", "video-gen": "Video", "voice-gen": "Audio", "music-gen": "Audio",
+            "ai-judge": "Decision"}
 CHART_SERIES = 10        # providers drawn by name on the daily chart; the rest is "Others"
 WINDOWS = {"7d": 7, "30d": 30}
 
@@ -236,7 +237,7 @@ def build(rows: list[DayRow], cat: store.Catalog, last_day: date) -> dict:
     head_to_head = head_to_head[:HEAD_TO_HEAD_JOBS]
     fastest.sort(key=lambda r: (r["p50_ms"], -r["timed"], r["id"]))
 
-    # Top AI models: image, video and audio generation only, where a vendor is mostly a host and the
+    # Top AI models: image, video and audio generation and decision models, where a vendor is mostly a host and the
     # model is what people choose. Two views of the same calls: per model (every vendor added up) and
     # per vendor; each by type.
     def model_name(ep: dict) -> str:
