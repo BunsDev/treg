@@ -411,7 +411,6 @@
         <div><h2>Top AI models</h2><p>AI models, each across all the vendors that serve it.</p></div>
         <div class="ctl"><div class="sm" data-type="aimodels"></div><div class="seg" data-win="aimodels"><button data-v="7d" class="on">Last 7 days</button><button data-v="30d">Last 30 days</button></div></div>
       </div>
-      <div class="ctl" style="margin:-4px 0 14px"><div class="seg" data-kind="aimodels"><button data-v="models" class="on">Models</button><button data-v="tools">Providers</button></div></div>
       <div class="list" id="aimodels-list"></div>
       <div class="more" data-more="aimodels" hidden><button>Show more</button></div>
     </section>
@@ -682,7 +681,7 @@
   // per board: what is chosen, whether "Show more" was pressed, and whether its data is here
   const state = { tools: { win: "7d", all: false }, endpoints: { win: "7d", cat: "", all: false },
                   trending: { kind: "providers", all: false }, reliable: { cat: "", all: false }, fastest: { cat: "", all: false },
-                  headtohead: { job: "", all: false }, aimodels: { win: "7d", kind: "models", type: "", all: false } };
+                  headtohead: { job: "", all: false }, aimodels: { win: "7d", type: "", all: false } };
   function paint(name, rows, render) {
     const list = $(name + "-list"), more = document.querySelector(`[data-more="${name}"]`);
     const st = state[name];
@@ -717,11 +716,8 @@
     },
     aimodels() {
       const st = state.aimodels, board = (D.ai_models || {})[st.win] || {};
-      const rows = (board[st.kind] || []).filter((r) => !st.type || r.type === st.type);
-      const who = {
-        models: (r) => `<a href="${toolLink(r.provider)}">${esc(r.name)}</a><small>${esc(r.type)} · via ${esc((r.vendors || []).join(", "))}</small>`,
-        tools: (r) => `<a href="${toolLink(r.provider)}">${esc(r.label)}</a><small>${esc(r.type)} · ${num(r.models)} model${num(r.models) === 1 ? "" : "s"}</small>`,
-      }[st.kind];
+      const rows = (board.models || []).filter((r) => !st.type || r.type === st.type);
+      const who = (r) => `<a href="${toolLink(r.provider)}">${esc(r.name)}</a><small>${esc(r.type)} · via ${esc((r.vendors || []).join(", "))}</small>`;
       paint("aimodels", rows, (r, i) => row(i, r, who(r), `<b>${compact(r.calls)}</b>${change(r.change)}`));
     },
     headtohead() {
