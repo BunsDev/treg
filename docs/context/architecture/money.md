@@ -353,7 +353,15 @@ cancellation before allowing the admission scope to exit, then propagates cancel
 original failure. It does not introduce a commit or change the application's commit boundaries.
 Waiting for admission holds no database connection.
 
-`money_admission_wait_s` accepts `0 < wait <= 120` seconds and still defaults to five.
+`money_admission_wait_s` accepts `0 < wait <= 120` seconds and still defaults to five. It is the
+`reserve` budget. Every other operation (`close`, `deferred`, `async`, `hub`, `release`) waits
+`max(money_admission_wait_s, 2 * money_admission_lease_s)`: a holder that dies keeps its lease for
+at most one TTL, and two cover that plus one live session. A reserve can shed load with a 429;
+a settlement cannot, and one that enters the database without the lease queues on the payer's
+CreditBlock row lock while holding a pooled connection. A caller with its own deadline passes
+`max_wait_s`, which caps the wider budget but never goes below `money_admission_wait_s`; the
+asynchronous worker caps it so a poll, the admission wait and the settlement session all fit
+inside one row's processing timeout.
 One acquisition deadline covers local-lock waiting and all Redis acquisition attempts; reaching
 Redis does not restart the budget. This is a per-admission wait, not a total call deadline: a
 request can reserve and later settle through separate admission scopes. Cleanup and database
@@ -401,9 +409,10 @@ retains `X-Treg-Error: 1`; both MCP surfaces expose the status, body and `retry_
 The feature defaults off; `money_admission_org_ids` selects an opt-in subset, or all orgs when
 empty and enabled. Non-selected operations supply the disabled timing baseline. Admission never
 replaces Hold claims, CreditBlock locks or transaction atomicity. For `close`, `deferred`, `async`,
-and `hub`, a missing identity, unavailable Redis, or expired acquisition budget releases any
-partially acquired gates and executes the original database path. `release` keeps that wait-budget
-fallback so financial cleanup still runs. Every operation, including `reserve`, retains fallback
+`hub` and `release`, a missing identity, unavailable Redis, or expiry of the wider acquisition
+budget releases any partially acquired gates and executes the original database path, so
+settlement and financial cleanup still run; it never raises. Store failures fall back at once,
+without the wider wait. Every operation, including `reserve`, retains fallback
 on Redis infrastructure errors, an unconfigured store or lease loss. A store-raised timeout is
 an infrastructure error, distinguished from expiry of the gate's own acquisition budget.
 Lost renewal does not cancel or restart a money transaction already in
@@ -447,7 +456,7 @@ A retry finding no matching token reports `not_owned`: an earlier delete may hav
 without its response, or the lease expired/changed owners. It cannot delete a replacement owner's
 lease and does not manufacture a new lease-loss observation. Repeated failures leave expiry as
 the backstop. Cleanup still follows database session closure and never repeats accounting or
-upstream work. The admission acquisition budget still defaults to five seconds; cleanup is observed
+upstream work. The reserve acquisition budget still defaults to five seconds; cleanup is observed
 separately from execution in the existing scope totals.
 
 This is best-effort contention isolation, not a global money concurrency cap, durable queue or

@@ -155,6 +155,7 @@ class AdmissionProbe:
         self.requested = asyncio.Event()
         self.allow = asyncio.Event()
         self.calls = []
+        self.max_waits = []
         self.connections = set()
         self.checkouts = 0
         self.connections_on_exit = []
@@ -171,9 +172,10 @@ class AdmissionProbe:
         self.connections.discard(id(connection))
 
     @asynccontextmanager
-    async def admit(self, org_ids, *, operation):
+    async def admit(self, org_ids, *, operation, max_wait_s=None):
         ids = list(org_ids)
         self.calls.append((operation, ids))
+        self.max_waits.append(max_wait_s)
         if ids:
             self.requested.set()
             await self.allow.wait()
@@ -222,6 +224,7 @@ async def test_paid_entry_waits_before_checkout_and_releases_after_session_clean
     try:
         await asyncio.wait_for(probe.requested.wait(), 5)
         assert probe.calls == [(kind, [org_id])]
+        assert probe.max_waits == [task_app.ADMISSION_WAIT_S if kind == "async" else None]
         assert probe.checkouts == 0, "queued settlement must not consume a database connection"
         probe.allow.set()
         assert await asyncio.wait_for(task, 5) == expected

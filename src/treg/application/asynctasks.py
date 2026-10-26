@@ -38,6 +38,8 @@ GLOBAL_CONCURRENCY = 8
 PROVIDER_CONCURRENCY = 2
 POLL_TIMEOUT_S = 10
 PROCESS_TIMEOUT_S = 30
+# Within PROCESS_TIMEOUT_S: a poll, then admission, then the settlement session itself.
+ADMISSION_WAIT_S = PROCESS_TIMEOUT_S - POLL_TIMEOUT_S - 10
 CLAIM_LEASE_S = 60
 # Terminal task JSON is small; a provider that streams more than this is not answering a poll.
 MAX_POLL_BODY_BYTES = 2 * 1024 * 1024
@@ -448,7 +450,7 @@ async def _finish_balance(org_id: int | None, operation: str, call_id: str, outc
                           document: object | None, now, **kwargs) -> str:
     """Admit one balance-row finish, then open its session. Not used around a second admit."""
     orgs = money_admission.require_balance_orgs([org_id])
-    async with money_admission.admit(orgs, operation=operation):
+    async with money_admission.admit(orgs, operation=operation, max_wait_s=ADMISSION_WAIT_S):
         return await _finish(call_id, outcome, document, now, **kwargs)
 
 
