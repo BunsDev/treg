@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "treg",
-      "source": "./",
+      "source": "./plugins/treg",
       "category": "developer-tools",
       "tags": [
         "api",

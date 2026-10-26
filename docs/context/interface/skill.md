@@ -13,8 +13,9 @@ sources:
   - src/treg/routers/web.py
   - src/treg/mcp_install.py
   - scripts/build_plugin.py
-  - .claude-plugin/plugin.json
   - .claude-plugin/marketplace.json
+  - plugins/treg/.claude-plugin/plugin.json
+  - .agents/plugins/marketplace.json
   - plugin/.codex-plugin/plugin.json
   - plugins/treg/.cursor-plugin/plugin.json
   - package.json
@@ -92,8 +93,9 @@ served**, because a second copy of the product's most-read page is a copy that r
 | door | artifact | who reaches it |
 |---|---|---|
 | the installer | `install.sh` → `treg skill bootstrap` → every detected agent's skills dir, the treg skill plus every workflow skill in `/.well-known/skills/index.json` | people who ran the curl one-liner |
-| Claude Code plugin | `.claude-plugin/` + generated `skills/treg/SKILL.md` (repo root) | `/plugin marketplace add superdesigndev/treg` |
-| Codex/ChatGPT plugin | `plugin/.codex-plugin/` + generated `plugin/skills/treg/SKILL.md` | the directory ChatGPT and Codex share. Submission runbook: [private submission runbook](https://github.com/superdesigndev/treg-internal/blob/main/docs/distribution/PLUGIN-SUBMISSION.md), test cases: [skill-openai-test-cases.md](skill-openai-test-cases.md), per-tool justifications: [skill-openai-tool-justifications.md](skill-openai-tool-justifications.md) |
+| Claude Code plugin | `.claude-plugin/marketplace.json` → `plugins/treg/` (the Cursor folder) with its own `.claude-plugin/plugin.json`, which declares the MCP server inline with `type: "http"` (Claude Code rejects a `url` with no `type`) | `/plugin marketplace add superdesigndev/treg`, then `/mcp` to sign in |
+| bare skill | generated `skills/treg/SKILL.md` (repo root), CLI bootstrap | `npx skills add superdesigndev/treg -s treg`, ClawHub |
+| Codex/ChatGPT plugin | `plugin/.codex-plugin/` + generated `plugin/skills/treg/SKILL.md` | the directory ChatGPT and Codex share, and `codex plugin marketplace add superdesigndev/treg` through `.agents/plugins/marketplace.json`. Submission runbook: [private submission runbook](https://github.com/superdesigndev/treg-internal/blob/main/docs/distribution/PLUGIN-SUBMISSION.md), test cases: [skill-openai-test-cases.md](skill-openai-test-cases.md), per-tool justifications: [skill-openai-tool-justifications.md](skill-openai-tool-justifications.md) |
 | Cursor plugin | `.cursor-plugin/marketplace.json` + generated `plugins/treg/skills/treg/SKILL.md` + `plugins/treg/mcp.json` (URL only; the host runs OAuth, because a `${env:TREG_TOKEN}` header made hosts demand the variable before sign-in) | the Cursor marketplace, and other hosts that install it, such as Grok Bot (plugin root is never the repo root) |
 | DeepSeek Harness bundle | root `package.json` (`dsh.bundle`) + `dsh/cordis.patch.yml` + generated `dsh/skills/treg/SKILL.md` | `dsh plugin --profile <name> add github:superdesigndev/treg` |
 | MiniMax plugin | `plugins/minimax/.minimax-plugin/plugin.json` + generated `plugins/minimax/skills/treg/SKILL.md`; `scripts/minimax_plugin.py` pre-runs their validator and builds the ZIP | the MiniMax Plugin Marketplace (MiniMax Code + MiniMax Agent), submitted by form as GitHub subdir `plugins/minimax`; skills-only because the package may hold no credential and the bootstrap omits `treg mcp install`, which cannot write a MiniMax config. See [docs/MINIMAX-PLUGIN.md](../../MINIMAX-PLUGIN.md) |

@@ -5,12 +5,12 @@ Five shop windows, four bootstraps, one source:
 
 - **codex**  -> `plugin/skills/treg/SKILL.md` — ships an MCP connector, so its bootstrap points at
   the MCP tools and tells the reader NOT to reach for a terminal.
-- **claude** -> `skills/treg/SKILL.md` — skills-only by design (nothing about it waits on a
-  directory review), so its bootstrap says the opposite: there are no tools, install the CLI. It
-  also gets a `version:` stamped into its frontmatter, which is what ClawHub requires and Claude
-  Code ignores.
-- **cursor** -> `plugins/treg/skills/treg/SKILL.md` — same CLI bootstrap as claude; Cursor
-  prescribes its own layout, where the plugin root is never the repo root.
+- **skills** -> `skills/treg/SKILL.md` — the bare skill that `npx skills add` and ClawHub publish:
+  no tools come with it, so its bootstrap installs the CLI. It also gets a `version:` stamped into
+  its frontmatter, which ClawHub requires.
+- **plugin** -> `plugins/treg/skills/treg/SKILL.md` — the one plugin folder Claude Code and Cursor
+  both install. It declares the remote MCP server (OAuth), so its bootstrap checks for the tools
+  first and sends the human to sign in.
 - **dsh**    -> `dsh/skills/treg/SKILL.md` — DeepSeek Harness, the only surface that ships the
   connector AND the CLI path in one install: the MCP row is disabled until `TREG_TOKEN` exists, so
   its bootstrap has to cover both states and steer away from `treg mcp install`, which cannot write
@@ -18,9 +18,9 @@ Five shop windows, four bootstraps, one source:
 - **minimax** -> `plugins/minimax/skills/treg/SKILL.md` — skills-only (MiniMax forbids credentials in the
   package), CLI bootstrap with NO `treg mcp install` step. See docs/MINIMAX-PLUGIN.md.
 
-The Claude variant sits at the REPO ROOT rather than under `plugin/` because that one path is
-simultaneously what Claude Code's plugin loader auto-discovers, what `npx skills add` resolves, and
-what `clawhub skill publish` takes — one generated tree, four distribution channels.
+The bare skill sits at the REPO ROOT because that is what `npx skills add` resolves and what
+`clawhub skill publish` takes. The Claude Code plugin is NOT the repo root: a root plugin ships the
+whole repository and every workflow skill under `skills/`.
 
 Each plugin is a shop window, and what it ships is the SAME skill `treg skill bootstrap` already
 writes into every agent's skills dir. Copying that file by hand would be a second source of truth for
@@ -34,16 +34,15 @@ Three transformations, each for a reason the served file does not have:
    substitutes it inside an installed plugin, so a raw copy would ship the literal string `{BASE}`
    and every URL in it would be broken. It is baked to the public deployment here.
 
-2. A short section is prepended, and it is the ONLY thing that differs between the two variants —
-   because they land in opposite worlds. Codex arrives with a connector, so its bootstrap maps the
-   page onto the MCP tools and tells the reader not to reach for a terminal. Claude Code arrives
-   with neither the CLI nor the tools, so its bootstrap walks the setup that produces both:
+2. A short section is prepended, and it is the ONLY thing that differs between the variants —
+   because they land in different worlds. A plugin that declares the MCP server arrives with tools
+   that wait for sign-in, so its bootstrap checks for them first. The bare skill arrives with
+   neither the CLI nor the tools, so its bootstrap walks the setup that produces both:
    `install.sh` -> `treg login` -> `treg mcp install`, in that order (step 3 exits without writing
-   if it runs before there is a token). Without either, a first run is an agent dutifully invoking
-   something that does not exist — the listing's whole conversion funnel spent on an error message.
+   if it runs before there is a token).
 
-3. The Claude variant gets `version:` stamped into its frontmatter. ClawHub requires it and Claude
-   Code ignores it, which is what lets one generated file satisfy both registries.
+3. The bare skill and the plugin get `version:` stamped into their frontmatter. ClawHub requires it
+   and the plugin hosts ignore it.
 
 Usage:  python3 scripts/build_plugin.py [--check]
         --check exits 1 if either generated file differs from what is checked in (used by the test).
@@ -64,11 +63,11 @@ SOURCE = ROOT / "src" / "treg" / "web" / "skill.md"
 PUBLIC_BASE = "https://treg.to"
 
 CODEX_TARGET = ROOT / "plugin" / "skills" / "treg" / "SKILL.md"
-CLAUDE_TARGET = ROOT / "skills" / "treg" / "SKILL.md"
+SKILLS_TARGET = ROOT / "skills" / "treg" / "SKILL.md"
 # Cursor's layout is prescribed by github.com/cursor/plugin-template: a listing manifest at the
 # repo root, and every plugin under `plugins/<name>/` with its OWN `.cursor-plugin/plugin.json`.
-# Unlike Claude Code, the plugin root is never the repo root — `source` must be `./plugins/treg`.
-CURSOR_TARGET = ROOT / "plugins" / "treg" / "skills" / "treg" / "SKILL.md"
+# Claude Code installs the same folder through its own `.claude-plugin/plugin.json`.
+PLUGIN_TARGET = ROOT / "plugins" / "treg" / "skills" / "treg" / "SKILL.md"
 # DeepSeek Harness installs an npm package, not a plugin manifest: `package.json` declares
 # `dsh.bundle`, and `dsh/cordis.patch.yml` mounts `dsh/index.js` as a `ctx.skills` provider over
 # this tree. See docs/DSH-PLUGIN.md.
@@ -127,11 +126,11 @@ ask the human for - treg adds the provider credential on its server.
   data, credentials and raw responses.
 """
 
-# Cursor now ships MCP alongside the skill, so its bootstrap is closer to Codex: check for the tools
-# first, and fall back to CLI only if they are not there. The MCP config declares the URL only and the
-# host runs OAuth itself. A `${env:TREG_TOKEN}` header made hosts that read this plugin (Grok Bot)
-# demand the variable before sign-in could start, which no phone user can supply.
-CURSOR_BOOTSTRAP = """
+# The plugin folder (Claude Code, Cursor, Grok Bot) ships MCP alongside the skill, so its bootstrap
+# is closer to Codex: check for the tools first, and fall back to CLI only if they are not there.
+# The MCP config declares the URL only and the host runs OAuth itself. A `${env:TREG_TOKEN}` header
+# made Grok Bot demand the variable before sign-in could start, which no phone user can supply.
+PLUGIN_BOOTSTRAP = """
 ## First, check which treg you have
 
 This plugin ships MCP tools alongside the skill. **Look at your tools before you do anything else.**
@@ -141,8 +140,8 @@ connected. Use those; there is nothing to install. The rest of this page is writ
 command line, so read `treg catalog search` as `catalog_search`, `treg call` as `call`, and so on.
 
 **If the tools error or you cannot see them**, the connector is not signed in yet. The human connects
-it in the app's MCP or connector settings; the app opens treg's sign-in page (GitHub / Google / email
-code) and the tools appear after it.
+it in the app's MCP or connector settings (in Claude Code: `/mcp`, pick treg, Authenticate); the app
+opens treg's sign-in page (GitHub / Google / email code) and the tools appear after it.
 
 A new team starts with **$1.00 of free balance**, so there is nothing to pay before the first call.
 If sign-in is needed, say so plainly and stop — never ask the human for a provider's API key, which
@@ -166,19 +165,14 @@ Either way, the rest of this page is the part that matters — **when** treg is 
 ---
 """
 
-# The Claude Code plugin's MANIFEST declares no connector — anything it declared would be registered
-# at install time, before a human has signed in, i.e. five always-on tools that 401 on every call.
-# Keeping it out is what makes `/plugin install` zero-config. The SKILL then finishes the job at
-# first run, when a human IS present to sign in, and the intended end state is CLI + skill + tools.
-#
-# Hence the ordered three-step block below. The order is load-bearing, not stylistic: `cmd_mcp_install`
-# reads the token from config and sys.exits before writing anything when there is none, so running it
-# ahead of `treg login` is a silent no-op an agent would move straight past.
+# The bare skill arrives with no tools. The order of the three steps is load-bearing:
+# `cmd_mcp_install` reads the token from config and sys.exits before writing anything when there is
+# none, so running it ahead of `treg login` is a silent no-op an agent would move straight past.
 CLI_BOOTSTRAP = """
 ## First run: finish the setup
 
-This plugin ships the skill, so you have this page — but not yet the `treg` command, and not yet its
-tools. Set both up **once**, in this order:
+You have this page, but not yet the `treg` command, and not yet its tools. Set both up **once**, in
+this order:
 
 ```bash
 curl -fsSL {BASE}/install.sh | sh   # 1. the CLI (skip if `treg --version` already works)
@@ -190,8 +184,8 @@ Step 3 writes the token from step 2, so the order matters — run out of order i
 writing anything. The tools (`catalog_search`, `catalog_get`, `call`, `balance`, `my_tools`) appear
 after the agent restarts; until then everything on this page works through the CLI.
 
-Step 1 also installs this same skill into the agent's own skills directory, which duplicates what
-the plugin already gives you — worth mentioning to the human, who can remove it.
+Step 1 also installs this same skill into the agent's own skills directory, which may duplicate
+this copy — worth mentioning to the human, who can remove one.
 
 ---
 """
@@ -267,18 +261,14 @@ the plugin already gives you — worth mentioning to the human, who can remove i
 
 # variant -> (target, bootstrap, stamp_version). One source, five shop windows.
 #
-# Claude Code uses CLI_BOOTSTRAP: it gives the agent a terminal, does not ship a connector, and
-# `treg mcp install` writes a verified config for it. Cursor now ships MCP alongside the skill, so it
-# gets CURSOR_BOOTSTRAP which checks for the tools first and falls back to CLI if not.
-#
 # dsh gets its OWN bootstrap rather than sharing either: it is the only surface that ships the
 # connector and the CLI path in one install (the row is disabled until there is a token), and it is
 # the only one where `treg mcp install` is the wrong move — it writes configs for other agents, not
 # for a dsh profile.
 VARIANTS = {
     "codex": (CODEX_TARGET, None, False),
-    "claude": (CLAUDE_TARGET, CLI_BOOTSTRAP, True),
-    "cursor": (CURSOR_TARGET, CURSOR_BOOTSTRAP, True),
+    "skills": (SKILLS_TARGET, CLI_BOOTSTRAP, True),
+    "plugin": (PLUGIN_TARGET, PLUGIN_BOOTSTRAP, True),
     "dsh": (DSH_TARGET, DSH_BOOTSTRAP, False),
     "minimax": (MINIMAX_TARGET, MINIMAX_BOOTSTRAP, True),
 }

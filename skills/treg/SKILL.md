@@ -6,8 +6,8 @@ version: 0.27.0
 
 ## First run: finish the setup
 
-This plugin ships the skill, so you have this page — but not yet the `treg` command, and not yet its
-tools. Set both up **once**, in this order:
+You have this page, but not yet the `treg` command, and not yet its tools. Set both up **once**, in
+this order:
 
 ```bash
 curl -fsSL https://treg.to/install.sh | sh   # 1. the CLI (skip if `treg --version` already works)
@@ -19,8 +19,8 @@ Step 3 writes the token from step 2, so the order matters — run out of order i
 writing anything. The tools (`catalog_search`, `catalog_get`, `call`, `balance`, `my_tools`) appear
 after the agent restarts; until then everything on this page works through the CLI.
 
-Step 1 also installs this same skill into the agent's own skills directory, which duplicates what
-the plugin already gives you — worth mentioning to the human, who can remove it.
+Step 1 also installs this same skill into the agent's own skills directory, which may duplicate
+this copy — worth mentioning to the human, who can remove one.
 
 ---
 

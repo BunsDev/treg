@@ -13,8 +13,8 @@ connected. Use those; there is nothing to install. The rest of this page is writ
 command line, so read `treg catalog search` as `catalog_search`, `treg call` as `call`, and so on.
 
 **If the tools error or you cannot see them**, the connector is not signed in yet. The human connects
-it in the app's MCP or connector settings; the app opens treg's sign-in page (GitHub / Google / email
-code) and the tools appear after it.
+it in the app's MCP or connector settings (in Claude Code: `/mcp`, pick treg, Authenticate); the app
+opens treg's sign-in page (GitHub / Google / email code) and the tools appear after it.
 
 A new team starts with **$1.00 of free balance**, so there is nothing to pay before the first call.
 If sign-in is needed, say so plainly and stop — never ask the human for a provider's API key, which
