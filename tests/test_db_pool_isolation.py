@@ -54,6 +54,7 @@ EXPECTED_MAKERS: dict[str, set[str]] = {
     # Snapshot read on the request path; the collector runs in the `treg-worker` process (see
     # `worker.py` below), where the API pool is the only one in use.
     "application/arena_insights.py": {API},
+    "application/shadow.py": {API},
     "application/arena_verification_insights.py": {API},  # explicit aggregate publication, no worker
 
     # Synchronous intake, and the catalog's five-minute verdict fold; admin reads use get_admin_session.

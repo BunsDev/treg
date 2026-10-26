@@ -317,6 +317,13 @@ def with_country_code(v: Any, country: Any) -> Any:
     return f"+{plan[0]}{digits}"
 
 
+def count_with(items: Any, path: Any) -> int | None:
+    """`count_with(people, 'email.value')` → how many rows carry a non-empty value at `path`."""
+    if not isinstance(items, list) or not isinstance(path, str):
+        return None
+    return sum(1 for item in items if get_path(item, path) not in (None, "", [], {}))
+
+
 def starts_with(v: Any, prefix: Any) -> bool:
     return isinstance(v, str) and prefix is not None and v.startswith(str(prefix))
 
@@ -325,7 +332,8 @@ TRANSFORMS = {"values": values, "get": get_path, "null_if": null_if, "choose": c
               "dfs_location": dfs_location, "seranking_source": seranking_source, "lower": lower, "upper": upper,
               "list": as_list, "at_least": at_least, "at_most": at_most, "ceil_to": ceil_to, "linkedin_handle": linkedin_handle, "linkedin_url": linkedin_url,
               "email_domain": email_domain, "host": host, "fmt": fmt, "obj": obj, "tca_filter": tca_filter, "csv": csv, "country_name": country_name,
-              "e164_digits": e164_digits, "starts_with": starts_with, "with_country_code": with_country_code}
+              "e164_digits": e164_digits, "starts_with": starts_with, "with_country_code": with_country_code,
+              "count_with": count_with}
 
 _CALL = re.compile(r"^(\w+)\((.*)\)$")
 _DIV = re.compile(r"^(.+?)\s*/\s*(\d+(?:\.\d+)?)$")
