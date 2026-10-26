@@ -1244,7 +1244,7 @@ async def _platform_settle(
         with observe_money("close", call_id=call_id) as timing:
             async with (
                 money_admission.admit(admission_orgs, operation=admission_operation,
-                                      max_wait_s=_hold_admission_wait_s([mk.reserved_at])),
+                                      max_wait_s=hold_admission_wait_s([mk.reserved_at])),
                 money_session(session_maker()) as db,
             ):
                 mark_money(db, "close", call_id=call_id)
@@ -1313,7 +1313,7 @@ class DeferredSettle:
     reserved_at: float | None = None
 
 
-def _hold_admission_wait_s(reserved_at: list[float | None]) -> float | None:
+def hold_admission_wait_s(reserved_at: list[float | None]) -> float | None:
     """What the oldest of these holds can still spend waiting for admission and leave half the
     reaper's grace for the settlement session: past `hold_ttl_s()` another reserve may reap it."""
     known = [at for at in reserved_at if at is not None]
@@ -1344,7 +1344,7 @@ async def close_deferred(items: list[DeferredSettle], *, charge: bool, why: str 
             async with (
                 money_admission.admit(
                     admission_orgs, operation=admission_operation,
-                    max_wait_s=_hold_admission_wait_s([d.reserved_at for d in pending])),
+                    max_wait_s=hold_admission_wait_s([d.reserved_at for d in pending])),
                 money_session(session_maker()) as db,
             ):
                 mark_money(db, "deferred", batch_size=len(pending))
@@ -1417,7 +1417,7 @@ async def _finish_cancelled_call(
                 async with (
                     money_admission.admit(
                         money_admission.require_balance_orgs([release_org]), operation="release",
-                        max_wait_s=_hold_admission_wait_s([mk.reserved_at])),
+                        max_wait_s=hold_admission_wait_s([mk.reserved_at])),
                     money_session(session_maker()) as cleanup_db,
                 ):
                     # The parent hold AND the overflow child's (`{call_ref}:overflow`): each release is a

@@ -1206,11 +1206,11 @@ async def test_session_cleanup_failure_does_not_replace_original_money_error(cap
 
 def test_hold_admission_wait_leaves_the_oldest_hold_half_its_grace():
     settings = get_settings()
-    assert call_settle._hold_admission_wait_s([]) is None
-    assert call_settle._hold_admission_wait_s([None]) is None
-    fresh = call_settle._hold_admission_wait_s([time.monotonic()])
+    assert call_settle.hold_admission_wait_s([]) is None
+    assert call_settle.hold_admission_wait_s([None]) is None
+    fresh = call_settle.hold_admission_wait_s([time.monotonic()])
     assert fresh == pytest.approx(ledger.hold_ttl_s() - settings.hold_grace_s / 2, abs=1)
-    aged = call_settle._hold_admission_wait_s(
+    aged = call_settle.hold_admission_wait_s(
         [time.monotonic(), time.monotonic() - ledger.hold_ttl_s() + 10, None])
     assert aged == pytest.approx(10 - settings.hold_grace_s / 2, abs=1)
 
@@ -1248,3 +1248,24 @@ async def test_settlement_of_an_aged_hold_does_not_queue_past_its_reaper_age(mon
         entries = (await db.execute(select(LedgerEntry.call_id).where(
             LedgerEntry.org_id == org_id, LedgerEntry.kind == "settle"))).scalars().all()
         assert sorted(entries) == sorted(settled_ids)
+
+
+async def test_hub_price_settlement_of_an_aged_hold_does_not_queue_past_its_reaper_age(money_db, monkeypatch):
+    org_id, caller = await _payer("aged-hub-buyer")
+    payee = await _fund("aged-hub-payee")
+    tool = HubTool(org_id=payee, tool_id="maker.tool", name="tool", kind="steps", summary="test", version=1)
+    assert await hub_runner._reserve_price(_hub_parent(caller), tool, "aged-hub", 80) == 80
+    store = _enable_real_admission(monkeypatch, wait_s=0.02)
+    store.values[f"money-admission:org:{org_id}"] = ("another-owner", time.monotonic() + 30)
+    started = time.monotonic()
+    earned = await hub_runner._close_price(
+        tool, "aged-hub", 80, success=True, actual=70, payer_org_id=org_id,
+        reserved_at=time.monotonic() - ledger.hold_ttl_s() + 10)
+    assert earned == 70
+    assert time.monotonic() - started < 1, "an aged price hold falls back instead of queueing"
+    [row] = [r for r in money_admission.snapshot() if r["completed"]]
+    assert row["operation"] == "hub" and row["mode"] == "fallback" and row["fallback_wait_timeout"] == 1
+    async with session_maker() as db:
+        assert await db.get(Hold, "aged-hub:price") is None
+        assert await ledger.balance_of(db, org_id) == 930
+        assert await ledger.balance_of(db, payee) == 1_070

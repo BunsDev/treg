@@ -365,9 +365,10 @@ the settlement session. That bound alone does not cover a hold that is already o
 leaves its children's holds open until the whole waterfall ends. So the call application records
 `reserved_at` (a monotonic time taken before the reserve, never after the hold's creation) on
 `MarketplaceCall` and each `DeferredSettle`, and `close`, deferred batches and cancellation release
-pass `max_wait_s = hold_ttl_s() - age of the oldest affected hold - hold_grace_s / 2`. A hold
-near its reaper age therefore falls back at once instead of queueing. A Hub price hold needs no
-age: a run stops at the manifest's wall limit, well inside the hold TTL. A caller with its own
+pass `max_wait_s = hold_ttl_s() - age of the oldest affected hold - hold_grace_s / 2`. The Hub
+runner records the same time before its price reserve and applies it when it closes the price hold:
+a manifest's wall limit does not keep that hold young when `call_timeout_s` is set low. A hold
+near its reaper age therefore falls back at once instead of queueing. A caller with its own
 deadline passes `max_wait_s`, a hard cap on the wait (zero or less falls back at once). The asynchronous worker passes what remains of the row's
 processing deadline (started before the claim) minus the time it keeps for the settlement session.
 One acquisition deadline covers local-lock waiting and all Redis acquisition attempts; reaching
