@@ -133,7 +133,7 @@ async def test_page_serves_the_boards_the_worker_saved(clients: AsyncClient):
         assert board.status_code == 200
         assert board.json()["endpoints"]["7d"][0]["id"] == a["id"]
         for name, key in (("trending", "trending"), ("categories", "by_category"),
-                          ("reliable", "reliable"), ("fastest", "fastest")):
+                          ("reliable", "reliable"), ("fastest", "fastest"), ("headtohead", "head_to_head"), ("aimodels", "ai_models")):
             assert key in (await clients.get(f"/rankings/data/{name}")).json()
         assert (await clients.get("/rankings/data/nothing")).status_code == 404
         assert "/rankings<" in (await clients.get("/sitemap.xml")).text
@@ -245,3 +245,92 @@ async def test_the_worker_saves_display_names(monkeypatch):
     monkeypatch.setattr(infra_db, "verify_db", no_verify)
     assert await worker._rankings_refresh(None) == 0
     assert seen["label"] == "People Data Labs"
+
+
+def test_head_to_head_compares_providers_within_one_job():
+    by_cap: dict = {}
+    for ep in store.load().endpoints:
+        if store.browsable(ep) and not ep.get("async") and not ep.get("status") and ep.get("capability") \
+                and not ep.get("observed_from"):
+            by_cap.setdefault(ep["capability"], {}).setdefault(ep["provider"], ep)
+    cap, eps = next((c, list(p.values())) for c, p in by_cap.items() if len(p) >= 3)
+    fast, slow, thin = eps[:3]
+    rows = (_rows(fast["id"], {0: 200}, bad=0, latency_seen=200, latencies=[150] * 50)
+            + _rows(slow["id"], {0: 190}, bad=10, latency_seen=190, latencies=[900] * 50)
+            + _rows(thin["id"], {0: 20}, bad=0, latency_seen=20, latencies=[50] * 20))   # under the floor
+    (job,) = [j for j in rankings.build(rows, store.load(), LAST)["head_to_head"] if j["job"] == cap]
+    assert [(p["provider"], p["ok_rate"], p["p50_ms"]) for p in job["providers"]] == [
+        (fast["provider"], 100.0, 150), (slow["provider"], 95.0, 900)]
+    assert job["providers"][1]["errors"] == 10 and job["title"]
+
+
+async def test_a_board_missing_from_an_older_saved_row_is_empty(clients: AsyncClient):
+    """After a deploy that adds a board, the saved row lacks it until the next cron run."""
+    rankings_app.reset_cache()
+    await rankings_app.refresh()
+    async with session_maker() as db:
+        row = await db.get(RankingsSnapshot, rankings_app.SNAPSHOT_ID)
+        row.body = {k: v for k, v in row.body.items() if k != "head_to_head"}
+        await db.commit()
+    try:
+        r = await clients.get("/rankings/data/headtohead")
+        assert r.status_code == 200 and r.json() == {"head_to_head": []}
+    finally:
+        rankings_app.reset_cache()
+
+
+def test_top_ai_models_adds_up_a_model_across_its_vendors():
+    by_cap: dict = {}
+    for ep in store.load().endpoints:
+        if store.browsable(ep) and not ep.get("status") and ep["platform"] in rankings.AI_TYPES \
+                and ep.get("capability") and not ep.get("observed_from"):
+            by_cap.setdefault(ep["capability"], {}).setdefault(ep["provider"], ep)
+    cap, (a, b) = next((c, list(p.values())[:2]) for c, p in by_cap.items() if len(p) >= 2)
+    rows = _rows(a["id"], _week(700) | _week(100, back=7)) + _rows(b["id"], _week(300) | _week(100, back=7))
+    board = rankings.build(rows, store.load(), LAST)["ai_models"]["7d"]
+    (model,) = [m for m in board["models"] if m["model"] == cap.split(".")[1]]
+    assert model["calls"] == 1_000 and model["change"] == 400.0
+    assert model["vendors"][0] == store.provider_label(a["provider"]) and len(model["vendors"]) == 2
+    assert {t["provider"] for t in board["tools"]} >= {a["provider"], b["provider"]}
+    assert set(board) == {"models", "tools"}
+
+
+def test_a_model_has_one_key_and_a_readable_name_at_every_vendor():
+    ep_slug = {"id": "x.slug", "provider": "replicate", "platform": "video-gen", "name": "minimax/hailuo-2.3-fast",
+               "capability": "", "kind": "rest"}
+    ep_said = dict(ep_slug, id="x.said", provider="openrouter", name="MiniMax: Hailuo 2.3 Fast")
+    cat = store.load()
+    for ep in (ep_slug, ep_said):
+        cat.by_id[ep["id"]] = ep
+    try:
+        cat.endpoints.extend([ep_slug, ep_said])
+        board = rankings.build(_rows("x.slug", {0: 30}) + _rows("x.said", {0: 70}), cat, LAST)["ai_models"]["7d"]
+        (model,) = board["models"]
+        assert model["calls"] == 100 and model["name"] == "Hailuo 2.3 Fast"
+        assert sorted(model["vendors"]) == sorted([store.provider_label("openrouter"), store.provider_label("replicate")])
+    finally:
+        cat.endpoints.remove(ep_slug); cat.endpoints.remove(ep_said)
+        cat.by_id.pop("x.slug"); cat.by_id.pop("x.said")
+
+
+def test_a_model_that_moved_vendor_compares_with_all_its_earlier_calls():
+    old = {"id": "x.old", "provider": "replicate", "platform": "image-gen", "name": "acme/pixel-1",
+           "capability": "", "kind": "rest"}
+    new = dict(old, id="x.new", provider="openrouter", name="Acme: Pixel 1")
+    twin = dict(old, id="x.twin", name="acme/pixel-1")   # a second endpoint of the same model
+    cat = store.load()
+    added = [old, new, twin]
+    for ep in added:
+        cat.by_id[ep["id"]] = ep
+    cat.endpoints.extend(added)
+    try:
+        rows = (_rows("x.old", _week(1_000, back=7)) + _rows("x.new", _week(1_500))
+                + _rows("x.twin", _week(100)))
+        board = rankings.build(rows, cat, LAST)["ai_models"]["7d"]
+        (model,) = board["models"]
+        assert model["calls"] == 1_600 and model["change"] == 60.0   # against all 1,000 the week before
+        (rep,) = [t for t in board["tools"] if t["provider"] == "replicate"]
+        assert rep["models"] == 1
+    finally:
+        for ep in added:
+            cat.endpoints.remove(ep); cat.by_id.pop(ep["id"])

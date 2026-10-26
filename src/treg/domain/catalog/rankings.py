@@ -14,13 +14,16 @@ small base cannot make a large percentage:
 - trending ranks only rows with at least `TRENDING_MIN_CALLS` successful calls this week;
 - most reliable ranks tools (all their endpoints together) with at least `RELIABLE_MIN_DECIDED`
   decided calls (2xx plus 5xx, the denominator `stats.publish` uses; a 4xx is the caller's mistake);
-- fastest ranks only endpoints with at least `FASTEST_MIN_TIMED` timed successful calls.
+- fastest ranks only endpoints with at least `FASTEST_MIN_TIMED` timed successful calls;
+- head to head lists, per job (one catalog capability), the providers past the reliability floor,
+  with a median time only past the speed floor, and only jobs with two such providers.
 
 Jobs that finish later (`async` endpoints) are left out of reliability and speed: their bucket's
 duration is the submit, not the job, and their success may still be reconciled.
 """
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -32,6 +35,9 @@ RELIABLE_MIN_DECIDED = 100
 FASTEST_MIN_TIMED = 20
 NEW_FIRST = 5            # trending lists at most this many brand-new rows before the risers
 TOP = 20                 # rows per board, and per category on a filterable board: 10, then 10 more
+HEAD_TO_HEAD_JOBS = 40   # jobs offered in the head-to-head menu, busiest first
+# The generation platforms the "Top AI models" board ranks, and the type each one is filed under.
+AI_TYPES = {"image-gen": "Image", "video-gen": "Video", "voice-gen": "Audio", "music-gen": "Audio"}
 CHART_SERIES = 10        # providers drawn by name on the daily chart; the rest is "Others"
 WINDOWS = {"7d": 7, "30d": 30}
 
@@ -59,14 +65,14 @@ def _change(cur: int, prev: int) -> float | str | None:
     return round((cur - prev) * 100 / prev, 1)
 
 
-def _keep_per_category(rows: list[dict], top: int = TOP) -> list[dict]:
+def _keep_per_category(rows: list[dict], top: int = TOP, key: str = "category") -> list[dict]:
     """The first `top` rows overall plus the first `top` of each category, in the given order, so
     a filter on a small category still has a full board without shipping every row."""
     seen: dict[str, int] = defaultdict(int)
     out = []
     for i, row in enumerate(rows):
-        seen[row["category"]] += 1
-        if i < top or seen[row["category"]] <= top:
+        seen[row[key]] += 1
+        if i < top or seen[row[key]] <= top:
             out.append(row)
     return out
 
@@ -199,7 +205,108 @@ def build(rows: list[DayRow], cat: store.Catalog, last_day: date) -> dict:
             if p50 is not None:
                 fastest.append(ep_view(ep_id) | {"p50_ms": p50, "timed": t.latency_seen})
     reliable.sort(key=lambda r: (-r["ok_rate"], -r["decided"], r["provider"]))
+
+    # Head to head: the providers that do the same job (one catalog capability), side by side on
+    # reliability and speed. Speed only compares fairly inside one job. A provider shows once it has
+    # the reliability floor of decided calls; its median time only past the speed floor.
+    by_job: dict[str, dict[str, stats.Tally]] = defaultdict(dict)
+    for ep_id, t in tallies.items():
+        cap = eps[ep_id].get("capability")
+        if cap:
+            by_job[cap].setdefault(eps[ep_id]["provider"], stats.Tally()).merge(t)
+    head_to_head = []
+    for cap, providers in by_job.items():
+        side = []
+        for provider, t in providers.items():
+            decided = t.ok + t.bad
+            if decided < RELIABLE_MIN_DECIDED:
+                continue
+            timed = t.latency_seen >= FASTEST_MIN_TIMED and len(t.latencies) >= stats.MIN_SAMPLES
+            side.append({"provider": provider, "label": label(provider), "calls": t.ok, "decided": decided,
+                         "errors": t.bad, "ok_rate": round(t.ok * 100 / decided, 2),
+                         "p50_ms": t.percentile(0.50) if timed else None})
+        if len(side) < 2:
+            continue
+        side.sort(key=lambda r: (-r["ok_rate"], r["p50_ms"] if r["p50_ms"] is not None else 10**9, -r["calls"]))
+        any_ep = next(eps[e] for e in tallies if eps[e].get("capability") == cap)
+        title = cat.capability_titles.get(cap) or (cat.capabilities.get(cap) or "").split(".")[0].strip() or cap
+        head_to_head.append({"job": cap, "title": title[:70], "category": category(any_ep),
+                             "calls": sum(r["calls"] for r in side), "providers": side[:10]})
+    head_to_head.sort(key=lambda j: (-j["calls"], j["job"]))
+    head_to_head = head_to_head[:HEAD_TO_HEAD_JOBS]
     fastest.sort(key=lambda r: (r["p50_ms"], -r["timed"], r["id"]))
+
+    # Top AI models: image, video and audio generation only, where a vendor is mostly a host and the
+    # model is what people choose. Two views of the same calls: per model (every vendor added up) and
+    # per vendor; each by type.
+    def model_name(ep: dict) -> str:
+        """The model as people say it: "Google: Gemini 3 Pro Image (Nano Banana Pro)" keeps its words
+        after the vendor; a slug such as "minimax/hailuo-2.3-fast" becomes "Hailuo 2.3 Fast"."""
+        name = ep.get("name") or ep["id"]
+        if ": " in name:
+            return name.split(": ", 1)[1]
+        slug = name.rsplit("/", 1)[-1]
+        return " ".join(w[:1].upper() + w[1:] for w in slug.replace("_", "-").split("-") if w)
+
+    def model_key(ep: dict) -> str:
+        """One key per model, the same at every vendor: the capability's model when the catalog
+        names one, else the model's name without its vendor, brackets or punctuation."""
+        cap = ep.get("capability") or ""
+        parts = cap.split(".")
+        if len(parts) >= 3 and parts[1]:
+            return parts[1]
+        base = re.sub(r"\(.*?\)", "", model_name(ep)).lower()
+        return re.sub(r"[^a-z0-9]+", "-", base).strip("-") or ep["id"]
+
+    def ai_board(by_ep: dict[str, int], prev: dict[str, int] | None) -> dict:
+        models: dict[str, dict] = {}
+        tools: dict[str, dict] = {}
+        for ep_id, calls in by_ep.items():
+            ep = eps[ep_id]
+            kind = AI_TYPES.get(ep["platform"])
+            if not kind or not calls:
+                continue
+            m = models.setdefault(model_key(ep), {
+                "model": model_key(ep), "type": kind, "calls": 0, "prev": 0, "best": 0, "vendors": {}})
+            m["calls"] += calls
+            m["vendors"][ep["provider"]] = m["vendors"].get(ep["provider"], 0) + calls
+            if calls > m["best"]:
+                m["best"], m["name"], m["provider"] = calls, model_name(ep), ep["provider"]
+            t = tools.setdefault(ep["provider"], {"provider": ep["provider"], "label": label(ep["provider"]),
+                                                  "calls": 0, "prev": 0, "models": set(), "types": defaultdict(int)})
+            t["calls"] += calls
+            t["models"].add(model_key(ep))
+            t["types"][kind] += calls
+        # The week before, from every endpoint that had calls then, so a model that changed vendors
+        # is compared with all of its earlier calls, not only those at today's vendors.
+        for ep_id, before in (prev or {}).items():
+            ep = eps[ep_id]
+            if not AI_TYPES.get(ep["platform"]) or not before:
+                continue
+            if model_key(ep) in models:
+                models[model_key(ep)]["prev"] += before
+            if ep["provider"] in tools:
+                tools[ep["provider"]]["prev"] += before
+        model_rows = []
+        for m in models.values():
+            vendors = sorted(m["vendors"], key=lambda p: (-m["vendors"][p], p))
+            model_rows.append({"model": m["model"], "name": m["name"], "type": m["type"], "provider": m["provider"],
+                               "label": label(m["provider"]), "vendors": [label(p) for p in vendors], "calls": m["calls"]}
+                              | ({"change": _change(m["calls"], m["prev"])} if prev is not None else {}))
+        tool_rows = []
+        for t in tools.values():
+            types = t.pop("types")
+            t["models"] = len(t["models"])
+            tool_rows.append({k: v for k, v in t.items() if k != "prev"} | {"type": max(types, key=lambda k: (types[k], k))}
+                             | ({"change": _change(t["calls"], t["prev"])} if prev is not None else {}))
+        def order(r: dict) -> tuple:
+            return (-r["calls"], r.get("model") or r["provider"])
+
+        return {"models": _keep_per_category(sorted(model_rows, key=order), key="type"),
+                "tools": _keep_per_category(sorted(tool_rows, key=order), key="type")}
+
+    ai_models = {"7d": ai_board(cur7_ep, prev7_ep if has_prev7 else None),
+                 "30d": ai_board(window_sum(*_days(last_day, 30))[0], None)}
 
     # The daily charts, one per window: that window's leaders by name (the same tools, in the same
     # order, as its list), everything else summed as "Others".
@@ -239,4 +346,6 @@ def build(rows: list[DayRow], cat: store.Catalog, last_day: date) -> dict:
         "by_category": by_category,
         "reliable": _keep_per_category(reliable),
         "fastest": _keep_per_category(fastest),
+        "head_to_head": head_to_head,
+        "ai_models": ai_models,
     }
