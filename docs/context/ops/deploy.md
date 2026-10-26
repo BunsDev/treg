@@ -545,6 +545,12 @@ without importing the heavy database stack into the light `treg` CLI.
   not schedule it). Each run reads only calls after each source's cursor, over `callrecord`'s
   (org_id, id) or (org_id, api_key_id, id) index in small batches, up to a cap per run; a busy
   source's first four weeks are counted over several runs.
+- `treg-worker rankings refresh` rebuilds the public /rankings boards from the per-day endpoint
+  stats (`endpointdaystat`, which `treg-worker catalog stats` writes) and replaces the one saved
+  row (schedule it hourly, as its own job: a failed run only leaves the rankings a run older, never
+  the catalog's reliability numbers). Until its first run the page says the rankings are being
+  prepared. Each run reads the counts of about thirty days and the first values of the last seven
+  days' latency samples, never `callrecord`.
 - `treg-worker media sweep` deletes public pictures no team, person or app names any more (schedule
   it daily; it reads only `img/` in the public bucket and skips files younger than a day).
 - Pictures (avatars, /showcase icons and screenshots) are off until `TREG_MEDIA_STORE_ENDPOINT`, its

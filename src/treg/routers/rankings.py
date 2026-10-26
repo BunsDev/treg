@@ -8,6 +8,7 @@ reader scrolls near it, as OpenRouter's rankings do. All of them come from one c
 """
 import hashlib
 import json
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -16,12 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..application import rankings
 from ..config import get_settings
 from ..infra.db import get_session
-from .web import _WEB_DIR
+from .web import _WEB_DIR, _strip_hosted
 
 router = APIRouter()
 
 # What the page carries itself, and the board name -> key of every board it loads later.
-_FIRST = ("through", "has_change", "floors", "categories", "chart", "tools")
+_FIRST = ("through", "has_change", "floors", "categories", "chart", "tools", "pending")
 _LATER = {"endpoints": "endpoints", "trending": "trending", "categories": "by_category",
           "reliable": "reliable", "fastest": "fastest"}
 
@@ -35,6 +36,20 @@ def _cached(body: bytes, request: Request, media_type: str) -> Response:
     return Response(body, media_type=media_type, headers=headers)
 
 
+def _item_list(boards: dict, base: str) -> str:
+    """Search engines' reading of the first board: this week's ten most used tools, in order,
+    each with its page. Built from the saved boards on every request, so it always matches them."""
+    top = (boards.get("tools") or {}).get("7d") or []
+    if not top:
+        return ""
+    items = [{"@type": "ListItem", "position": i + 1, "name": r["label"],
+              "url": f"{base}/tools/{quote(r['provider'], safe='')}"} for i, r in enumerate(top[:10])]
+    body = json.dumps({"@context": "https://schema.org", "@type": "ItemList",
+                       "name": "Most used tools by AI agents this week", "itemListOrder": "https://schema.org/ItemListOrderDescending",
+                       "numberOfItems": len(items), "itemListElement": items}, separators=(",", ":"))
+    return '<script type="application/ld+json">' + body.replace("</", "<\\/") + "</script>"
+
+
 @router.get("/rankings", include_in_schema=False)
 async def rankings_page(request: Request, db: AsyncSession = Depends(get_session)):
     """Most used tools, most called endpoints, trending, top by category, most reliable and
@@ -43,11 +58,12 @@ async def rankings_page(request: Request, db: AsyncSession = Depends(get_session
     if not page.exists():
         raise HTTPException(status_code=404, detail="rankings.html not bundled")
     boards = await rankings.boards(db)
-    data = json.dumps({k: boards[k] for k in _FIRST}, separators=(",", ":"))
+    data = json.dumps({k: boards.get(k) for k in _FIRST}, separators=(",", ":"))
     # Inside <script type="application/json">: no "</" may close the element early.
     data = data.replace("</", "<\\/")
     base = get_settings().public_url.rstrip("/")
-    html = page.read_text(encoding="utf-8").replace("{BASE}", base).replace("{DATA}", data)
+    html = (_strip_hosted(page.read_text(encoding="utf-8")).replace("{BASE}", base)
+            .replace("{ITEMLIST}", _item_list(boards, base)).replace("{DATA}", data))
     return _cached(html.encode("utf-8"), request, "text/html; charset=utf-8")
 
 

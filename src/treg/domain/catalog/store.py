@@ -1286,6 +1286,11 @@ def _provider_label(provider: str) -> str:
     return provider
 
 
+def provider_label(provider: str) -> str:
+    """A provider's display name ("pdl" -> "People Data Labs"), or its id when none is configured."""
+    return _provider_label(provider)
+
+
 def configure_provider_labels(label: Callable[[str], str]) -> None:
     """Composition seam (`bootstrap`): a provider's display name ("pdl" -> "People Data Labs"),
     read from the provider registry, which this domain does not import. Unconfigured, a provider is

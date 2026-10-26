@@ -12,8 +12,11 @@
 <meta property="og:type" content="website"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta property="og:image" content="{BASE}/media/og.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
 <meta name="twitter:image" content="{BASE}/media/og.png"/>
 <link rel="icon" href="favicon.svg">
+{ITEMLIST}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Inter:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
@@ -203,27 +206,28 @@
 
   /* ---------- the daily chart ---------- */
   .chart { position: relative; border: 1px solid var(--line); border-radius: 14px; background: #fff; padding: 18px 18px 12px; margin-bottom: 22px; }
-  .plot { position: relative; }
-  .bars { display: flex; align-items: stretch; height: 190px; }
+  /* the plot sits right of a gutter that holds the y labels; the grid lines run under the bars */
+  .plot { position: relative; margin-left: 44px; }
+  .bars { position: relative; display: flex; align-items: stretch; height: 190px; }
+  .grid { position: absolute; inset: 0; pointer-events: none; }
+  .grid span { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); }
+  .grid span:last-child { border-top-style: solid; }
+  .grid b { position: absolute; right: calc(100% + 8px); top: -7px; font: 500 10.5px var(--mono); color: var(--muted); white-space: nowrap; }
   .col { flex: 1; min-width: 0; display: flex; align-items: flex-end; justify-content: center; padding: 0 3px; border-radius: 6px; }
   .col.hover { background: var(--card); }
   .bar { width: 100%; max-width: 44px; display: flex; flex-direction: column-reverse; border-radius: 4px 4px 0 0; overflow: hidden; }
   .bar span { display: block; width: 100%; transition: opacity .2s, background-color .2s; }
-  /* one tool in focus (its list row or legend item hovered): its parts take their strong colour,
+  /* one tool in focus (its list row hovered): its parts take their strong colour,
      every other part steps back, as OpenRouter's charts do */
   .chart.focus .bar span { opacity: .28; }
   .chart.focus .bar span.hl { opacity: 1; background-color: var(--strong) !important; }
-  .legend span { cursor: default; transition: opacity .2s; }
-  .chart.focus .legend span:not(.hl) { opacity: .45; }
-  .chart.focus .legend span.hl i { background: var(--strong) !important; }
   .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
   .chart-empty { display: none; padding: 26px 0; color: var(--muted); font-size: 14px; text-align: center; }
   .chart.blank .chart-empty { display: block; }
   .chart.blank .plot { display: none; }
-  .axis.each span { flex: 1; text-align: center; }
-  .axis { display: flex; justify-content: space-between; margin-top: 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
-  .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin-top: 14px; font-size: 12.5px; color: var(--ink2); }
-  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; vertical-align: 0; }
+  /* each date sits under its own bar */
+  .axis { position: relative; height: 16px; margin: 8px 0 0 44px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
   /* the Usage card's tooltip (frontend/src/components/SpendBars.vue): beside the hovered bar, at
      the pointer's height inside the plot, flipped to the left near the right edge */
   .tip { position: absolute; transform: translateX(10px); display: grid; gap: 4px; min-width: 150px; padding: 8px 10px; border: 1px solid var(--line);
@@ -367,7 +371,7 @@
         <div><h2>Most used tools</h2><p id="chart-sub">Successful calls per tool, every day for the last 7 days.</p></div>
         <div class="ctl"><div class="seg" data-win="tools"><button data-v="7d" class="on">Last 7 days</button><button data-v="30d">Last 30 days</button></div></div>
       </div>
-      <div class="chart" id="chart"><div class="plot"><div class="bars" id="bars"></div><div class="tip" id="tip" hidden></div></div><div class="axis" id="axis"></div><div class="legend" id="legend"></div><div class="chart-empty">The daily chart fills in as calls arrive.</div></div>
+      <div class="chart" id="chart"><div class="plot"><div class="grid" id="grid" aria-hidden="true"></div><div class="bars" id="bars"></div><div class="tip" id="tip" hidden></div></div><div class="axis" id="axis"></div><div class="chart-empty">The daily chart fills in as calls arrive.</div></div>
       <div class="list" id="tools-list"></div>
       <div class="more" data-more="tools" hidden><button>Show more</button></div>
     </section>
@@ -456,11 +460,11 @@
     </div>
     <nav class="bf-cols" aria-label="Site">
       <div class="bf-col"><div class="lab">Explore</div>
-        <a href="/catalog">Catalog</a><a href="/rankings">Rankings</a><a href="/blog">Blog</a></div>
+        <a href="/catalog">Catalog</a><a href="/use-cases">Use cases</a><a href="/workflows">Workflows</a><!--hosted--><a href="/showcase">Showcase</a><!--/hosted--><a href="/rankings">Rankings</a><!--hosted--><a href="/gtm-engineering">GTM engineering</a><!--/hosted--><a href="/agents/claude-code">Agents</a><a href="/blog">Blog</a></div>
       <div class="bf-col"><div class="lab">Build</div>
         <a href="/tutorial">Docs</a><a href="/docs">API</a><a href="/llms.txt">llms.txt</a><a href="https://github.com/superdesigndev/treg" target="_blank" rel="noopener">GitHub ↗</a></div>
       <div class="bf-col"><div class="lab">Company</div>
-        <a href="/support">Support</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></div>
+        <a href="/resources">Resources</a><a href="/support">Support</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></div>
     </nav>
   </div>
   <div class="bf-tag">© 2026 treg — OpenRouter for agent tools</div>
@@ -519,7 +523,7 @@
     hero.classList.add("go");
   });
 
-  $("asof").textContent = "Usage data through " + fmtDay(D.through, { year: "numeric" });
+  $("asof").textContent = D.pending ? "Rankings are being prepared. Check back soon." : "Usage data through " + fmtDay(D.through, { year: "numeric" });
   $("f-trending").textContent = D.floors.trending.toLocaleString("en-US");
   $("f-reliable").textContent = D.floors.reliable.toLocaleString("en-US");
   $("f-fastest").textContent = D.floors.fastest.toLocaleString("en-US");
@@ -528,7 +532,8 @@
   const logo = (provider, label) => {
     const letter = esc((label || provider || "?").trim().charAt(0).toUpperCase());
     if (!provider) return `<span class="logo" aria-hidden="true">${letter}</span>`;
-    return `<span class="logo" aria-hidden="true"><img src="/logos/${encodeURIComponent(provider)}.svg" alt="" loading="lazy" onerror="this.replaceWith(document.createTextNode('${letter}'))"></span>`;
+    // A missing logo falls back to the letter, kept in a data attribute so no name can break it.
+    return `<span class="logo" aria-hidden="true" data-letter="${letter}"><img src="/logos/${encodeURIComponent(provider)}.svg" alt="" loading="lazy" onerror="this.parentNode.textContent=this.parentNode.dataset.letter"></span>`;
   };
   const change = (c) => {
     if (c === "new") return `<span class="new">new</span>`;
@@ -762,23 +767,27 @@
   const slot = (s, k) => s.provider ? k : COLORS.length - 1;
   const color = (s, k) => COLORS[slot(s, k)];
   let C = null, hovered = -1;
+  function niceTop(v) {
+    const p = 10 ** Math.floor(Math.log10(v)), m = v / p;
+    return ([1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find((s) => m <= s) || 10) * p;
+  }
   function drawChart(win) {
     const { days, series: S } = D.chart[win];
     const blank = !days.length || !S.length;
     chartBox.classList.toggle("blank", blank);
     $("chart-sub").textContent = `Successful calls per tool, every day for the last ${win === "7d" ? 7 : 30} days.`;
     hovered = -1; tip.hidden = true;
-    if (blank) { C = null; bars.innerHTML = $("axis").innerHTML = $("legend").innerHTML = ""; return; }
+    if (blank) { C = null; bars.innerHTML = $("axis").innerHTML = $("grid").innerHTML = ""; return; }
     const totals = days.map((_, i) => S.reduce((a, s) => a + s.values[i], 0));
-    const peak = Math.max(...totals, 1);
+    const peak = niceTop(Math.max(...totals, 1));   // a round top, so the guides read 500K and 1M
     C = { days, S, totals };
+    $("grid").innerHTML = [1, 0.5, 0].map((f) => `<span style="top:${(1 - f) * 100}%"><b>${f ? esc(compact(peak * f)) : "0"}</b></span>`).join("");
     bars.innerHTML = days.map((d, i) => `<div class="col" data-i="${i}"><div class="bar" style="height:${Math.max(totals[i] / peak * 100, totals[i] ? 1.5 : 0)}%">` +
       S.map((s, k) => s.values[i] ? `<span data-p="${esc(s.provider)}" style="height:${s.values[i] / totals[i] * 100}%;background:${color(s, k)};--strong:${STRONG[slot(s, k)]}"></span>` : "").join("") + `</div></div>`).join("");
-    const each = days.length <= 8;   // a short window names every day under its bar
-    const ticks = each ? days.map((_, i) => i) : [0, Math.floor((days.length - 1) / 2), days.length - 1];
-    $("axis").classList.toggle("each", each);
-    $("axis").innerHTML = ticks.map((i) => `<span>${esc(fmtDay(days[i], each ? { weekday: "short" } : undefined))}</span>`).join("");
-    $("legend").innerHTML = S.map((s, k) => `<span data-p="${esc(s.provider)}" style="--strong:${STRONG[slot(s, k)]}"><i style="background:${color(s, k)}"></i>${esc(s.label)}</span>`).join("");
+    // a week names every day; a month names one day a week, counted back from the newest
+    const each = days.length <= 8, n = days.length;
+    const ticks = days.map((_, i) => i).filter((i) => each || (n - 1 - i) % 7 === 0);
+    $("axis").innerHTML = ticks.map((i) => `<span style="left:${(i + 0.5) / n * 100}%">${esc(fmtDay(days[i], each ? { weekday: "short" } : undefined))}</span>`).join("");
   }
   bars.addEventListener("mousemove", (e) => {
     const col = e.target.closest(".col"); if (!col || !C) return;
@@ -799,7 +808,7 @@
   });
   bars.addEventListener("mouseleave", () => { bars.children[hovered]?.classList.remove("hover"); hovered = -1; tip.hidden = true; });
 
-  // A tool's chart colour beside its row, and hovering the row or its legend item brings that
+  // A tool's chart colour beside its row, and hovering the row brings that
   // tool forward in the chart (only a tool the chart draws by name).
   function dot(provider) {
     const k = C ? C.S.findIndex((s) => s.provider && s.provider === provider) : -1;
@@ -815,7 +824,6 @@
     box.addEventListener("mouseleave", () => focus(""));
   };
   hoverFocus($("tools-list"), ".row[data-p]");
-  hoverFocus($("legend"), "span[data-p]");
   draw.tools();   // the list and its chart, once the chart's pieces exist
 
   // ---------- sidebar: mark the board being read ----------

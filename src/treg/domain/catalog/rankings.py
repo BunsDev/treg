@@ -4,13 +4,16 @@ Pure: the caller reads the `EndpointDayStat` rows (`application.rankings`) and p
 the catalog and the last complete UTC day; nothing here touches the database or the audit table.
 
 What counts is a successful call (`ok`, a 2xx the provider answered), the same word the catalog's
-reliability numbers use, so a cheap search and an expensive render weigh the same. Each board
-has its own floor, so a small base cannot make a large percentage and a quiet endpoint never
-shows one team's activity:
+reliability numbers use, so a cheap search and an expensive render weigh the same.
+
+The usage boards (most used tools, most called endpoints, the daily chart, top by category) have
+no floor on purpose: they list every tool with calls, so a tool only one team uses shows that
+team's volume, though never the team. The three boards that rate or compare have floors, so a
+small base cannot make a large percentage:
 
 - trending ranks only rows with at least `TRENDING_MIN_CALLS` successful calls this week;
 - most reliable ranks tools (all their endpoints together) with at least `RELIABLE_MIN_DECIDED`
-  decided calls  (2xx plus 5xx, the denominator `stats.publish` uses; a 4xx is the caller's mistake);
+  decided calls (2xx plus 5xx, the denominator `stats.publish` uses; a 4xx is the caller's mistake);
 - fastest ranks only endpoints with at least `FASTEST_MIN_TIMED` timed successful calls.
 
 Jobs that finish later (`async` endpoints) are left out of reliability and speed: their bucket's
@@ -83,7 +86,7 @@ def build(rows: list[DayRow], cat: store.Catalog, last_day: date) -> dict:
         return (cat.platforms.get(ep["platform"]) or {}).get("category") or "Other"
 
     def label(provider: str) -> str:
-        return store._provider_label(provider)
+        return store.provider_label(provider)
 
     def ep_view(ep_id: str) -> dict:
         ep = eps[ep_id]

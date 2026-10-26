@@ -10,6 +10,7 @@
     treg-worker catalog repair-status --manifest <path>  # check the saved applied target list
     treg-worker spend rollup [--max-rows 50000]      # fold new ledger settles into per-key daily spend
     treg-worker showcase activity                    # add new calls to the /showcase activity rows (hourly)
+    treg-worker rankings refresh                     # rebuild the public /rankings boards from the day stats (hourly)
     treg-worker media sweep                          # delete public pictures nothing uses any more (daily)
     treg-worker jev xboost [--posts 60] [--min-likes 150]   # the /jev launch-radar demo: X posts <24h -> jev
     treg-worker admin purge-evidence [--batch-size 5000]  # blank expired error evidence past 14-day retention
@@ -411,6 +412,17 @@ async def _showcase_activity(args) -> int:
     return 0
 
 
+async def _rankings_refresh(args) -> int:
+    from .infra.db import verify_db
+    from .application.rankings import refresh
+    from .bootstrap import configure_provider_labels
+
+    configure_provider_labels()   # the boards print display names ("Crawl4AI"), as the web app does
+    await verify_db()
+    print(json.dumps(await refresh(), sort_keys=True))
+    return 0
+
+
 async def _media_sweep(args) -> int:
     from .infra.db import verify_db
     from .application.images import sweep
@@ -708,6 +720,10 @@ def main(argv: list[str] | None = None) -> int:
     showcasesub = showcase.add_subparsers(dest="cmd", required=True)
     activity = showcasesub.add_parser("activity", help="add each approved app's new calls to its weekly activity rows")
     activity.set_defaults(fn=_showcase_activity)
+    ranks = sub.add_parser("rankings", help="the public /rankings page's read model")
+    rankssub = ranks.add_subparsers(dest="cmd", required=True)
+    rrefresh = rankssub.add_parser("refresh", help="rebuild every board from the per-day endpoint stats and save it")
+    rrefresh.set_defaults(fn=_rankings_refresh)
     media = sub.add_parser("media", help="picture files in the public media bucket")
     mediasub = media.add_subparsers(dest="cmd", required=True)
     media_sweep = mediasub.add_parser("sweep", help="delete public pictures no team, person or app uses any more")

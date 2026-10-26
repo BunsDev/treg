@@ -10,7 +10,9 @@ from httpx import AsyncClient
 from treg.application import rankings as rankings_app
 from treg.domain.catalog import rankings, store
 from treg.infra.db import session_maker
-from treg.models import EndpointDayStat
+from sqlalchemy import select
+
+from treg.models import EndpointDayStat, RankingsSnapshot
 from treg.timeutil import utcnow_naive
 
 LAST = date(2026, 10, 25)
@@ -109,7 +111,7 @@ def test_by_category_shares_add_up():
         assert round(sum(p["share"] for p in c["providers"])) == 100
 
 
-async def test_page_serves_the_boards_in_the_html(clients: AsyncClient):
+async def test_page_serves_the_boards_the_worker_saved(clients: AsyncClient):
     rankings_app.reset_cache()
     (a,) = _sync_endpoints(1)
     yesterday = (utcnow_naive().date() - timedelta(days=1)).isoformat()
@@ -117,6 +119,8 @@ async def test_page_serves_the_boards_in_the_html(clients: AsyncClient):
         db.add(EndpointDayStat(endpoint_id=a["id"], day=yesterday, n=40, ok=40, latency_sample=[]))
         await db.commit()
     try:
+        done = await rankings_app.refresh()
+        assert done["through"] == yesterday and done["tools"] == 1
         r = await clients.get("/rankings")
         assert r.status_code == 200
         assert "{BASE}" not in r.text and "{DATA}" not in r.text
@@ -133,19 +137,54 @@ async def test_page_serves_the_boards_in_the_html(clients: AsyncClient):
             assert key in (await clients.get(f"/rankings/data/{name}")).json()
         assert (await clients.get("/rankings/data/nothing")).status_code == 404
         assert "/rankings<" in (await clients.get("/sitemap.xml")).text
+        # search engines read the same first board as a ranked list
+        (ld,) = [json.loads(b) for b in re.findall(r'<script type="application/ld\+json">(.*?)</script>', r.text, re.S)
+                 if '"ItemList"' in b]
+        assert ld["itemListElement"][0]["name"] == data["tools"]["7d"][0]["label"]
+        assert ld["itemListElement"][0]["url"].endswith("/tools/" + a["provider"])
     finally:
         rankings_app.reset_cache()
 
 
-async def test_page_with_no_data_still_serves(clients: AsyncClient):
+async def test_before_the_first_worker_run_the_page_says_it_is_preparing(clients: AsyncClient):
     rankings_app.reset_cache()
+    (a,) = _sync_endpoints(1)
+    async with session_maker() as db:   # day stats alone are not read by the page
+        db.add(EndpointDayStat(endpoint_id=a["id"], day=(utcnow_naive().date() - timedelta(days=1)).isoformat(),
+                               n=40, ok=40, latency_sample=[]))
+        await db.commit()
     try:
         r = await clients.get("/rankings")
         assert r.status_code == 200
         (block,) = re.findall(r'id="rk-data">(.*?)</script>', r.text, re.S)
-        assert json.loads(block)["tools"] == {"7d": [], "30d": []}
+        data = json.loads(block)
+        assert data["pending"] is True and data["tools"] == {"7d": [], "30d": []}
+        assert '"ItemList"' not in r.text
+        assert (await clients.get("/rankings/data/fastest")).json() == {"fastest": []}
     finally:
         rankings_app.reset_cache()
+
+
+async def test_a_new_run_replaces_the_saved_boards(clients: AsyncClient):   # clients: a fresh database
+    (a, b) = _sync_endpoints(2)
+    yesterday = (utcnow_naive().date() - timedelta(days=1)).isoformat()
+    async with session_maker() as db:
+        db.add(EndpointDayStat(endpoint_id=a["id"], day=yesterday, n=5, ok=5, latency_sample=[]))
+        await db.commit()
+    await rankings_app.refresh()
+    async with session_maker() as db:
+        db.add(EndpointDayStat(endpoint_id=b["id"], day=yesterday, n=9, ok=9, latency_sample=[]))
+        await db.commit()
+    await rankings_app.refresh()
+    async with session_maker() as db:
+        rows = (await db.execute(select(RankingsSnapshot))).scalars().all()
+    assert len(rows) == 1
+    assert [t["provider"] for t in rows[0].body["tools"]["7d"]] == [b["provider"], a["provider"]]
+
+
+async def test_the_footers_link_to_the_rankings(clients: AsyncClient):
+    for page in ("/rankings", "/showcase", "/aeo", "/jev", "/people-search"):
+        assert 'href="/rankings"' in (await clients.get(page)).text, page
 
 
 def test_the_chart_follows_each_window_and_its_leaders():
@@ -179,7 +218,30 @@ async def test_the_read_keeps_only_the_first_samples_of_each_day(clients: AsyncC
                                latency_seen=200, latency_sample=kept + dropped))
         await db.commit()
     try:
+        await rankings_app.refresh()
         fastest = (await clients.get("/rankings/data/fastest")).json()["fastest"]
         assert [(r["id"], r["p50_ms"]) for r in fastest] == [(a["id"], 100)]
     finally:
         rankings_app.reset_cache()
+
+
+async def test_the_worker_saves_display_names(monkeypatch):
+    """The cron is its own process: it must load the providers' display names before it builds."""
+    from treg import worker
+    from treg.application import rankings as app_rankings
+    from treg.infra import db as infra_db
+
+    monkeypatch.setattr(store, "_provider_label", lambda provider: provider)   # a fresh process
+    seen = {}
+
+    async def fake_refresh():
+        seen["label"] = store.provider_label("pdl")
+        return {}
+
+    async def no_verify():
+        return None
+
+    monkeypatch.setattr(app_rankings, "refresh", fake_refresh)
+    monkeypatch.setattr(infra_db, "verify_db", no_verify)
+    assert await worker._rankings_refresh(None) == 0
+    assert seen["label"] == "People Data Labs"
