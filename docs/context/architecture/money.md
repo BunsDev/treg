@@ -1402,6 +1402,8 @@ delayed account balance, so neither field is interpreted as per-call cost.
 
 HTTP 200 alone does not prove a billable success. `settle.py` checks the catalog's `expect` rule
 (`{json_path, equals}`) first, then the routing adapter, and otherwise falls back to the estimate.
+A value in the rule's optional `misses` list settles at zero like any other non-`equals` value;
+it only stops the hit verdict from calling a free miss a provider failure.
 `store.py` inherits provider-file `expect` rules onto endpoints so new routes retain the provider's
 success convention. An undecidable rule does not imply a free call.
 

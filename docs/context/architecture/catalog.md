@@ -638,6 +638,7 @@ endpoints:
     expect:                          # optional; default is "HTTP 2xx"
       json_path: code                # dotted path into the response JSON
       equals: 200                    #   (for providers that answer HTTP 200 even on failure)
+      misses: [404]                  # optional; values meaning "found nothing": an answer, not a failure
     cost:
       type: per_success              # per_call | per_result | per_success | free | quota_rows
       value: 0.0015

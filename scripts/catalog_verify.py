@@ -202,7 +202,7 @@ def main() -> int:
             expect = ep.get("expect")
             if ok and expect and doc is not None:
                 got = dig(doc, expect["json_path"])
-                ok = got == expect.get("equals")
+                ok = got == expect.get("equals") or got in (expect.get("misses") or ())
                 detail += f", {expect['json_path']}={got!r}"
             if ok:
                 note = ""

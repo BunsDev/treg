@@ -400,7 +400,8 @@ LeadMagic needs person identity fields, not an email address; SE Ranking needs b
 mixed SE Ranking batch is useful if at least one row has data and every row has a valid shape.
 Explicit empty arrays/no-data flags are empty. A 2xx body that fails the endpoint's own `expect`
 success rule (`results.fails_expect`; a DataForSEO task status other than 20000 under a 20000
-envelope) is an error with reason `expect_failed`, before any adapter reads it. HTTP errors and
+envelope) is an error with reason `expect_failed`, before any adapter reads it. A value listed in
+the rule's `misses` (a provider's 200 `not_found` status word) is not a failure: the adapter judges that body. HTTP errors and
 explicit provider error envelopes are errors; invalid JSON, predicate failures and unsupported shapes are unknown. Generic adapter
 rules retain their existing semantics, including their limitations on missing fields; verification
 against a fixture does not imply full response-schema validation.
