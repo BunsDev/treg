@@ -440,8 +440,9 @@ shared HTTP client. `/auth/logout` remains an HTTP-only cookie action.
   call, scoped to its live agent membership and org. An old key's history cannot confirm a new
   key after rotation; unknown, foreign, disabled, revoked, or removed agent keys return 404.
   `GET /orgs/{id}/agents/observed` (admin+) lists the agents **detected in member
-  traffic** - one row per (member, runtime) from `CallRecord.client`/`RunRecord.client` over 30 days,
-  excluding plain-terminal (`''`/`cli`) and machine-identity traffic; attribution, never a gate. See
+  traffic** - one row per (member, runtime) from `CallRecord.client`/`RunRecord.client` over 30 days
+  (calls from the same daily usage rollup, so the window starts at a UTC midnight; `[]` while its
+  first backfill runs), excluding plain-terminal (`''`/`cli`) and machine-identity traffic; attribution, never a gate. See
   [multi-tenancy](../architecture/multi-tenancy.md).
 - **Projects (a sub-scope inside the org):** `create_project` / `list_projects` /
   `delete_project` (`/orgs/{id}/projects`, admin+ to mutate) - deleting frees its tools to org-wide and
@@ -460,9 +461,11 @@ shared HTTP client. `/auth/logout` remains an HTTP-only cookie action.
 - **Usage metering + caps** (usage-metering v1, `docs/USAGE-METERING-PLAN.md`): `org_usage`
   (`GET /orgs/{id}/usage?days=`, admin+) rolls up `CallRecord` + `RunRecord` since the window start into
   **by-user** (with a `call`/`local_run`/`server_run` split), **by-tool**, **by-day**, and totals - pure
-  `GROUP BY`, **no request/response bodies** (they aren't stored). It reads the window's audit rows
-  twice, not once per section: one grouped pass answers member, kind and tool together, and the
-  per-day count is the second. This rollup, `/usage/by-tag` and `/agents/observed` run on the gated
+  counts, **no request/response bodies** (they aren't stored). The call side reads the daily usage
+  rollup plus the rows after its cursor ([data-model](../architecture/data-model.md)); the answer
+  carries `ready` (false, with no counts, until the rollup's first backfill has caught up) and
+  `history_from`, the first day the rollup holds, which a longer window starts at. Where the
+  rollup worker has never run, the audit table is aggregated directly. This rollup, `/usage/by-tag` and `/agents/observed` run on the gated
   report session ([deploy](../ops/deploy.md#dashboard-reports)): when its slots are full or a
   statement passes its timeout they answer `429 {"report_busy": "busy" | "timeout"}` with
   `Retry-After: 2`, never the call surface's `treg_saturated`. `set_member_cap`

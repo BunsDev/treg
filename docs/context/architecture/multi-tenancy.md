@@ -361,7 +361,8 @@ Org existence and coordinate with deletion before cleanup starts. See [configura
   (`CLAUDECODE` → `claude-code`, `CODEX_*`, `CURSOR_*`, …; `TREG_CLIENT` overrides) and sends
   `X-Treg-Client`; `_client_of` normalizes it (slug ≤32, versions stripped, unknown-but-well-formed
   kept so a new runtime needs no release) onto `CallRecord.client` / `RunRecord.client` at all three
-  audit points. The endpoint aggregates 30 days into one row per (member, runtime), excluding
+  audit points. The endpoint aggregates 30 days (calls from the daily usage rollup,
+  [data-model](data-model.md)) into one row per (member, runtime), excluding
   `''`/`cli` (a roster listing every human twice teaches nothing) and machine identities (already
   attributed to themselves). **Attribution, never authentication** — anything holding the token can
   claim any name, so nothing gates on it; scoping a detected agent for real = minting it a token
