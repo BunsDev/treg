@@ -11,6 +11,7 @@ import atexit
 import glob
 import hashlib
 import hmac
+import json
 import os
 import socket
 import tempfile
@@ -478,6 +479,23 @@ async def funded_user(client, email, *, micro=1_000_000):
         await money.grant(db, body["org_id"], amount_micro=micro, kind="promotional")
         await db.commit()
     return body
+
+
+def mcp_text_result(name: str, payload: dict) -> dict:
+    """The text block a host shows, after checking that `structuredContent` (what a host may read
+    instead) carries every key it does: the output schema silently drops an undeclared one."""
+    result = payload.get("result") or {}
+    content = result.get("content") or []
+    if not (content and content[0].get("type") == "text"):
+        return payload
+    try:
+        text = json.loads(content[0]["text"])
+    except ValueError:
+        return {"_text": content[0]["text"]}
+    if isinstance(text, dict) and isinstance(result.get("structuredContent"), dict):
+        dropped = {k for k, v in text.items() if v is not None} - set(result["structuredContent"])
+        assert not dropped, f"{name}: structuredContent drops {sorted(dropped)}"
+    return text
 
 
 async def drain_background_writes():

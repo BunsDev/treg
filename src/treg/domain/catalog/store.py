@@ -29,6 +29,7 @@ import yaml
 # The YAML data ships at the package root (`src/treg/catalog/`), not next to this module.
 CATALOG_DIR = Path(__file__).resolve().parents[2] / "catalog"
 EXAMPLES_DIRNAME = "examples"
+EXAMPLE_MAX_BYTES = 10_000
 CAPABILITIES_FILE = "capabilities.yaml"
 FX_FILE = "fx.yaml"
 ALIASES_FILE = "aliases.yaml"
@@ -812,6 +813,31 @@ def example_path(endpoint_id: str) -> Path | None:
     if ep is None or not ep["example_file"]:
         return None
     return CATALOG_DIR / EXAMPLES_DIRNAME / ep["example_file"]
+
+
+_COST_EVIDENCE = frozenset({"note", "source", "source_url", "checked", "confidence"})
+
+
+def sibling_view(ep: dict, provider_display: str, cat: Catalog) -> dict:
+    """One row of an endpoint's comparison with the other providers of its job; the full view is
+    that endpoint's own detail."""
+    cost = cat.cost_view(ep["cost"], ep["provider"])
+    return {
+        "id": ep["id"],
+        "provider": ep["provider"],
+        "provider_display": provider_display,
+        "name": ep.get("name") or "",
+        "scope": ep["scope"],
+        "kind": ep.get("kind") or DEFAULT_KIND,
+        "cost": {k: v for k, v in cost.items() if k not in _COST_EVIDENCE} if cost else cost,
+        "platform_eligible": cat.platform_eligible(ep),
+        "status": ep.get("status") or None,
+        "status_note": ep.get("status_note") or None,
+        "superseded_by": ep.get("superseded_by") or None,
+        "verified": ep["verified"],
+        "params": [k for where in ("pathParams", "queryParams", "body")
+                   if isinstance(params := (ep.get("input") or {}).get(where), dict) for k in params],
+    }
 
 
 def endpoint_view(ep: dict, provider_display: str, cat: Catalog | None = None) -> dict:

@@ -423,6 +423,9 @@ class CatalogGetOut(TypedDict, total=False):
                                            # and `reviews` (what other teams' agents said after using it)
     provider: dict[str, Any] | None
     siblings: list[dict[str, Any]] | None  # other providers of the same capability, for comparison
+    routing: dict[str, Any] | None
+    related_capabilities: list[dict[str, Any]] | None
+    observed_pending: bool | None
     call_template: str | None
     example_response: Any                  # a dict for most endpoints, an ARRAY for providers whose
                                            # response is a list of records (brightdata datasets)
@@ -450,6 +453,9 @@ class CallOut(TypedDict, total=False):
     whose_error: str | None         # "treg" or "provider" — who to blame, and whether to retry
     hint: str | None
     did_you_mean: list[str] | None  # real ids close to one that missed
+    routed_tool: str | None
+    suggestion: str | None
+    upstream_failed: str | None
     error: str | None
     detail: str | None
 
@@ -1246,6 +1252,8 @@ async def _catalog_get_impl(
             out["overflow_price_usd"] = ep["overflow_price_usd"]
             out["overflow_price_unit"] = ep.get("overflow_price_unit")
             out["overflow_via"] = ep.get("overflow_via")
+    if isinstance(out, dict) and (out.get("routing") or {}).get("plan"):
+        out.pop("siblings", None)
     return out
 
 
