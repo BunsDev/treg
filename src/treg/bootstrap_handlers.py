@@ -13,7 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import analytics
 from .call_surface import split_call_path
 from .caller_metadata import _client_of
-from .client_identity import _norm_client
+from .client_identity import _norm_client, mcp_host
 from .config import get_settings
 from .infra.db import ReportBusy
 
@@ -28,17 +28,18 @@ _stamp_call_exit: Any = None
 def _capture_call_intake_failure(request: Request, *, surface: str) -> None:
     """Report a call-shaped request that failed before treg could resolve its caller."""
     user_agent = request.headers.get("user-agent", "")
+    client = _client_of(request)
     props = {
         "status_code": 503,
         "outcome": "gateway_failed",
         "failure_kind": "db_pool",
         "phase": "caller_identity",
         "surface": surface,
-        "client": _client_of(request),
+        "client": client,
         "method": request.method,
         "user_agent": user_agent[:100],
         "ua_family": _norm_client(user_agent),
-    }
+    } | mcp_host(request.headers, client)
     request.state.call_failure_kind = props["failure_kind"]
     analytics.capture("treg-server", "call_intake_failed", props)
 

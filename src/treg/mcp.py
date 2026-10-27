@@ -63,6 +63,7 @@ from .application import catalog_search as search_app
 from .application import search_experiment
 from .domain.catalog import store as catalog_store
 from .capacity_notice import account_out_notice, is_balance_refusal
+from .client_identity import printable_ascii
 from .config import get_settings
 from .feedback_contract import FeedbackCategory, FEEDBACK_DESCRIPTION, ReviewUsefulness, REVIEW_DESCRIPTION
 from .domain.catalog.stats import EndpointObservationReader
@@ -503,26 +504,20 @@ class MyToolsOut(TypedDict, total=False):
 # request would come from the ASGI transport's loopback peer, and every MCP caller would share one
 # per-IP bucket. Task-scoped, so concurrent tool calls never see each other's address.
 _caller_ip: ContextVar[str] = ContextVar("treg_mcp_caller_ip", default="")
-# The MCP host behind that tool call: the name its client reported (`clientInfo.name`) and the
-# inbound User-Agent. `_api` forwards both so `tool_called` can be split by host; the internal
-# request's own User-Agent stays httpx's, because that is what an own-key upstream sees.
+# The MCP host behind that tool call (`clientInfo.name`, inbound User-Agent), forwarded the same way.
 _caller_host: ContextVar[tuple[str, str]] = ContextVar("treg_mcp_caller_host", default=("", ""))
-
-
-def _printable(value: str, limit: int) -> str:
-    return "".join(c for c in value if " " <= c <= "~")[:limit]
 
 
 def _host_of(ctx: Context, headers: Any) -> tuple[str, str]:
     """On the stateless transport only a 2026-07-28+ request carries `clientInfo` on every request;
     an older client reports it at `initialize` alone, so its tool calls have only the User-Agent."""
     try:
-        params = ctx.session.client_params
-    except (AttributeError, ValueError):
-        params = None
-    name = getattr(getattr(params, "client_info", None), "name", None) or ""
+        name = ctx.session.client_params.client_info.name or ""
+    except Exception:  # noqa: BLE001 - attribution must never fail the tool call
+        name = ""
     user_agent = headers.get("user-agent") or headers.get("User-Agent") or ""
-    return _printable(name, 64), _printable(user_agent, 200)
+    # An httpx header value must be ASCII.
+    return printable_ascii(str(name)), printable_ascii(user_agent)
 
 
 def _bearer(ctx: Context) -> str:

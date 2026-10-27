@@ -229,8 +229,9 @@ drifting quietly. The in-process client stamps `X-Treg-Client: mcp` for the team
 `X-Treg-Client: claude-connector` for V2 (attribution, never a gate), so each MCP surface is
 distinguishable from unreported CLI traffic and from the other MCP surface. It also forwards the
 host behind the tool call, as `_bearer` read it: `X-Treg-Mcp-Client` (`clientInfo.name`) and
-`X-Treg-Mcp-User-Agent` (the inbound User-Agent), which `tool_called` records as `mcp_client` and
-`mcp_user_agent`. The stateless transport keeps no `initialize`, so `clientInfo` is known only on a
+`X-Treg-Mcp-User-Agent` (the inbound User-Agent), on both MCP surfaces. `tool_called` and
+`call_intake_failed` record them as `mcp_client` and `mcp_user_agent`, and only when `X-Treg-Client`
+names an MCP surface, so a direct `/call/` cannot pose as an MCP host. The stateless transport keeps no `initialize`, so `clientInfo` is known only on a
 2026-07-28+ request, which carries it on every request; older clients are told apart by User-Agent.
 The internal request keeps httpx's own User-Agent, since that is what an own-key upstream sees, and
 relay drops every `x-treg-*` header before the upstream.
