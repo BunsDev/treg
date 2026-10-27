@@ -22,13 +22,13 @@ a downloaded script, which Claude Code's auto mode blocks by default.
 ## What is where
 
 ```
-.claude-plugin/marketplace.json           makes this repo its own single-plugin marketplace
+.claude-plugin/marketplace.json           makes this repo its own marketplace: treg plus the workflow plugins
 plugins/treg/.claude-plugin/plugin.json   the manifest Claude Code reads, MCP server inline
 plugins/treg/.cursor-plugin/plugin.json   the manifest Cursor (and Grok Bot) read
 plugins/treg/mcp.json                     Cursor's URL-only MCP config
-plugins/treg/skills/treg/SKILL.md         GENERATED — the plugin's skill
-plugins/workflows/<name>/                 GENERATED — one optional plugin per workflow skill
-skills/treg/SKILL.md                      GENERATED — the bare skill for `npx skills add` and ClawHub
+plugins/treg/skills/treg/SKILL.md         GENERATED - the plugin's skill
+plugins/workflows/<name>/                 GENERATED - one optional plugin per workflow skill
+skills/treg/SKILL.md                      GENERATED - the bare skill for `npx skills add` and ClawHub
 skills.sh.json                            category grouping for skills.sh / Hermes' Skills Hub
 ```
 
@@ -65,7 +65,7 @@ Ordered so that everything self-serve ships before anything with a queue.
 
 Nothing to submit. Merging to `main` publishes it; the install lines above start working.
 
-Bump `version` in `pyproject.toml` and every manifest together — `test_plugin_version_tracks_the_package`
+Bump `version` in `pyproject.toml` and every manifest together: `test_plugin_version_tracks_the_package`
 pins all of them to one value.
 
 ### 2. ClawHub (clawhub.ai) — ✅ LIVE, self-serve, CLI-based

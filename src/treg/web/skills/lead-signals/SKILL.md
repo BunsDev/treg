@@ -8,8 +8,10 @@ description: Use when the user wants to find buyers, warm or hot leads, or in-ma
 A signal is a public fact that makes a conversation timely: someone complained about the problem you
 solve, engaged with a post about it, hired for it, raised money, switched tools.
 
-Runs on treg. If it isn't set up (`treg --version` fails), read {BASE}/llms.txt and follow it to
-install and sign in, then come back here.
+Runs on treg, through its MCP tools or the `treg` CLI; either is enough. Over MCP, each command
+below maps onto a tool: `treg catalog search` is `catalog_search`, `treg catalog get` is
+`catalog_get`, `treg call` is `call`. With neither, treg is not set up: {BASE}/llms.txt says how.
+Install only if the human asked you to; otherwise tell them how and stop.
 
 ## The run
 

@@ -5,17 +5,17 @@ Five shop windows, one source:
 
 - **codex**  -> `plugin/skills/treg/SKILL.md` — ships an MCP connector, so its bootstrap points at
   the MCP tools and tells the reader NOT to reach for a terminal.
-- **skills** -> `skills/treg/SKILL.md` — the bare skill that `npx skills add` and ClawHub publish:
+- **skills** -> `skills/treg/SKILL.md`: the bare skill that `npx skills add` and ClawHub publish:
   the served page unchanged, since its first section already covers an agent with neither the tools
   nor the CLI. It gets a `version:` stamped into its frontmatter, which ClawHub requires.
-- **plugin** -> `plugins/treg/skills/treg/SKILL.md` — the one plugin folder Claude Code and Cursor
+- **plugin** -> `plugins/treg/skills/treg/SKILL.md`: the one plugin folder Claude Code and Cursor
   both install. It declares the remote MCP server (OAuth), so its bootstrap checks for the tools
   first and sends the human to sign in.
 - **dsh**    -> `dsh/skills/treg/SKILL.md` — DeepSeek Harness, the only surface that ships the
   connector AND the CLI path in one install: the MCP row is disabled until `TREG_TOKEN` exists, so
   its bootstrap has to cover both states and steer away from `treg mcp install`, which cannot write
   a dsh profile. See docs/DSH-PLUGIN.md.
-- **minimax** -> `plugins/minimax/skills/treg/SKILL.md` — skills-only, the served page unchanged.
+- **minimax** -> `plugins/minimax/skills/treg/SKILL.md`: skills-only, the served page unchanged.
   See docs/MINIMAX-PLUGIN.md.
 
 The bare skill sits at the REPO ROOT because that is what `npx skills add` resolves and what
@@ -43,7 +43,7 @@ Three transformations, each for a reason the served file does not have:
    and the plugin hosts ignore it.
 
 Usage:  python3 scripts/build_plugin.py [--check]
-        --check exits 1 if either generated file differs from what is checked in (used by the test).
+        --check exits 1 if any generated file differs from what is checked in (used by the test).
 """
 
 from __future__ import annotations
@@ -51,6 +51,7 @@ from __future__ import annotations
 import functools
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -139,9 +140,12 @@ This plugin ships treg's MCP tools. If you cannot see them yet, they are waiting
 human connects treg in the app's MCP settings (in Claude Code: `/mcp`, pick treg, Authenticate). Do
 not install the CLI for this.
 
-In Claude Code, treg's marketplace also offers ready workflow skills as separate plugins:
-{WORKFLOWS}. `/plugin` shows what each one does. When the human's task matches one, offer it once;
-they add it with `/plugin install <name>@treg`.
+In Claude Code, treg's marketplace also offers ready workflow skills as separate plugins, each
+described in `/plugin`:
+
+{WORKFLOWS}
+
+When the human's task matches one, offer it once; they add it with `/plugin install <name>@treg`.
 """
 
 DSH_BOOTSTRAP = """
@@ -234,7 +238,7 @@ def render(variant: str) -> str:
         # stamping it here is what lets one generated file satisfy both registries.
         fm = f"{fm.rstrip()}\nversion: {package_version()}\n"
     if bootstrap:
-        bootstrap = bootstrap.replace("{WORKFLOWS}", ", ".join(f"`{n}`" for n in workflow_names()))
+        bootstrap = bootstrap.replace("{WORKFLOWS}", "\n".join(f"- `{n}`" for n in workflow_names()))
     out = f"---{fm}---\n" + (f"{bootstrap}\n" if bootstrap else "") + body.lstrip(chr(10))
     # 4. `<!--routed-->` / `<!--/routed-->` delimit the section the SERVER strips when a deployment
     #    sets TREG_ROUTED_DISCOVERY=off. A plugin copy is static and cannot know a deployment's
@@ -267,7 +271,7 @@ def main() -> int:
         rel = target.relative_to(ROOT)
         if check:
             if current != generated:
-                print(f"STALE — {rel} does not match {source.relative_to(ROOT)}", file=sys.stderr)
+                print(f"STALE - {rel} does not match {source.relative_to(ROOT)}", file=sys.stderr)
                 stale = True
             return
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -299,7 +303,20 @@ def main() -> int:
     # The marketplace lists the hand-written `treg` entry, then every workflow plugin (generated).
     market = json.loads(CLAUDE_MARKETPLACE.read_text(encoding="utf-8"))
     market["plugins"] = [p for p in market["plugins"] if p["name"] == "treg"] + workflows
-    emit(CLAUDE_MARKETPLACE, json.dumps(market, indent=2, ensure_ascii=False) + "\n", SOURCE)
+    emit(CLAUDE_MARKETPLACE, json.dumps(market, indent=2, ensure_ascii=False) + "\n", WORKFLOW_SOURCES)
+
+    # A workflow skill that was renamed or removed must not linger as a published plugin or skill.
+    generated = {*workflow_names(), "treg"}
+    for leftover in sorted({*WORKFLOWS.glob("*/"), *(ROOT / "skills").glob("*/")}):
+        if leftover.name in generated:
+            continue
+        if check:
+            print(f"STALE - {leftover.relative_to(ROOT)} has no source in "
+                  f"{WORKFLOW_SOURCES.relative_to(ROOT)}", file=sys.stderr)
+            stale = True
+        else:
+            shutil.rmtree(leftover)
+            print(f"removed {leftover.relative_to(ROOT)}")
 
     if stale:
         print("  regenerate with: python3 scripts/build_plugin.py", file=sys.stderr)

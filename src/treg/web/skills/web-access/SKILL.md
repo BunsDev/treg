@@ -10,8 +10,10 @@ pages and platforms a free fetch can't reach. Nothing runs on this machine: no b
 no burner accounts. treg calls the vendor and, on a routed job, tries the next one when a vendor
 comes back empty or blocked.
 
-Runs on treg. If it isn't set up (`treg --version` fails), read {BASE}/llms.txt and follow it to
-install and sign in, then come back here.
+Runs on treg, through its MCP tools or the `treg` CLI; either is enough. Over MCP, each command
+below maps onto a tool: `treg catalog search` is `catalog_search`, `treg catalog get` is
+`catalog_get`, `treg call` is `call`. With neither, treg is not set up: {BASE}/llms.txt says how.
+Install only if the human asked you to; otherwise tell them how and stop.
 
 ## Pick the job
 
@@ -116,6 +118,8 @@ Batches: always send a `Max-Cost`.
 treg --version && treg balance
 treg call treg.web.search --data '{"q":"treg web access"}' --header 'X-Treg-Route-Prefer: tinyfish'
 ```
+
+Over MCP: `balance`, then `call` with `treg.web.search` and `{"q": "treg web access"}`.
 
 A result with `_treg.served_by` and no charge means free search works. Something wrong:
 `treg feedback "<what happened>"` reaches the team.
