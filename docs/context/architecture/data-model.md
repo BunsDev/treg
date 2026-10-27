@@ -414,8 +414,9 @@ uses this metadata, never the encrypted token's shape.
   found over `(org_id, id)` and is a few minutes of calls while the cron runs. With no cursor row
   (the worker never ran, e.g. a small self-hosted registry) the reports still aggregate
   `callrecord` live; with a cursor that has not caught up they say usage is being prepared, and a
-  window older than `history_from` starts there and says so. `RunRecord` is still read live: it no
-  longer grows. Team deletion clears a team's rows.
+  window older than `history_from` starts there and says so. The members and agents lists' `used_today`
+  reads today's rows the same way once the rollup has caught up, and `callrecord` live before that;
+  it never waits. `RunRecord` is still read live: it no longer grows. Team deletion clears a team's rows.
 
   **`ix_callrecord_call_ref`, and why a database could lack it.** The model and revision 0001
   declare it, so every database Alembic created has it. A database that predates Alembic got

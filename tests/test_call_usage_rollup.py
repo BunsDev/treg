@@ -12,10 +12,10 @@ from __future__ import annotations
 import asyncio
 from datetime import timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 
 from treg.application import call_usage_rollup as rollup
-from treg.infra.db import session_maker
+from treg.infra.db import _engine as engine, session_maker
 from treg.models import CallRecord, CallUsageCursor, CallUsageDay, Org, RunRecord
 from treg.timeutil import utcnow_naive
 
@@ -175,3 +175,37 @@ async def test_overlapping_runs_never_fold_the_same_rows_twice(clients):
     later = utcnow_naive() + timedelta(minutes=2)   # past the lag for every row, the fixture's too
     await asyncio.gather(rollup.refresh(batch_rows=10, now=later), rollup.refresh(batch_rows=10, now=later))
     assert await _folded() == await _in_history()
+
+
+async def _used_today(clients, org_id: int, email: str) -> dict[str, int]:
+    """Today's count for `email` as the members list and the agents list each report it."""
+    members = (await clients.get(f"/orgs/{org_id}/members")).json()
+    return {m["email"]: m["used_today"] for m in members}[email]
+
+
+async def test_todays_roster_counts_read_the_rollup_and_its_tail_once_caught_up(clients):
+    me = (await clients.get("/auth/me")).json()
+    org_id, email = me["org_id"], me["email"]
+    now = utcnow_naive()
+    await _add(*(_call(org_id, email, "t", now - timedelta(minutes=5)) for _ in range(3)),
+               _call(org_id, email, "t", now - timedelta(days=2)),
+               _call(org_id, "someone-else@example.dev", "t", now - timedelta(minutes=5)))
+    live = await _used_today(clients, org_id, email)   # no cursor yet: the audit table itself
+    assert live >= 3
+
+    await rollup.refresh()
+    await _add(_call(org_id, email, "t", now - timedelta(seconds=5)))   # after the cursor
+    statements: list[str] = []
+
+    def record_sql(conn, cursor, statement, parameters, context, executemany):
+        if "callrecord" in statement.lower():
+            statements.append(statement.lower())
+
+    event.listen(engine.sync_engine, "before_cursor_execute", record_sql)
+    try:
+        got = await _used_today(clients, org_id, email)
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", record_sql)
+    assert got == live + 1
+    grouped = [sql for sql in statements if "group by" in sql]
+    assert grouped and all("callusagecursor" in sql for sql in grouped), statements
