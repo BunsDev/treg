@@ -49,7 +49,8 @@ run deletes rows older than `shadow_retention_days`.
 ## The report
 
 `GET /admin/shadow?days=N` (superadmin) and `treg-worker shadow report`: per capability and served
-endpoint, the pair count, each side's hit rate, the candidate's hit rate with an email, its error
+endpoint, the pair count, the pairs the candidate answered (a refusal, a timeout or a 5xx is no
+answer: it counts in the error rate and stays out of every hit rate), each side's hit rate, the candidate's hit rate with an email, its error
 rate, p50 and p95 time, per-field agreement, the candidate's units per 1,000 pairs and the served
 cost per 1,000 calls.
 
