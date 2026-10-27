@@ -239,6 +239,33 @@ async def test_checkin_flips_connected(env):
     assert listed[0]["connected"] is True, "the poll must see the check-in synchronously"
 
 
+async def test_roster_probes_each_agent_once_and_never_walks_its_history(env):
+    called, idle, elsewhere = [await _agent(env, name) for name in ("called-bot", "idle-bot", "elsewhere-bot")]
+    async with session_maker() as s:
+        other = Org(name="Other", slug="other")
+        s.add(other)
+        await s.flush()
+        s.add_all([CallRecord(org_id=org_id, user_email=email, tool_name="t", method="GET", path="/",
+                              status_code=200)
+                   for org_id, email in [(env.org_id, called["email"])] * 50 + [(other.id, elsewhere["email"])]])
+        await s.commit()
+    statements = []
+
+    def record_sql(conn, cursor, statement, parameters, context, executemany):
+        if "callrecord" in statement.lower():
+            statements.append(statement.lower())
+
+    event.listen(engine.sync_engine, "before_cursor_execute", record_sql)
+    try:
+        listed = (await env.c.get(f"/orgs/{env.org_id}/agents", headers=_h(env.owner))).json()
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", record_sql)
+    assert {a["email"]: a["connected"] for a in listed} == {
+        called["email"]: True, idle["email"]: False, elsewhere["email"]: False}
+    probes = [sql for sql in statements if "exists" in sql]
+    assert len(probes) == 1 and "distinct" not in probes[0], statements
+
+
 async def test_members_roster_carries_agent_name_and_owner(env):
     made = await env.c.post(f"/orgs/{env.org_id}/agents", headers=_h(env.owner), json={"name": "ci-bot"})
     assert made.status_code == 200
