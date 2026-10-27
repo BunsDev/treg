@@ -30,6 +30,8 @@ export const moreAgents: Agent[] = [
   {id:'other',name:'Other',icon:null},
 ]
 
+export const installsInHost = (agent: Agent) => !!(agent.connector || agent.plugin)
+
 export const iconUrl: IconUrl = (icon, theme = 'light') =>
   icon?.startsWith('/') ? icon : icon ? 'https://unpkg.com/@lobehub/icons-static-png@latest/'+theme+'/'+icon+'.png' : ''
 

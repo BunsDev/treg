@@ -1,6 +1,6 @@
 <script lang="ts">
 import { defineComponent, type PropType } from 'vue'
-import { iconUrl, setupText, claudeConnectorLink, hideBrokenImage, type Agent, type IconUrl } from './data'
+import { iconUrl, setupText, claudeConnectorLink, hideBrokenImage, installsInHost, type Agent, type IconUrl } from './data'
 
 export default defineComponent({
   props: {
@@ -14,7 +14,7 @@ export default defineComponent({
     full() { return setupText(this.command, this.team, this.token) },
     masked() { return setupText(this.command, this.team, this.token, !this.showToken) },
     connectorLink: () => claudeConnectorLink(location.origin),
-    inHost(): boolean { return !!(this.agent.connector || this.agent.plugin) },
+    inHost(): boolean { return installsInHost(this.agent) },
     showSetup(): boolean { return !this.inHost || !!this.agent.setupFallback },
   },
   methods: { hideBrokenImage },

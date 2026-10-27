@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate every plugin's SKILL.md from the one source: `src/treg/web/skill.md`.
 
-Five shop windows, four bootstraps, one source:
+Five shop windows, one source:
 
 - **codex**  -> `plugin/skills/treg/SKILL.md` — ships an MCP connector, so its bootstrap points at
   the MCP tools and tells the reader NOT to reach for a terminal.
@@ -48,6 +48,7 @@ Usage:  python3 scripts/build_plugin.py [--check]
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 import sys
@@ -77,7 +78,9 @@ DSH_TARGET = ROOT / "dsh" / "skills" / "treg" / "SKILL.md"
 # docs/MINIMAX-PLUGIN.md.
 MINIMAX_TARGET = ROOT / "plugins" / "minimax" / "skills" / "treg" / "SKILL.md"
 CLAUDE_MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
+CLAUDE_MANIFEST = ROOT / "plugins" / "treg" / ".claude-plugin" / "plugin.json"
 WORKFLOWS = ROOT / "plugins" / "workflows"
+WORKFLOW_SOURCES = ROOT / "src" / "treg" / "web" / "skills"
 
 # The Codex plugin is the one variant that is NOT the served page plus a bootstrap. It ships an MCP
 # connector, and OpenAI's plugin review refuses a skill that "may download or execute code outside
@@ -137,10 +140,8 @@ human connects treg in the app's MCP settings (in Claude Code: `/mcp`, pick treg
 not install the CLI for this.
 
 In Claude Code, treg's marketplace also offers ready workflow skills as separate plugins:
-`lead-signals` (buyers and buying signals), `recruit` (candidates for a job post), `make-ugc` (UGC
-videos), `web-access` (search, read and crawl the web) and `jev-memory` (preferences remembered
-across sessions). When the human's task matches one, offer it once; they add it with
-`/plugin install <name>@treg`.
+{WORKFLOWS}. `/plugin` shows what each one does. When the human's task matches one, offer it once;
+they add it with `/plugin install <name>@treg`.
 """
 
 DSH_BOOTSTRAP = """
@@ -184,21 +185,18 @@ a directory dsh also scans. Harmless, but redundant with this bundle.
 ---
 """
 
-# variant -> (target, bootstrap, stamp_version). One source, five shop windows.
-#
-# dsh gets its OWN bootstrap rather than sharing either: it is the only surface that ships the
-# connector and the CLI path in one install (the row is disabled until there is a token), and it is
-# the only one where `treg mcp install` is the wrong move — it writes configs for other agents, not
-# for a dsh profile.
+# variant -> (target, bootstrap, stamp_version). One source, five shop windows; None means the
+# served page unchanged.
 VARIANTS = {
     "codex": (CODEX_TARGET, None, False),
-    "skills": (SKILLS_TARGET, "", True),
+    "skills": (SKILLS_TARGET, None, True),
     "plugin": (PLUGIN_TARGET, PLUGIN_BOOTSTRAP, True),
     "dsh": (DSH_TARGET, DSH_BOOTSTRAP, False),
-    "minimax": (MINIMAX_TARGET, "", True),
+    "minimax": (MINIMAX_TARGET, None, True),
 }
 
 
+@functools.cache
 def package_version() -> str:
     """The one version, read from pyproject — the same value `tests/test_plugin.py` pins both
     manifests to. Read rather than duplicated so a release bump cannot leave the skill behind."""
@@ -206,6 +204,10 @@ def package_version() -> str:
         if line.startswith("version = "):
             return line.split('"')[1]
     raise SystemExit("pyproject.toml has no `version = \"…\"` line")
+
+
+def workflow_names() -> list[str]:
+    return sorted(p.parent.name for p in WORKFLOW_SOURCES.glob("*/SKILL.md"))
 
 
 def workflow_description(skill: str) -> str:
@@ -231,7 +233,9 @@ def render(variant: str) -> str:
         # parent directory, which `treg` already does). Claude Code ignores the extra key, so
         # stamping it here is what lets one generated file satisfy both registries.
         fm = f"{fm.rstrip()}\nversion: {package_version()}\n"
-    out = f"---{fm}---\n{bootstrap}\n{body.lstrip(chr(10))}"
+    if bootstrap:
+        bootstrap = bootstrap.replace("{WORKFLOWS}", ", ".join(f"`{n}`" for n in workflow_names()))
+    out = f"---{fm}---\n" + (f"{bootstrap}\n" if bootstrap else "") + body.lstrip(chr(10))
     # 4. `<!--routed-->` / `<!--/routed-->` delimit the section the SERVER strips when a deployment
     #    sets TREG_ROUTED_DISCOVERY=off. A plugin copy is static and cannot know a deployment's
     #    setting, so it keeps the content — but the markers themselves must never ship, or the
@@ -257,24 +261,6 @@ def main() -> int:
     check = "--check" in sys.argv
     stale = False
 
-    for variant, (target, _, _) in VARIANTS.items():
-        generated = render(variant)
-        current = target.read_text(encoding="utf-8") if target.exists() else None
-        rel = target.relative_to(ROOT)
-
-        if check:
-            if current == generated:
-                print(f"OK — {rel} matches {SOURCE.relative_to(ROOT)}")
-            else:
-                print(f"STALE — {rel} does not match {SOURCE.relative_to(ROOT)}",
-                      file=sys.stderr)
-                stale = True
-            continue
-
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(generated, encoding="utf-8")
-        print(f"wrote {rel}  ({len(generated.splitlines())} lines)")
-
     def emit(target: Path, generated: str, source: Path) -> None:
         nonlocal stale
         current = target.read_text(encoding="utf-8") if target.exists() else None
@@ -288,29 +274,31 @@ def main() -> int:
         target.write_text(generated, encoding="utf-8")
         print(f"wrote {rel}  ({len(generated.splitlines())} lines)")
 
+    for variant, (target, _, _) in VARIANTS.items():
+        emit(target, render(variant), SOURCE)
+
     # The workflow skills (make-ugc, lead-signals…) as real files under skills/: `npx skills add
     # superdesigndev/treg` (skills.sh) reads that folder and skips symlinks, so a link would hide them.
     # Each is also its own Claude Code plugin in this repo's marketplace, so `/plugin` offers them one
     # by one beside `treg` instead of installing all of them with it.
     workflows = []
-    for src in sorted((ROOT / "src/treg/web/skills").glob("*/SKILL.md")):
-        name = src.parent.name
+    shared = json.loads(CLAUDE_MANIFEST.read_text(encoding="utf-8"))
+    shared = {k: shared[k] for k in ("author", "homepage", "repository", "license")}
+    for name in workflow_names():
+        src = WORKFLOW_SOURCES / name / "SKILL.md"
         generated = src.read_text(encoding="utf-8").replace("{BASE}", PUBLIC_BASE)
         emit(ROOT / "skills" / name / "SKILL.md", generated, src)
         emit(WORKFLOWS / name / "skills" / name / "SKILL.md", generated, src)
         description = workflow_description(generated)
-        emit(WORKFLOWS / name / ".claude-plugin" / "plugin.json", json.dumps({
-            "name": name, "version": package_version(), "description": description,
-            "author": {"name": "Superdesign dev, Inc.", "url": PUBLIC_BASE},
-            "homepage": PUBLIC_BASE, "repository": "https://github.com/superdesigndev/treg",
-            "license": "Apache-2.0",
-        }, indent=2, ensure_ascii=False) + "\n", src)
+        emit(WORKFLOWS / name / ".claude-plugin" / "plugin.json", json.dumps(
+            {"name": name, "version": package_version(), "description": description, **shared},
+            indent=2, ensure_ascii=False) + "\n", src)
         workflows.append({"name": name, "source": f"./plugins/workflows/{name}",
                           "description": description, "category": "productivity"})
 
-    # The marketplace lists `treg` first (hand-written) and then every workflow plugin (generated).
+    # The marketplace lists the hand-written `treg` entry, then every workflow plugin (generated).
     market = json.loads(CLAUDE_MARKETPLACE.read_text(encoding="utf-8"))
-    market["plugins"] = market["plugins"][:1] + workflows
+    market["plugins"] = [p for p in market["plugins"] if p["name"] == "treg"] + workflows
     emit(CLAUDE_MARKETPLACE, json.dumps(market, indent=2, ensure_ascii=False) + "\n", SOURCE)
 
     if stale:

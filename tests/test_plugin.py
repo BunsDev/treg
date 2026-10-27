@@ -45,10 +45,10 @@ BARE_SKILL = ROOT / "skills" / "treg" / "SKILL.md"
 # root is NEVER the repo root here — that is the difference from Claude Code that is easy to get
 # wrong, and `source` pointing at the wrong place installs an empty plugin.
 CURSOR_MARKETPLACE = ROOT / ".cursor-plugin" / "marketplace.json"
-CURSOR_PLUGIN_DIR = ROOT / "plugins" / "treg"
-CURSOR_MANIFEST = CURSOR_PLUGIN_DIR / ".cursor-plugin" / "plugin.json"
-CURSOR_SKILL = CURSOR_PLUGIN_DIR / "skills" / "treg" / "SKILL.md"
-CLAUDE_MANIFEST = CURSOR_PLUGIN_DIR / ".claude-plugin" / "plugin.json"
+PLUGIN_DIR = ROOT / "plugins" / "treg"
+CURSOR_MANIFEST = PLUGIN_DIR / ".cursor-plugin" / "plugin.json"
+PLUGIN_SKILL = PLUGIN_DIR / "skills" / "treg" / "SKILL.md"
+CLAUDE_MANIFEST = PLUGIN_DIR / ".claude-plugin" / "plugin.json"
 
 # DeepSeek Harness has no plugin manifest at all: it installs an npm package whose `package.json`
 # declares `dsh.bundle`, pointing at a config layer. So the "manifest" here is package.json, and the
@@ -68,7 +68,7 @@ MINIMAX_SKILL = MINIMAX_PLUGIN_DIR / "skills" / "treg" / "SKILL.md"
 # Every generated SKILL.md, and every manifest a public directory reads. Tests that apply to the
 # product as a whole (version, positioning, no-routing) parametrise over these rather than being
 # written against whichever plugin happened to exist first.
-ALL_SKILLS = {"codex": SKILL, "skills": BARE_SKILL, "plugin": CURSOR_SKILL, "dsh": DSH_SKILL,
+ALL_SKILLS = {"codex": SKILL, "skills": BARE_SKILL, "plugin": PLUGIN_SKILL, "dsh": DSH_SKILL,
               "minimax": MINIMAX_SKILL}
 ALL_MANIFESTS = {"codex": MANIFEST, "claude": CLAUDE_MANIFEST, "cursor": CURSOR_MANIFEST,
                  "dsh": DSH_MANIFEST, "minimax": MINIMAX_MANIFEST}
@@ -182,8 +182,8 @@ def test_the_claude_marketplace_installs_the_plugin_folder():
     manifest = json.loads(CLAUDE_MANIFEST.read_text(encoding="utf-8"))
     entry = market["plugins"][0]
     assert entry["name"] == manifest["name"] == "treg"
-    assert (ROOT / entry["source"]).resolve() == CURSOR_PLUGIN_DIR.resolve()
-    assert [p.parent.name for p in (CURSOR_PLUGIN_DIR / "skills").glob("*/SKILL.md")] == ["treg"]
+    assert (ROOT / entry["source"]).resolve() == PLUGIN_DIR.resolve()
+    assert [p.parent.name for p in (PLUGIN_DIR / "skills").glob("*/SKILL.md")] == ["treg"]
     assert not (ROOT / ".claude-plugin" / "plugin.json").exists(), (
         "a root manifest would make the repository root a second plugin")
 
@@ -208,6 +208,8 @@ def test_the_claude_plugin_declares_a_typed_oauth_mcp_server():
     header: the host runs OAuth, and the server waits as "needs authentication" until sign-in."""
     manifest = json.loads(CLAUDE_MANIFEST.read_text(encoding="utf-8"))
     assert manifest["mcpServers"] == {"treg": {"type": "http", "url": "https://treg.to/mcp/"}}
+    cursor = json.loads((PLUGIN_DIR / "mcp.json").read_text(encoding="utf-8"))
+    assert cursor["mcpServers"]["treg"]["url"] == manifest["mcpServers"]["treg"]["url"]
 
 
 def test_the_codex_marketplace_installs_the_codex_plugin():
@@ -218,7 +220,7 @@ def test_the_codex_marketplace_installs_the_codex_plugin():
     assert entry["name"] == "treg"
     assert entry["source"] == {"source": "local", "path": "./plugin"}
     assert (ROOT / entry["source"]["path"]).resolve() == PLUGIN.resolve()
-    assert entry["policy"]["installation"] and entry["policy"]["authentication"] and entry["category"]
+    assert entry["policy"] == {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}
 
 
 def test_the_codex_subtitle_fits_the_field():
@@ -247,7 +249,7 @@ def test_the_cursor_layout_matches_cursors_template():
         "`source` must be the relative path to the plugin folder, and match the folder name")
 
     root = (ROOT / entry["source"]).resolve()
-    assert root == CURSOR_PLUGIN_DIR.resolve()
+    assert root == PLUGIN_DIR.resolve()
     assert (root / ".cursor-plugin" / "plugin.json").exists()
     assert (root / "skills" / "treg" / "SKILL.md").exists()
 
@@ -270,7 +272,7 @@ def test_the_cursor_plugin_ships_mcp_alongside_the_skill():
     assert manifest["mcpServers"] == "./mcp.json", "the manifest must point to the MCP config"
     assert manifest["skills"] == "./skills/", "the manifest must still ship the skill"
 
-    mcp_config = json.loads((CURSOR_PLUGIN_DIR / "mcp.json").read_text(encoding="utf-8"))
+    mcp_config = json.loads((PLUGIN_DIR / "mcp.json").read_text(encoding="utf-8"))
     assert "mcpServers" in mcp_config, "Cursor's MCP config uses the { mcpServers: {...} } wrapper"
     assert "treg" in mcp_config["mcpServers"]
     server = mcp_config["mcpServers"]["treg"]
