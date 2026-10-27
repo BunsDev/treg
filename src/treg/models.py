@@ -2296,6 +2296,45 @@ class ApiKeySpendCursor(SQLModel, table=True):
     updated_at: NaiveUTC = Field(default_factory=_now)
 
 
+class CallUsageDay(SQLModel, table=True):
+    """How many audit rows one team wrote for one member, kind, tool and client on one UTC day, and
+    when the last of them was: the read model behind the Usage page's counts and the observed-agents
+    roster. Folded from `callrecord` by `application.call_usage_rollup` (the `treg-worker usage
+    rollup` cron), which is this table's only writer; team deletion clears it with the team. The
+    reports read a few hundred of these rows instead of every audit row of the window.
+
+    `kind` is the audit row's own value; readers map an unexpected one to "call", as they always
+    did. Counts inherit the audit table's loss: a row `audit.py` shed is not counted here either.
+    """
+
+    org_id: int = Field(foreign_key="org.id", primary_key=True)
+    day: str = Field(primary_key=True)  # YYYY-MM-DD, UTC, from CallRecord.created_at
+    user_email: str = Field(primary_key=True)
+    kind: str = Field(primary_key=True)
+    tool_name: str = Field(primary_key=True)
+    client: str = Field(primary_key=True)
+    calls: int = Field(default=0)
+    last_at: NaiveUTC
+    updated_at: NaiveUTC = Field(default_factory=_now)
+
+
+class CallUsageCursor(SQLModel, table=True):
+    """Where `application.call_usage_rollup` has got to in `callrecord`. One row
+    (`id = "callrecord"`). `cursor_id` is the last folded `CallRecord.id`; reports add the rows
+    after it live. `history_from` is the first UTC day the rollup holds; nothing reads before it.
+    `caught_up_at` is NULL until a run drains the first backfill, and the reports say usage is
+    being prepared until then. With no row at all (the worker never ran) the reports aggregate
+    `callrecord` directly, as a small self-hosted registry without the cron always has.
+    """
+
+    id: str = Field(primary_key=True)
+    cursor_id: int = Field(default=0)
+    watermark: NaiveUTC | None = Field(default=None)  # created_at of the last folded row
+    history_from: str  # YYYY-MM-DD
+    caught_up_at: NaiveUTC | None = Field(default=None)
+    updated_at: NaiveUTC = Field(default_factory=_now)
+
+
 # Showcase leaderboard (docs/context/architecture/showcase.md).
 # Teams apply their apps to the /showcase leaderboard; staff review them. treg is the only writer of
 # these tables: makers through `application.showcase`, staff through its staff API (which the

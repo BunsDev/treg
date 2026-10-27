@@ -211,6 +211,9 @@ API slots; `/call/` keeps the rest. Reports on the replica see replication lag.
 `tests/test_report_session.py` pins which routes take the report session. The dashboard runs the
 per-tag reports one at a time and retries a 429 with backoff (`withReportRetry` in
 `frontend/src/api.ts`); a report that still fails shows its error instead of being hidden.
+The gate bounds a slow report but cannot make it fast: the usage counts and the observed-agents
+roster read the daily usage rollup (`treg-worker usage rollup`, below) instead of the audit
+table's 30-day window.
 
 ### Optional read replica
 
@@ -651,6 +654,16 @@ without importing the heavy database stack into the light `treg` CLI.
   service runs a build with revision 0070). It reads the primary database in small batches, and
   its first run backfills 31 days over as many runs as `--max-rows` needs. The Team page's "Spent"
   column and the Usage page's spend chart say spend history is being prepared until it has caught up once.
+- `treg-worker usage rollup` folds new audit rows into per-member, per-tool, per-day call counts
+  (`--max-rows`, default 500,000, bounds one pass; schedule it every few minutes, after the web
+  service runs a build with revision 0088). It walks `callrecord` by primary key on the primary
+  database, in short batches, and its first run backfills 31 days over as many runs as
+  `--max-rows` needs. Until it has caught up once the Usage page says counts are being prepared and
+  the observed-agents roster is empty. If it stops, the reports keep answering, reading the rows
+  after its cursor live, and slow down as that tail grows. Deleting the cursor row
+  (`callusagecursor`) returns the reports to the live audit-table aggregate; suspend the cron
+  first to stay there, because its next run starts a new cursor, clears the old rollup rows in the
+  same transaction and backfills again.
 - `treg-worker jev xboost` runs the `/jev` launch-radar demo once a day: it calls treg's own `/call/` API
   with `TREG_JEV_TREG_TOKEN` (a member token of the demo team, so the spend is an ordinary bill) and jev
   through the Vercel AI Gateway (`TREG_AI_GATEWAY_API_KEY`), and stores the run under Ephemeral for the page.

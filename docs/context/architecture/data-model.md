@@ -65,6 +65,10 @@ sources:
   - src/treg/alembic/versions/0084_enterprise_workos_cleanup.py
   - src/treg/alembic/versions/0085_enterprise_sso_blocks.py
   - src/treg/alembic/versions/0087_rankings_snapshot.py
+  - src/treg/alembic/versions/0088_call_usage_rollup.py
+  - src/treg/application/call_usage_rollup.py
+  - src/treg/application/call_usage.py
+  - tests/test_call_usage_rollup.py
   - src/treg/timeutil.py
   - src/treg/infra/db.py
   - src/treg/infra/money_timing.py
@@ -390,6 +394,28 @@ uses this metadata, never the encrypted token's shape.
   `recounted_on`). `application/key_spend_rollup.py`, run as `treg-worker spend rollup`, is the
   only writer of both, and the Team and Usage pages read only them; see [money](money.md) § Spend
   per API key. Team deletion clears a team's rows.
+
+  **Call counts per member are folded too.** The Usage page's counts and the observed-agents
+  roster grouped a team's whole 30-day window of `callrecord` per page open; the
+  `(org_id, created_at)` index finds the window, but every row is a heap fetch of a wide audit
+  row, and a busy team's report outlasted the report session's statement timeout. A covering
+  index was rejected: it would copy four string columns of every audit row and slow every audit
+  insert. Revision 0088 adds `CallUsageDay` (team + UTC day + member + kind + tool + client ->
+  `calls`, `last_at`) and the single-row `CallUsageCursor` (`cursor_id`, the last folded
+  `CallRecord.id`; `history_from`; `caught_up_at`). `application/call_usage_rollup.py`, run as
+  `treg-worker usage rollup`, is the only writer of both: it walks `callrecord` by primary key with
+  the commit lag of `catalog_stats`, starting at the first row of a 31-day history, and moves the
+  counts and the cursor in one transaction. The cursor lock is a no-op UPDATE, which also locks on
+  SQLite, where SELECT FOR UPDATE is ignored. A new cursor deletes the old day rows in the
+  transaction that creates it, so a rebuild never adds to a previous history. There is no recount: audit is lossy by design, and the
+  only race left undercounts by a row the queue could have shed anyway. A report
+  (`application/call_usage.py`) reads the folded rows and the team's rows after `cursor_id` in ONE
+  statement, so both halves share a snapshot and no row is counted twice or missed; the tail is
+  found over `(org_id, id)` and is a few minutes of calls while the cron runs. With no cursor row
+  (the worker never ran, e.g. a small self-hosted registry) the reports still aggregate
+  `callrecord` live; with a cursor that has not caught up they say usage is being prepared, and a
+  window older than `history_from` starts there and says so. `RunRecord` is still read live: it no
+  longer grows. Team deletion clears a team's rows.
 
   **`ix_callrecord_call_ref`, and why a database could lack it.** The model and revision 0001
   declare it, so every database Alembic created has it. A database that predates Alembic got
