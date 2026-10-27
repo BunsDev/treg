@@ -996,6 +996,12 @@ export really does cost 5,000 keywords. Before this the 20-row default billed a 
 saw the wrong price before the call too. On these providers nothing reports a cost after the fact,
 so the reserve IS the charge: a wrong entity count is a wrong bill, not a hold the settle trues up.
 
+Fiber natural-language search (`fiber-ai.people.search.natural_language`) adds a fee the page size
+does not name. `_marketplace_pricing` adds two credits, converted with `_usd_to_micro` at the
+`fx.yaml` fiber-ai rate, when the JSON body has no non-empty `pageToken` (absent, null, or blank).
+A later page that sends `pageToken` reserves only the requested page. Settlement is unchanged: it
+still reads `chargeInfo.creditsCharged`.
+
 The estimate is never a substitute for an available response-derived charge.
 
 `_platform_settle` uses its own short session and never turns a served response into a 500.

@@ -954,6 +954,12 @@ def _marketplace_pricing(
             credits = -(-asked // 10)  # ceil division: whole credits, minimum 1
             return _usd_to_micro(credits * rate), _usd_to_micro(rate)
         return estimate, unit
+    if endpoint_id == "fiber-ai.people.search.natural_language" and credit_rate:
+        # Fiber charges 2 NL-interpretation credits on the first page only.
+        token = _json_object(body).get("pageToken")
+        if not (isinstance(token, str) and token.strip()):
+            estimate += _usd_to_micro(2 * credit_rate)
+        return estimate, unit
     if provider != "aviato" and not cost.get("modifiers"):
         return estimate, unit
 
