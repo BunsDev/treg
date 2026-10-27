@@ -2509,6 +2509,22 @@ CRUSTDATA = OAuthProvider(
     probe_path="/account/credits",
 )
 
+THEIRSTACK = OAuthProvider(
+    service="theirstack", display_name="TheirStack", auth_kind="key",
+    token_label="API key", token_placeholder="your TheirStack API key",
+    setup_url="https://app.theirstack.com/",
+    setup_action_label="Get your TheirStack API key",
+    setup_steps=("Sign in to TheirStack and open your workspace settings.",
+                 "Create or copy an API key and paste it here."),
+    setup_note="Jobs and company data spend API credits. The balance check is free.",
+    auth_uri="", token_uri="", scopes={}, client_id_setting="", client_secret_setting="",
+    category="Enrichment",
+    summary="Search jobs and companies, inspect technologies and buying intent, and browse filter catalogs.",
+    base_url="https://api.theirstack.com",
+    docs_url="https://theirstack.com/en/docs/what-is-theirstack",
+    probe_path="/v0/billing/credit-balance",
+)
+
 
 AVIATO = OAuthProvider(
     service="aviato",
@@ -4037,7 +4053,7 @@ REGISTRY: dict[str, OAuthProvider] = {
         DATAFORSEO, SERANKING, MOZ, MAJESTIC, SERPSTAT, EXA, SEARCH1API, TAVILY, OCTEN, LINKUP, PARALLEL, YOU, VALYU, KEENABLE, OLOSTEP, FIRECRAWL, CRAWL4AI, SPIDERCLOUD, PERPLEXITY,
         SCRAPEGRAPHAI, SERPER, LITESCRAPE, CLORO,
         # more Enrichment API-key providers
-        LUSHA, CORESIGNAL, DIFFBOT, THECOMPANIESAPI, LEADMAGIC, ENRICHLAYER, FIBER_AI, CRUSTDATA, AVIATO,
+        LUSHA, CORESIGNAL, DIFFBOT, THECOMPANIESAPI, LEADMAGIC, ENRICHLAYER, FIBER_AI, CRUSTDATA, THEIRSTACK, AVIATO,
         COMPANYENRICH, OCEANIO, ADYNTEL, TOMBA, TRESTLEIQ, HLRLOOKUP, PREDICTLEADS, FINDYMAIL, ANYMAILFINDER, BRANDDEV, ICYPEAS, LEADSFORGE,
         INFLUENCERSCLUB, VILLAGE,
         # Market data API-key providers

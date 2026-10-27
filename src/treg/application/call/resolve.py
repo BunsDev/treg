@@ -1614,6 +1614,33 @@ def _enforce_platform_request(ep: dict, body: bytes, headers=None, query=None) -
     has a singleton enum is the row identity, not caller choice: accepting another value lets a cheap
     row reserve for an expensive model. Full schema validation remains out of the faithful BYOK path.
     """
+    if ep.get("provider") == "theirstack":
+        endpoint_id = ep["id"]
+        if endpoint_id in {"theirstack.jobs.search", "theirstack.companies.search"}:
+            document = _request_body_document(ep, body, headers)
+            limit = document.get("limit")
+            if type(limit) is not int or not 1 <= limit <= _PLATFORM_PAGE_MAX \
+                    or document.get("blur_company_data") is True:
+                raise ResolutionFailed(
+                    "catalog_parameter_invalid", status_code=400, detail={
+                        "error": "catalog_parameter_invalid", "endpoint_id": endpoint_id,
+                        "parameter": "body.limit",
+                        "message": "TheirStack shared-key search requires an explicit limit from 1 to 100 and ordinary, unblurred results.",
+                    },
+                )
+        elif endpoint_id in {"theirstack.companies.technologies", "theirstack.companies.buying_intents"}:
+            document = _request_body_document(ep, body, headers)
+            identifiers = ("company_name", "company_domain", "company_linkedin_url")
+            if (sum(bool(document.get(name)) for name in identifiers) != 1
+                    or document.get("company_name_or") or document.get("company_id")):
+                raise ResolutionFailed(
+                    "catalog_parameter_invalid", status_code=400, detail={
+                        "error": "catalog_parameter_invalid", "endpoint_id": endpoint_id,
+                        "parameter": "body",
+                        "message": "TheirStack shared-key lookup requires exactly one singular company identifier.",
+                    },
+                )
+
     if ep.get("provider") == "oceanio":
         endpoint_id = ep["id"]
         if endpoint_id in {

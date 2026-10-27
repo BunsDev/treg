@@ -531,6 +531,16 @@ def _observed_cost_micro(mk: MarketplaceCall, body: bytes, headers=None) -> int 
         doc = json.loads(body)
     except (ValueError, UnicodeDecodeError):
         return 0 if provider == "contactout" else None
+    if provider == "theirstack" and mk.endpoint_id in {
+        "theirstack.jobs.search", "theirstack.companies.search",
+        "theirstack.companies.technologies", "theirstack.companies.buying_intents",
+    }:
+        rows = doc.get("data") if isinstance(doc, dict) else None
+        if not isinstance(rows, list):
+            return None
+        if mk.endpoint_id in {"theirstack.jobs.search", "theirstack.companies.search"}:
+            return _rows_billed_micro(mk, ep, len(rows))
+        return mk.estimate_micro if rows else 0
     if (provider == "valyu" and mk.endpoint_id.endswith(".search")
             and isinstance(doc, dict)
             and ("results" not in doc or doc["results"] == [])

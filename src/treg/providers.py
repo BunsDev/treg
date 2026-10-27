@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 # `auth` is the provider's DEFAULT shape; a per-variable form (CLIENT_ID/SECRET → oauth2) can override
 # it. Served at GET /providers.json so the CLI can refresh centrally (bundled copy = offline fallback);
 # bump CATALOG_VERSION whenever entries change so a cache can tell it's stale.
-CATALOG_VERSION = 24
+CATALOG_VERSION = 25
 # `skills` (optional) matches a SKILL FOLDER name for file-credential skills that have no env var to
 # key on (OAuth token files etc.) — see `match_skill`. Such providers carry `tokens: []` so the env
 # scanner never mis-detects them as a simple bearer key (their real auth is OAuth + extra headers).
@@ -153,6 +153,8 @@ CATALOG: list[dict] = [
     {"provider": "Crustdata", "tokens": ["CRUSTDATA"], "base_url": "https://api.crustdata.com",
      "auth": {"shape": "bearer"}, "probe": "account/credits",
      "required_headers": {"x-api-version": "2025-11-01"}},
+    {"provider": "TheirStack", "tokens": ["THEIRSTACK"], "base_url": "https://api.theirstack.com",
+     "auth": {"shape": "bearer"}, "probe": "v0/billing/credit-balance"},
     {"provider": "Aviato", "tokens": ["AVIATO"], "base_url": "https://data.api.aviato.co",
      "auth": {"shape": "bearer"}, "probe": "billing/balance"},
     {"provider": "Enrichlayer", "tokens": ["ENRICHLAYER"], "base_url": "https://enrichlayer.com",
