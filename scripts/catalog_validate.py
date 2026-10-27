@@ -23,7 +23,8 @@ Checks (the success criteria from docs/context/architecture/catalog.md):
     billing
   - every tool row carries `added:`, the UTC day it reached main, as YYYY-MM-DD and not in the
     future (scripts/catalog_added.py writes it; its `--base` mode guards existing dates in CI)
-  - a `verified` endpoint must have an existing example_response file
+  - a `verified` endpoint must have an existing example_response file, and every example file
+    parses and stays under EXAMPLE_MAX_BYTES
   - an extended endpoint a verification run has touched claims exactly one non-empty state
     (verified | unverified | untestable | skipped), and an `untestable` one carries no
     test_request for a re-verify run to call it with anyway
@@ -46,6 +47,7 @@ never what a claim on it is worth.
 from __future__ import annotations
 
 import datetime as dt
+import json
 import math
 import re
 import sys
@@ -61,6 +63,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from treg.domain.catalog.store import COST_SOURCES as _SOURCES  # noqa: E402
 from treg.domain.catalog.store import COST_UNITS as _UNITS  # noqa: E402
 from treg.domain.catalog.store import CONFIDENCES as _CONFIDENCES  # noqa: E402
+from treg.domain.catalog.store import EXAMPLE_MAX_BYTES  # noqa: E402
 from treg.domain.catalog.store import _effective_cost, effective_async_descriptor  # noqa: E402
 from treg.domain.catalog.routing import paths as _paths  # noqa: E402
 
@@ -158,6 +161,19 @@ def check_status_marker(ep: dict, where: str, endpoint_status: dict[str, str],
     elif endpoint_status[successor]:
         fail(errors, where, f"superseded_by target '{successor}' is itself "
                             f"{endpoint_status[successor]} — replacements must be live")
+
+
+def check_example_file(path: Path, where: str, errors: list[str]) -> None:
+    if not path.is_file():
+        return
+    size = path.stat().st_size
+    if size > EXAMPLE_MAX_BYTES:
+        fail(errors, where, f"example_response is {size} bytes, over {EXAMPLE_MAX_BYTES}; shrink it "
+                            f"the way catalog_verify.py --write does")
+    try:
+        json.loads(path.read_text())
+    except ValueError:
+        fail(errors, where, "example_response is not valid JSON")
 
 
 def _as_date(value) -> dt.date | None:
@@ -1426,6 +1442,8 @@ def main(argv: list[str]) -> int:
                 check_managed_resource(ep["managed_resource"], where, inp, errors)
             if "spooled_response" in ep:
                 check_spooled_response(ep, effective_async, where, errors)
+            if ep.get("example_response"):
+                check_example_file(CATALOG / str(ep["example_response"]), where, errors)
             if ep.get("verified"):
                 ex = ep.get("example_response")
                 if not ex:

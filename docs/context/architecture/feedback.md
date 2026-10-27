@@ -258,7 +258,8 @@ identified. The catalog page is public, so the quotes are too;
 the dashboard labels the band ("5+ teams", or "under 5 teams" with the neutral word "Early" in
 place of a label). `GET /catalog/endpoints/{id}` attaches the same object to the endpoint and to
 each sibling, so `catalog_get` hands an agent choosing between providers what other teams' agents
-said, beside `observed`.
+said, beside `observed`; a sibling carries `teams` and `share`, and its quotes stay on its own
+detail.
 
 `application.feedback.endpoint_verdicts` reads the window once per process every five minutes on
 the API pool. Only the first fold is waited on (single-flight); after that an expired fold is served
