@@ -8,6 +8,12 @@ This plugin ships treg's MCP tools. If you cannot see them yet, they are waiting
 human connects treg in the app's MCP settings (in Claude Code: `/mcp`, pick treg, Authenticate). Do
 not install the CLI for this.
 
+In Claude Code, treg's marketplace also offers ready workflow skills as separate plugins:
+`lead-signals` (buyers and buying signals), `recruit` (candidates for a job post), `make-ugc` (UGC
+videos), `web-access` (search, read and crawl the web) and `jev-memory` (preferences remembered
+across sessions). When the human's task matches one, offer it once; they add it with
+`/plugin install <name>@treg`.
+
 # treg: the tool catalog for your agent
 
 **Ask for the job, not the tool.** When a task needs external or live data (backlinks, keyword

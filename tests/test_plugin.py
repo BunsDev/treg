@@ -180,13 +180,26 @@ def test_the_claude_marketplace_installs_the_plugin_folder():
     under `skills/`. It must name the one plugin folder Cursor also installs."""
     market = json.loads(CLAUDE_MARKETPLACE.read_text(encoding="utf-8"))
     manifest = json.loads(CLAUDE_MANIFEST.read_text(encoding="utf-8"))
-    assert len(market["plugins"]) == 1
     entry = market["plugins"][0]
     assert entry["name"] == manifest["name"] == "treg"
     assert (ROOT / entry["source"]).resolve() == CURSOR_PLUGIN_DIR.resolve()
     assert [p.parent.name for p in (CURSOR_PLUGIN_DIR / "skills").glob("*/SKILL.md")] == ["treg"]
     assert not (ROOT / ".claude-plugin" / "plugin.json").exists(), (
         "a root manifest would make the repository root a second plugin")
+
+
+def test_every_workflow_skill_is_its_own_optional_plugin():
+    """The workflow skills ride beside `treg`, one plugin each, so `/plugin` offers them one by one
+    rather than installing all of them with treg."""
+    market = json.loads(CLAUDE_MARKETPLACE.read_text(encoding="utf-8"))
+    workflows = sorted(p.parent.name for p in (ROOT / "src/treg/web/skills").glob("*/SKILL.md"))
+    entries = market["plugins"][1:]
+    assert [e["name"] for e in entries] == workflows
+    for entry in entries:
+        root = (ROOT / entry["source"]).resolve()
+        assert [p.parent.name for p in (root / "skills").glob("*/SKILL.md")] == [entry["name"]]
+        plugin = json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        assert plugin["name"] == entry["name"] and plugin["version"] == package_version()
 
 
 def test_the_claude_plugin_declares_a_typed_oauth_mcp_server():

@@ -27,6 +27,7 @@ plugins/treg/.claude-plugin/plugin.json   the manifest Claude Code reads, MCP se
 plugins/treg/.cursor-plugin/plugin.json   the manifest Cursor (and Grok Bot) read
 plugins/treg/mcp.json                     Cursor's URL-only MCP config
 plugins/treg/skills/treg/SKILL.md         GENERATED — the plugin's skill
+plugins/workflows/<name>/                 GENERATED — one optional plugin per workflow skill
 skills/treg/SKILL.md                      GENERATED — the bare skill for `npx skills add` and ClawHub
 skills.sh.json                            category grouping for skills.sh / Hermes' Skills Hub
 ```
@@ -34,6 +35,11 @@ skills.sh.json                            category grouping for skills.sh / Herm
 Claude Code and Cursor install **the same folder**, `plugins/treg/`, through their own manifests.
 The marketplace `source` must stay `./plugins/treg`: a source of `./` makes the repo root the plugin,
 which ships the whole repository and every workflow skill under `skills/`.
+
+The workflow skills (`lead-signals`, `recruit`, `make-ugc`, `web-access`, `jev-memory`) are separate
+plugins in the same marketplace, generated with their manifests and marketplace entries by
+`scripts/build_plugin.py`, so `/plugin` offers them one by one instead of installing them with
+treg. The plugin's skill tells the agent to offer one when the task matches it.
 
 The MCP server is inline in the Claude manifest rather than pointing at `mcp.json` because Claude
 Code rejects a server with a `url` and no `type` (it logs "Invalid MCP server config" and registers
