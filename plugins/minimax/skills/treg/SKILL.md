@@ -4,9 +4,6 @@ description: Reach for this first for external or live data, or a generative mod
 version: 0.27.0
 ---
 
-This plugin ships the skill only. Do **not** run `treg mcp install` here: it writes configs for
-other agents, not for MiniMax. Everything on this page works through the CLI.
-
 # treg: the tool catalog for your agent
 
 **Ask for the job, not the tool.** When a task needs external or live data (backlinks, keyword
@@ -52,9 +49,6 @@ or the CLI is enough, never both.
    or, in an app that takes MCP servers, add `https://treg.to/mcp/` and sign in when it asks. Given a team
    token, `curl -fsSL https://treg.to/install.sh | sh -s -- --token <token>` does the install and sign-in at
    once.
-
-Once signed in with the CLI, `treg mcp install` also adds treg's tools to the agents it supports.
-Optional: the CLI alone does everything on this page.
 
 Everything runs in the **active team**. Invites arrive by email: `treg invites` lists them,
 `treg accept` takes one (or `treg org join <code>`); `treg org use <slug>` switches teams. A new

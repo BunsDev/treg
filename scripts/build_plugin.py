@@ -15,8 +15,8 @@ Five shop windows, four bootstraps, one source:
   connector AND the CLI path in one install: the MCP row is disabled until `TREG_TOKEN` exists, so
   its bootstrap has to cover both states and steer away from `treg mcp install`, which cannot write
   a dsh profile. See docs/DSH-PLUGIN.md.
-- **minimax** -> `plugins/minimax/skills/treg/SKILL.md` — skills-only (MiniMax forbids credentials in the
-  package), CLI bootstrap with NO `treg mcp install` step. See docs/MINIMAX-PLUGIN.md.
+- **minimax** -> `plugins/minimax/skills/treg/SKILL.md` — skills-only, the served page unchanged.
+  See docs/MINIMAX-PLUGIN.md.
 
 The bare skill sits at the REPO ROOT because that is what `npx skills add` resolves and what
 `clawhub skill publish` takes. The Claude Code plugin is NOT the repo root: a root plugin ships the
@@ -36,8 +36,8 @@ Three transformations, each for a reason the served file does not have:
 
 2. A short section may be prepended, and it is the ONLY thing that differs between the variants.
    The served page's first section branches on what the agent has (MCP tools, the CLI, neither), so
-   a bootstrap says only what that host adds: a plugin's tools waiting for sign-in, dsh's
-   token-gated row, MiniMax's missing `treg mcp install` target.
+   a bootstrap says only what that host adds: a plugin's tools waiting for sign-in, or dsh's
+   token-gated row.
 
 3. The bare skill and the plugin get `version:` stamped into their frontmatter. ClawHub requires it
    and the plugin hosts ignore it.
@@ -175,14 +175,6 @@ a directory dsh also scans. Harmless, but redundant with this bundle.
 ---
 """
 
-# MiniMax forbids any credential in the package and gates authenticated MCP behind its own
-# App/Connector program, so this plugin is skills-only. `treg mcp install` writes configs for Claude
-# Code, Cursor and opencode, none of which is a MiniMax profile, so running it is a silent no-op.
-MINIMAX_BOOTSTRAP = """
-This plugin ships the skill only. Do **not** run `treg mcp install` here: it writes configs for
-other agents, not for MiniMax. Everything on this page works through the CLI.
-"""
-
 # variant -> (target, bootstrap, stamp_version). One source, five shop windows.
 #
 # dsh gets its OWN bootstrap rather than sharing either: it is the only surface that ships the
@@ -194,7 +186,7 @@ VARIANTS = {
     "skills": (SKILLS_TARGET, "", True),
     "plugin": (PLUGIN_TARGET, PLUGIN_BOOTSTRAP, True),
     "dsh": (DSH_TARGET, DSH_BOOTSTRAP, False),
-    "minimax": (MINIMAX_TARGET, MINIMAX_BOOTSTRAP, True),
+    "minimax": (MINIMAX_TARGET, "", True),
 }
 
 

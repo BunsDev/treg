@@ -54,9 +54,6 @@ or the CLI is enough, never both.
    token, `curl -fsSL https://treg.to/install.sh | sh -s -- --token <token>` does the install and sign-in at
    once.
 
-Once signed in with the CLI, `treg mcp install` also adds treg's tools to the agents it supports.
-Optional: the CLI alone does everything on this page.
-
 Everything runs in the **active team**. Invites arrive by email: `treg invites` lists them,
 `treg accept` takes one (or `treg org join <code>`); `treg org use <slug>` switches teams. A new
 verified account gets $1.00 of credit once, on its first eligible team; aliases of one inbox (`+tag`,
