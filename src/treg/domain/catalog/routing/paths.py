@@ -274,6 +274,61 @@ def as_list(v: Any) -> Any:
     return v if isinstance(v, list) else [v]
 
 
+# Role words in a job title → the seniority and department a people search can filter by. Checked
+# in order; the first seniority that matches wins, every department that matches is kept.
+_SENIORITY = (
+    ("owner_founder", r"\b(owner|founder|co-?founder|proprietor)\b"),
+    ("c_level", r"\b(c[a-z]o|chief\b|president|managing director|general manager)\b"),
+    ("vp", r"\b(vp|svp|evp|vice[ -]president)\b"),
+    ("director", r"\b(director|head of|head)\b"),
+    ("manager", r"\b(manager|lead|supervisor)\b"),
+    ("intern", r"\b(intern|trainee)\b"),
+)
+_DEPARTMENT = (
+    ("executive", r"\b(ceo|coo|founder|owner|president|managing director|general manager)\b"),
+    ("engineering", r"\b(cto|engineer\w*|developer|devops|software)\b"),
+    ("product", r"\b(cpo|product)\b"),
+    ("sales", r"\b(cro|sales|account executive|business development|bdr|sdr)\b"),
+    ("marketing", r"\b(cmo|marketing|growth|brand|seo|content)\b"),
+    ("finance", r"\b(cfo|finance|financial|accounting|controller)\b"),
+    ("hr", r"\b(chro|hr|human resources|people|talent|recruit\w*)\b"),
+    ("operations", r"\b(operations|ops)\b"),
+    ("legal", r"\b(legal|counsel|general counsel)\b"),
+    ("it", r"\b(cio|it|information technology|security|ciso)\b"),
+    ("design", r"\b(design\w*|ux|ui)\b"),
+)
+
+
+def _role_texts(v: Any) -> list[str]:
+    items = v if isinstance(v, list) else [v]
+    return [str(x).lower() for x in items if x not in (None, "")]
+
+
+def role_seniority(v: Any) -> list[str] | None:
+    """`role_seniority(['CMO', 'VP Marketing'])` → ['c_level', 'vp']: each title's seniority, once."""
+    out: list[str] = []
+    for text in _role_texts(v):
+        hit = next((name for name, rx in _SENIORITY if re.search(rx, text)), None)
+        if hit and hit not in out:
+            out.append(hit)
+    return out or None
+
+
+def role_department(v: Any) -> list[str] | None:
+    """`role_department(['CMO', 'Head of Growth'])` → ['marketing']: every department a title names."""
+    out: list[str] = []
+    for text in _role_texts(v):
+        for name, rx in _DEPARTMENT:
+            if re.search(rx, text) and name not in out:
+                out.append(name)
+    return out or None
+
+
+def scalar(v: Any) -> Any:
+    """A one-element list → its element; anything else unchanged (`['stripe.com']` → 'stripe.com')."""
+    return v[0] if isinstance(v, list) and len(v) == 1 else v
+
+
 def null_if(value: Any, *sentinels: Any) -> Any:
     """Convert declared empty markers to null; retain the original nonempty value."""
     key = value.strip().lower() if isinstance(value, str) else value
@@ -333,7 +388,8 @@ TRANSFORMS = {"values": values, "get": get_path, "null_if": null_if, "choose": c
               "list": as_list, "at_least": at_least, "at_most": at_most, "ceil_to": ceil_to, "linkedin_handle": linkedin_handle, "linkedin_url": linkedin_url,
               "email_domain": email_domain, "host": host, "fmt": fmt, "obj": obj, "tca_filter": tca_filter, "csv": csv, "country_name": country_name,
               "e164_digits": e164_digits, "starts_with": starts_with, "with_country_code": with_country_code,
-              "count_with": count_with}
+              "count_with": count_with, "role_seniority": role_seniority, "role_department": role_department,
+              "scalar": scalar}
 
 _CALL = re.compile(r"^(\w+)\((.*)\)$")
 _DIV = re.compile(r"^(.+?)\s*/\s*(\d+(?:\.\d+)?)$")
