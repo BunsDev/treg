@@ -69,11 +69,11 @@ async def _pool_saturated(request: Request, exc: PoolTimeoutError) -> JSONRespon
 
 
 async def _report_busy(request: Request, exc: ReportBusy) -> JSONResponse:
-    """A dashboard report was refused at its gate or cut off by its statement timeout. Typed like
-    pool saturation so the dashboard can retry, but counted apart: no `db_pool` fault."""
+    """A dashboard report was refused at its gate or cut off by its statement timeout. A 429, not
+    a 503: the service is up and the dashboard should retry later. No `db_pool` fault."""
     return JSONResponse(
         {"detail": "this report is busy — retry in a moment", "report_busy": exc.reason},
-        status_code=503, headers={"Retry-After": "2"})
+        status_code=429, headers={"Retry-After": "2"})
 
 
 async def _mark_treg_own_errors(request: Request, exc: StarletteHTTPException):

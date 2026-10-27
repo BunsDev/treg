@@ -464,7 +464,7 @@ shared HTTP client. `/auth/logout` remains an HTTP-only cookie action.
   twice, not once per section: one grouped pass answers member, kind and tool together, and the
   per-day count is the second. This rollup, `/usage/by-tag` and `/agents/observed` run on the gated
   report session ([deploy](../ops/deploy.md#dashboard-reports)): when its slots are full or a
-  statement passes its timeout they answer `503 {"report_busy": "busy" | "timeout"}` with
+  statement passes its timeout they answer `429 {"report_busy": "busy" | "timeout"}` with
   `Retry-After: 2`, never the call surface's `treg_saturated`. `set_member_cap`
   (`PATCH /orgs/{id}/members/{user}/cap`, admin+) sets `Membership.daily_call_cap` (`-1` = unlimited,
   rejects `< -1`). `my_usage` (`GET /usage/me`, any member) returns the caller's own `used_today` + `cap`.

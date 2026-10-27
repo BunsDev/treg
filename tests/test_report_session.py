@@ -2,7 +2,7 @@
 
 The 30-day usage rollup, the observed-agents roster and spend by tag aggregate whole windows of the
 audit and ledger tables. These tests pin which routes take the report session, that a full gate or a
-statement timeout answers a typed 503 at once, and that a slot is always given back.
+statement timeout answers a typed 429 at once, and that a slot is always given back.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ async def test_a_report_answers_and_gives_its_slot_back(env, path):
     assert infra_db._report_slots()._value == infra_db._REPORT_SLOTS
 
 
-async def test_a_full_gate_refuses_at_once_with_a_typed_503(env, monkeypatch):
+async def test_a_full_gate_refuses_at_once_with_a_typed_429(env, monkeypatch):
     monkeypatch.setattr(infra_db, "_REPORT_WAIT_S", 0.01)
     slots = infra_db._report_slots()
     for _ in range(infra_db._REPORT_SLOTS):
@@ -75,7 +75,7 @@ async def test_a_full_gate_refuses_at_once_with_a_typed_503(env, monkeypatch):
     finally:
         for _ in range(infra_db._REPORT_SLOTS):
             slots.release()
-    assert resp.status_code == 503
+    assert resp.status_code == 429
     assert resp.headers["Retry-After"] == "2"
     assert resp.json()["report_busy"] == "busy"
     assert other.status_code == 200, "a full report gate must not refuse other routes"

@@ -198,8 +198,9 @@ Team dashboard reports that aggregate whole windows of the audit and ledger tabl
   within `_REPORT_WAIT_S` (1 s) is refused before checkout;
 - each report transaction sets `statement_timeout` (`_REPORT_STATEMENT_TIMEOUT_MS`, 15 s) on
   PostgreSQL, so no report can hold a connection for longer;
-- both refusals answer `503 {"report_busy": "busy" | "timeout"}` with `Retry-After: 2` through
-  `bootstrap_handlers._report_busy`. They are not `treg_saturated` and record no `db_pool` fault.
+- both refusals answer `429 {"report_busy": "busy" | "timeout"}` with `Retry-After: 2` through
+  `bootstrap_handlers._report_busy`: the service is up, the report should be retried later. They are
+  not `treg_saturated` and record no `db_pool` fault.
 
 Authorization finishes on `get_session` first; `require_member` commits, so that session holds no
 connection while the report runs. On the API pool the gate caps reports at two of the process's
