@@ -321,7 +321,10 @@ heading sits above the prompt card; the card is a flat panel with Copy floating 
 on desktop and above the command on phones. Both stylesheets style that one shape, and the
 component carries no layout of its own, so a change to its markup is checked on both surfaces
 (the dashboard defines `.agent-setup-instructions .text-button` for "Show key"). The remembered
-`treg-agent` choice, expanded agent list and Grok Bot plugin step are shared. The setup text points
+`treg-agent` choice, expanded agent list and the install-in-host step are shared: a connector
+(Claude.ai) or plugin agent (Codex, Grok Bot) gets one button and signs in there over OAuth, with no
+setup line or key; Codex adds the setup line underneath for its IDE extension, which installs no
+plugins. The setup text points
 to this deployment's `/llms.txt`. Continuing as a signed-in team member fetches `/auth/cli-token`
 for the active team; the token is masked by default, copied only on click, never persisted by the
 modal, and cleared when it closes. Stale responses cannot restore a closed or wrong-team token.
