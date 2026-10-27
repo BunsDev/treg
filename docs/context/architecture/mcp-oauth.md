@@ -227,7 +227,13 @@ capability pins, per-member tool access, the credential ladder, metering) live i
 second path that "just read the database" would be a second implementation of every one of them,
 drifting quietly. The in-process client stamps `X-Treg-Client: mcp` for the team MCP and
 `X-Treg-Client: claude-connector` for V2 (attribution, never a gate), so each MCP surface is
-distinguishable from unreported CLI traffic and from the other MCP surface.
+distinguishable from unreported CLI traffic and from the other MCP surface. It also forwards the
+host behind the tool call, as `_bearer` read it: `X-Treg-Mcp-Client` (`clientInfo.name`) and
+`X-Treg-Mcp-User-Agent` (the inbound User-Agent), which `tool_called` records as `mcp_client` and
+`mcp_user_agent`. The stateless transport keeps no `initialize`, so `clientInfo` is known only on a
+2026-07-28+ request, which carries it on every request; older clients are told apart by User-Agent.
+The internal request keeps httpx's own User-Agent, since that is what an own-key upstream sees, and
+relay drops every `x-treg-*` header before the upstream.
 
 The catalog is the one exception: read straight from `catalog_store`, which is already parsed in
 memory, so a search answers in about a millisecond. That is a **speed** choice, not a permission one.

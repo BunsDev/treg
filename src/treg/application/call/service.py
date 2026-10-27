@@ -300,14 +300,16 @@ def _tool_called_props(request: _ApplicationRequest, *, tool_name: str, status_c
                        hit: bool | None = None, response_bytes: int | None = None) -> dict:
     """The `tool_called` event, minus the provider block. No params, bodies or full URL: per-call
     detail stays in the DB, joined on `call_ref`. The UA is kept because relay forwards it verbatim,
-    so it is what the vendor's edge saw."""
+    so it is what the vendor's edge saw. A call made through `/mcp/` also names its MCP host."""
     user_agent = request.headers.get("user-agent", "")
     return {"tool_name": tool_name, "status_code": status_code, "client": _client_name(request),
             "method": request.method, "own_tool": own_tool, "duration_ms": duration_ms,
             "call_ref": call_ref, "outcome": _outcome(status_code, refused_by, answered=answered),
             "refused_by": refused_by, "cached": cached, "smoothed": smoothed, "hit": hit,
             "response_bytes": response_bytes, "user_agent": user_agent[:100],
-            "ua_family": _norm_client(user_agent)}
+            "ua_family": _norm_client(user_agent),
+            "mcp_client": request.headers.get("X-Treg-Mcp-Client", "")[:64] or None,
+            "mcp_user_agent": request.headers.get("X-Treg-Mcp-User-Agent", "")[:100] or None}
 
 
 class _HeaderView:
