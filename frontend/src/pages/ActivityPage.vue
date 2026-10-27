@@ -266,6 +266,10 @@ export default {
           <template #cell-spend="{ row: r }"><b v-if="r.value">{{money(r.charged_micro)}}</b><span v-else class="muted">{{money(r.charged_micro)}}</span></template>
         </DataTable>
       </section>
+      <section v-else-if="tagUsageErr[key]" class="pl-sec">
+        <h2 class="pl-h"><span>Spend by {{key}}</span><i></i></h2>
+        <p class="pl-empty">{{tagUsageErr[key]}}</p>
+      </section>
     </template>
   </template>
 </div>

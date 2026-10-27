@@ -47,7 +47,7 @@ Its last step loads installed policy extensions (`policy.load_extensions`, see
 [policy extensions](policy-extensions.md)), so an extension's `install` sees the finished app.
 
 The factory owns concrete assembly: the three core pure-ASGI middleware registrations, the optional
-V2 path normalizer, five exception handlers, static mounts, optional MCP mounts and lifespans,
+V2 path normalizer, six exception handlers, static mounts, optional MCP mounts and lifespans,
 GET-to-HEAD widening, the OpenAPI wrapper that hides
 implied HEAD operations and gives each method of a multi-method route its own operation id, shared HTTP client creation, startup work, shutdown drains, and the Ads
 conversion worker. Registration order is compatibility behavior. The four stage-0 snapshots stay

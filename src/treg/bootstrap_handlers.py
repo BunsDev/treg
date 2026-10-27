@@ -15,6 +15,7 @@ from .call_surface import split_call_path
 from .caller_metadata import _client_of
 from .client_identity import _norm_client
 from .config import get_settings
+from .infra.db import ReportBusy
 
 # The token refusals `domain/identity/access.py` raises; their bodies carry `hint` (interface/api.md).
 _TOKEN_REFUSALS = frozenset({"not authenticated", "invalid token", "revoked key", "disabled key"})
@@ -65,6 +66,15 @@ async def _pool_saturated(request: Request, exc: PoolTimeoutError) -> JSONRespon
             _capture_call_intake_failure(request, surface=call_path[0])
             await _stamp_call_exit(request, resp, 503)
     return resp
+
+
+async def _report_busy(request: Request, exc: ReportBusy) -> JSONResponse:
+    """A dashboard report was refused at its gate or cut off by its statement timeout. A 429, not
+    a 503: the service is up and the dashboard should retry later. No `db_pool` fault."""
+    return JSONResponse(
+        {"detail": "this report is busy — retry in a moment", "report_busy": exc.reason},
+        status_code=429, headers={"Retry-After": "2"})
+
 
 async def _mark_treg_own_errors(request: Request, exc: StarletteHTTPException):
     """Tag treg's own call-surface refusals with `X-Treg-Error`, then answer as before.
