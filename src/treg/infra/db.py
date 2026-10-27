@@ -393,12 +393,13 @@ async def get_admin_read_session() -> AsyncIterator[AsyncSession]:
 _REPORT_SLOTS = 2
 _REPORT_WAIT_S = 1.0
 _REPORT_STATEMENT_TIMEOUT_MS = 15_000
+_REPORT_DEADLINE_S = 15.0
 _QUERY_CANCELED = "57014"
 _report_gate: tuple[object, asyncio.Semaphore] | None = None
 
 
 class ReportBusy(Exception):
-    """A dashboard report was refused before checkout, or cut off by its statement timeout."""
+    """A dashboard report was refused before checkout, or cut off by its timeout or deadline."""
 
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
@@ -422,8 +423,10 @@ async def get_report_session() -> AsyncIterator[AsyncSession]:
     """Dashboard reports: the configured reader, otherwise the API pool, behind a per-process gate.
 
     Authorization must finish on `get_session` first; `require_member` commits, so that session
-    holds no connection while the report runs. A full gate or a statement timeout raises
-    `ReportBusy` rather than waiting on, or pinning, a pooled connection."""
+    holds no connection while the report runs. A full gate, a statement timeout, or the report as a
+    whole passing `_REPORT_DEADLINE_S` raises `ReportBusy` rather than waiting on, or pinning, a
+    pooled connection. The deadline covers the handler: FastAPI runs a dependency's body and the
+    endpoint in one task."""
     slots = _report_slots()
     try:
         async with asyncio.timeout(_REPORT_WAIT_S):
@@ -432,11 +435,14 @@ async def get_report_session() -> AsyncIterator[AsyncSession]:
         raise ReportBusy("busy") from exc
     try:
         async with read_session_maker() as session:
-            if session.get_bind().dialect.name == "postgresql":
-                await session.execute(text(
-                    f"SET LOCAL statement_timeout = {_REPORT_STATEMENT_TIMEOUT_MS}"))
             try:
-                yield session
+                async with asyncio.timeout(_REPORT_DEADLINE_S):
+                    if session.get_bind().dialect.name == "postgresql":
+                        await session.execute(text(
+                            f"SET LOCAL statement_timeout = {_REPORT_STATEMENT_TIMEOUT_MS}"))
+                    yield session
+            except TimeoutError as exc:
+                raise ReportBusy("timeout") from exc
             except DBAPIError as exc:
                 if _canceled_by_timeout(exc):
                     raise ReportBusy("timeout") from exc

@@ -7,15 +7,18 @@ statement timeout answers a typed 429 at once, and that a slot is always given b
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
+from fastapi import Depends, FastAPI
 from fastapi.routing import APIRoute
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.exc import DBAPIError
 
 from treg import crypto
 from treg.api import app
+from treg.bootstrap_handlers import _report_busy
 from treg.infra import db as infra_db
 from treg.infra.db import ReportBusy, get_report_session, reset_db, session_maker
 from treg.models import Membership, Org, User
@@ -79,6 +82,25 @@ async def test_a_full_gate_refuses_at_once_with_a_typed_429(env, monkeypatch):
     assert resp.headers["Retry-After"] == "2"
     assert resp.json()["report_busy"] == "busy"
     assert other.status_code == 200, "a full report gate must not refuse other routes"
+
+
+async def test_the_whole_report_is_bounded_not_just_each_statement(monkeypatch):
+    """Many statements, each under the statement timeout, still end at the report deadline."""
+    monkeypatch.setattr(infra_db, "_REPORT_DEADLINE_S", 0.05)
+    probe = FastAPI()
+    probe.add_exception_handler(ReportBusy, _report_busy)
+
+    @probe.get("/slow")
+    async def slow(db=Depends(get_report_session)):
+        for _ in range(20):
+            await asyncio.sleep(0.01)
+        return {"ok": True}
+
+    async with AsyncClient(transport=ASGITransport(app=probe), base_url="http://probe") as c:
+        resp = await c.get("/slow")
+    assert resp.status_code == 429
+    assert resp.json()["report_busy"] == "timeout"
+    assert infra_db._report_slots()._value == infra_db._REPORT_SLOTS
 
 
 class _Canceled(Exception):
