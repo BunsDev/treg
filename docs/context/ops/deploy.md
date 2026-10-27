@@ -197,7 +197,10 @@ Team dashboard reports that aggregate whole windows of the audit and ledger tabl
 - at most `_REPORT_SLOTS` (2) reports run at once per process; a report that cannot get a slot
   within `_REPORT_WAIT_S` (1 s) is refused before checkout;
 - each report transaction sets `statement_timeout` (`_REPORT_STATEMENT_TIMEOUT_MS`, 15 s) on
-  PostgreSQL, so no report can hold a connection for longer;
+  PostgreSQL, and the report as a whole runs under `_REPORT_DEADLINE_S` (15 s), so a report of
+  several sub-limit statements cannot hold its connection longer either. The deadline is an
+  `asyncio.timeout` around the dependency's yield: FastAPI runs a dependency's body and the endpoint
+  in one task, and cancelling an in-flight asyncpg query cancels it on the server;
 - both refusals answer `429 {"report_busy": "busy" | "timeout"}` with `Retry-After: 2` through
   `bootstrap_handlers._report_busy`: the service is up, the report should be retried later. They are
   not `treg_saturated` and record no `db_pool` fault.
@@ -205,7 +208,9 @@ Team dashboard reports that aggregate whole windows of the audit and ledger tabl
 Authorization finishes on `get_session` first; `require_member` commits, so that session holds no
 connection while the report runs. On the API pool the gate caps reports at two of the process's
 API slots; `/call/` keeps the rest. Reports on the replica see replication lag.
-`tests/test_report_session.py` pins which routes take the report session.
+`tests/test_report_session.py` pins which routes take the report session. The dashboard runs the
+per-tag reports one at a time and retries a 429 with backoff (`withReportRetry` in
+`frontend/src/api.ts`); a report that still fails shows its error instead of being hidden.
 
 ### Optional read replica
 

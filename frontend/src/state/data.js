@@ -40,7 +40,7 @@ export default function data(){
       denyRules:[], denyForm:{host:'',path_prefix:'',method:'',user_id:null,project_id:null,note:''}, denyBusy:false, confirmDeny:null, cliDeny:[],
       bootVersion:'', newVersion:false,
       usage:null, usageErr:'', usageToolPage:0, usageDayPage:0, usageDays:30, usageSpend:null, usageSpendBusy:false, usageSpendErr:'', spendRange:{preset:30, from:'', to:''}, spendFilter:{group:'day', key:'', provider:'', stack:'key'}, spendRankPage:0, spendRankOpen:false, myUsage:null, actTab:'feed', buildTab:'vendor',  // Activity page: 'feed' | 'usage'
-      tagUsage:{}, tagKeys:[],   // spend per X-Treg-Meta key: {customer:{…}, workspace:{…}}
+      tagUsage:{}, tagUsageErr:{}, tagKeys:[],   // spend per X-Treg-Meta key: {customer:{…}, workspace:{…}}
   // usage-metering: rollups + the member's own used/cap
       // Billing (Stripe top-ups). `billing` null = not loaded / not an admin; billing.configured
       // false = this deployment sells no balance, so the whole block stays hidden.
