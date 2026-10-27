@@ -340,7 +340,8 @@ status and detail. Provider failures remain response data. Header contracts are 
 After credential refresh and relay, `_audit` records the attempt and mirrors it through
 `_tool_called_props` / `analytics.capture`. Provider identity is the catalog provider or the
 own tool's upstream host. Analytics includes outcome, status, timing, cost, call reference,
-capacity/cache/smoothing signals and user-agent attribution, never params or bodies.
+capacity/cache/smoothing signals and user-agent attribution (plus the MCP host for a call made
+through either MCP surface), never params or bodies.
 
 `domain.catalog.results.classify` shares verified hit/miss rules between business-hit telemetry
 and cache admission. Found means `hit=true`, explicit empty means false, and errors/unknown

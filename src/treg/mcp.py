@@ -63,6 +63,7 @@ from .application import catalog_search as search_app
 from .application import search_experiment
 from .domain.catalog import store as catalog_store
 from .capacity_notice import account_out_notice, is_balance_refusal
+from .client_identity import printable_ascii
 from .config import get_settings
 from .feedback_contract import FeedbackCategory, FEEDBACK_DESCRIPTION, ReviewUsefulness, REVIEW_DESCRIPTION
 from .domain.catalog.stats import EndpointObservationReader
@@ -503,6 +504,20 @@ class MyToolsOut(TypedDict, total=False):
 # request would come from the ASGI transport's loopback peer, and every MCP caller would share one
 # per-IP bucket. Task-scoped, so concurrent tool calls never see each other's address.
 _caller_ip: ContextVar[str] = ContextVar("treg_mcp_caller_ip", default="")
+# The MCP host behind that tool call (`clientInfo.name`, inbound User-Agent), forwarded the same way.
+_caller_host: ContextVar[tuple[str, str]] = ContextVar("treg_mcp_caller_host", default=("", ""))
+
+
+def _host_of(ctx: Context, headers: Any) -> tuple[str, str]:
+    """On the stateless transport only a 2026-07-28+ request carries `clientInfo` on every request;
+    an older client reports it at `initialize` alone, so its tool calls have only the User-Agent."""
+    try:
+        name = ctx.session.client_params.client_info.name or ""
+    except Exception:  # noqa: BLE001 - attribution must never fail the tool call
+        name = ""
+    user_agent = headers.get("user-agent") or headers.get("User-Agent") or ""
+    # An httpx header value must be ASCII.
+    return printable_ascii(str(name)), printable_ascii(user_agent)
 
 
 def _bearer(ctx: Context) -> str:
@@ -514,6 +529,7 @@ def _bearer(ctx: Context) -> str:
     """
     headers = ctx.headers or {}
     _caller_ip.set(client_ip.from_headers(headers, None) if headers else "")
+    _caller_host.set(_host_of(ctx, headers))
     raw = headers.get("authorization") or headers.get("Authorization") or ""
     return raw.removeprefix("Bearer ").removeprefix("bearer ").strip()
 
@@ -665,13 +681,16 @@ async def _api(token: str, *, client_name: str = "mcp"):
     """An in-process client bound to treg's own ASGI app, carrying the caller's identity."""
     from .api import app  # deferred: bootstrap imports THIS module while assembling api:app
 
+    host_name, host_user_agent = _caller_host.get()
+    host = {k: v for k, v in (("X-Treg-Mcp-Client", host_name),
+                              ("X-Treg-Mcp-User-Agent", host_user_agent)) if v}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url=_INTERNAL_BASE,
         timeout=_TIMEOUT,
         # X-Treg-Client is attribution, not auth: without it every MCP-originated call lands
         # in the audit trail as client="", indistinguishable from unreported CLI traffic.
-        headers={**await _internal_auth(token), "X-Treg-Client": client_name,
+        headers={**await _internal_auth(token), "X-Treg-Client": client_name, **host,
                  **client_ip.forwarding_headers(_caller_ip.get())},
     ) as client:
         yield client

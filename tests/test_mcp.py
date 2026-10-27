@@ -53,6 +53,7 @@ async def _modern_rpc(client: AsyncClient, method: str, params=None, token: str 
         "Authorization": f"Bearer {token}",
         "MCP-Protocol-Version": "2026-07-28",
         "MCP-Method": method,
+        **({"MCP-Name": body_params["name"]} if "name" in body_params else {}),
     })
 
 
@@ -1667,3 +1668,47 @@ async def test_catalog_get_gives_the_caller_its_own_team_values(clients, monkeyp
     async with mcp_session(clients) as c:
         out = await _call_tool(c, "catalog_get", {"endpoint_id": "crawl4ai.watch.list"}, token=token)
     assert out["endpoint"]["your_values"] == {"queryParams.agent": call_resolution.team_label(org_id)}
+
+
+async def test_tool_called_names_the_mcp_host(clients, monkeypatch, posthog_events):
+    """An MCP call's `tool_called` names its host: the inbound User-Agent always, and `clientInfo.name`
+    when the request carries it (2026-07-28+; an older client reports it at `initialize` alone, which
+    the stateless transport does not keep)."""
+    from treg.application.call import service as call_service
+    from treg.application.call.types import UpstreamResponse
+    from treg.config import get_settings
+
+    monkeypatch.setenv("TREG_PLATFORM_KEY_HARVESTAPI", "PLATFORM-HARVESTAPI")
+    monkeypatch.setenv("TREG_PLATFORM_PROVIDERS", "harvestapi")
+    get_settings.cache_clear()
+    monkeypatch.setattr(get_settings(), "posthog_key", "phc_test_suite", raising=False)
+
+    async def relay(*args, **kwargs):
+        async def stream():
+            yield b'{"elements":[]}'
+
+        async def close():
+            return None
+
+        return UpstreamResponse(200, ((b"content-type", b"application/json"),), stream(), close)
+
+    monkeypatch.setattr(call_service, "relay", relay)
+    token = clients.headers["X-Treg-Token"]
+    args = {"name": "call", "arguments": {
+        "endpoint_id": "harvestapi.linkedin.post.search", "params": {"search": "film"}}}
+    try:
+        async with mcp_session(clients) as c:
+            c.headers["User-Agent"] = "claude-code/2.1.0 (cli)"
+            await _rpc(c, "initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                                         "clientInfo": {"name": "claude-code", "version": "2.1.0"}}, token)
+            legacy = await _rpc(c, "tools/call", args, token)
+            modern = await _modern_rpc(c, "tools/call", args, token)
+        events = await posthog_events()
+    finally:
+        get_settings.cache_clear()
+    assert legacy.json()["result"]["isError"] is False, legacy.json()
+    assert modern.json()["result"]["isError"] is False, modern.json()
+    old, new = [e["properties"] for e in events]
+    assert old["client"] == "mcp" and old["user_agent"].startswith("python-httpx/")
+    assert old["mcp_user_agent"] == "claude-code/2.1.0 (cli)" and old["mcp_client"] is None
+    assert new["mcp_user_agent"] == "claude-code/2.1.0 (cli)" and new["mcp_client"] == "test"

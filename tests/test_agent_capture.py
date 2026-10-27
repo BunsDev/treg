@@ -200,7 +200,8 @@ async def test_promotion_link_survives_a_rotate(env):
 async def test_call_emits_one_tool_called_event(env, posthog_events):
     """The audit funnel also mirrors each /call to PostHog (when a key is set): one `tool_called`
     per call, carrying the runtime attribution and — for own tools — the upstream host as vendor."""
-    r = await env.c.get("/call/alpha/ok", headers=_h(env.member, "claude-code"))
+    r = await env.c.get("/call/alpha/ok", headers={**_h(env.member, "claude-code"),
+                                                   "X-Treg-Mcp-Client": "cursor"})
     assert r.status_code == 200
     (e,) = await posthog_events()
     assert e["distinct_id"] == "m@x.dev"
@@ -213,6 +214,7 @@ async def test_call_emits_one_tool_called_event(env, posthog_events):
     assert p["call_ref"] == r.headers["X-Treg-Call-Id"]
     assert p["cached"] is False and p["smoothed"] is None and p["hit"] is None
     assert p["ua_family"] == "python-httpx" and p["user_agent"].startswith("python-httpx/")
+    assert p["mcp_client"] is None, "only the MCP surfaces' own traffic names an MCP host"
     assert "capacity_signal" not in p, "a capacity reading belongs to catalog calls only"
 
 
