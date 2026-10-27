@@ -287,11 +287,12 @@ def _observation_pending(reader: endpoint_stats.EndpointObservationReader, endpo
         return False
 
 
-def _with_reviews(view: dict, verdicts: dict[str, dict]) -> dict:
+def _with_reviews(view: dict, verdicts: dict[str, dict], *, quotes: bool = True) -> dict:
     """What agents said after using this endpoint's result (`domain.feedback.verdicts`), on the
     views that carry it: absent where no team has said anything quotable yet."""
     if view.get("id") in verdicts:
-        view["reviews"] = verdicts[view["id"]]
+        review = verdicts[view["id"]]
+        view["reviews"] = review if quotes else {k: v for k, v in review.items() if k != "samples"}
     return view
 
 
@@ -625,7 +626,7 @@ async def catalog_endpoint(
             response.headers["Vary"] = "Authorization, X-Treg-Token, X-Treg-Org, Cookie"
         view |= personal
     siblings = [
-        catalog_store.endpoint_view(other, _provider_display(other["provider"]), cat)
+        catalog_store.sibling_view(other, _provider_display(other["provider"]), cat)
         for other in sorted(cat.for_capability(ep["capability"]), key=lambda e: e["id"])
         if other["id"] != ep["id"]
     ]
@@ -647,7 +648,7 @@ async def catalog_endpoint(
     # the other half of the choice, attached here for the same reason as `observed`.
     verdicts = await _verdicts_or_empty()
     view = _with_reviews(view | {"observed": stats.get(endpoint_id)} | overflow, verdicts)
-    siblings = [_with_reviews(s | {"observed": stats.get(s["id"])}, verdicts) for s in siblings]
+    siblings = [_with_reviews(s | {"observed": stats.get(s["id"])}, verdicts, quotes=False) for s in siblings]
     # Hub tools treg approved for this job sit beside its providers (docs/hub-listing-decisions.md
     # round 3), with a seeded success rate while they are new. Shown for comparison only: they are
     # never a routed child (AGENTS.md non-negotiable 4).
@@ -761,7 +762,7 @@ async def _hub_endpoint_view(endpoint_id: str, db: AsyncSession,
     # comparison catalog_get gives a provider row. Its own numbers carry the seed.
     capability = await hub_app.approved_capability(db, row.tool_id)
     cat = catalog_store.load()
-    siblings = [catalog_store.endpoint_view(o, _provider_display(o["provider"]), cat)
+    siblings = [catalog_store.sibling_view(o, _provider_display(o["provider"]), cat)
                 for o in sorted(cat.for_capability(capability), key=lambda e: e["id"])] if capability else []
     if siblings and observations is not None:
         stats = await _observed_or_empty(observations, [s["id"] for s in siblings])
