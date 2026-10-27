@@ -113,21 +113,21 @@ skips symlinks; repo-tooling skills under `.agents/skills` (`.claude/skills` is 
 sees the same set) carry
 `metadata.internal: true` so that command offers only what a user should install. The Codex plugin is the exception: it ships an MCP connector, and OpenAI's plugin review refuses a skill
 that downloads or runs code outside the package, so it carries a short connector-only skill (`CODEX_SKILL`)
-instead of the served page, with no CLI and no `install.sh`. The other variants differ **only** in their prepended bootstrap; the Claude plugin declares **no connector in its
-manifest** — so it installs with no token and nothing waits on a directory review — and its bootstrap
-does the opposite, walking the agent through `install.sh` → `treg login` → `treg mcp install` so the
-first run ends with the CLI *and* the tools. Skills-only is a property of the manifest, not of the
-end state; the order in that bootstrap is load-bearing, because `treg mcp install` exits without
-writing when it runs before there is a token. The Claude copy also gets a `version:` stamped into its
-frontmatter, which ClawHub requires and Claude Code ignores; that stamp is what lets one file satisfy
-both registries.
+instead of the served page, with no CLI and no `install.sh`. The other variants are the served page plus, at most, a short prepended bootstrap. The served
+page's first section branches on what the agent already has (treg's MCP tools, the CLI, or
+neither), and installs only in the last case and only when the human asked. So the bare skill at
+the repo root is the page unchanged, and a bootstrap says only what its host adds. The Claude Code
+and Cursor plugins install one folder, `plugins/treg/`, that declares the MCP server URL-only (with
+`type: "http"` in the Claude manifest, which Claude Code requires); the host runs OAuth and the
+server waits as "needs authentication", so nothing 401s before sign-in. The bare skill and the
+plugin get a `version:` stamped into their frontmatter, which ClawHub requires and the hosts ignore.
 
 **DeepSeek Harness** is the odd one out, and the only door that ships the connector *and* the CLI
 path in one zero-config install. dsh reads no manifest: it installs an npm package whose
 `package.json` declares `dsh.bundle`, pointing at a config layer that composes into the user's
 profile. That layer carries a treg MCP row whose `disabled` expression is evaluated at boot, so it
-stays off until `TREG_TOKEN` is in the environment — the same "no always-on tools that 401" stance as
-the Claude manifest, but expressible as a row rather than an omission. Its bootstrap is its own for
+stays off until `TREG_TOKEN` is in the environment, because dsh's MCP client sends a static header
+and runs no OAuth. Its bootstrap is its own for
 two reasons the others do not have: the tools are namespaced (`mcp__treg__call`, not `call`), and
 `treg mcp install` cannot help here (it writes Claude Code / Cursor / opencode / Codex configs, never a dsh
 profile), so `mcp_install.py` reports dsh as a MANUAL agent pointing at the bundle. See
