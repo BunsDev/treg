@@ -113,3 +113,13 @@ async def test_collect_is_off_without_the_setting(clients, monkeypatch):
     monkeypatch.delenv("TREG_SHADOW_PROVIDER", raising=False)
     get_settings.cache_clear()
     assert await service.collect(session_factory=session_maker) == {"status": "off"}
+
+
+def test_role_words_become_seniority_and_department_and_one_item_lists_unwrap():
+    assert P.evaluate("role_seniority(t)", {"t": ["CMO", "VP Marketing", "Head of Growth"]}) == ["c_level", "vp", "director"]
+    assert P.evaluate("role_department(t)", {"t": ["CMO", "VP Marketing", "Head of Growth"]}) == ["marketing"]
+    assert P.evaluate("role_seniority(t)", {"t": "Software Engineer"}) is None
+    assert P.evaluate("scalar(d)", {"d": ["acme.example"]}) == "acme.example"
+    identity = rules.request_identity(store.load().adapters["quickenrich.people.search"], {},
+                                      {"company_url": {"include": ["acme.example"]}, "title": {"include": ["CMO"]}})
+    assert identity == {"company_domain": "acme.example", "title": "CMO"}
