@@ -187,6 +187,25 @@ SQLite aliases all three makers to one engine. It has no pool to protect and fil
 it cannot share, so separate engines would only manufacture lock failures. Tests pin routing rather
 than SQLite isolation.
 
+### Dashboard reports
+
+Team dashboard reports that aggregate whole windows of the audit and ledger tables
+(`/orgs/{id}/usage`, `/orgs/{id}/usage/by-tag`, `/orgs/{id}/agents/observed`) take
+`get_report_session` instead of `get_session`. It opens `read_session_maker`: the replica when
+`TREG_READ_DATABASE_URL` is set, otherwise the API pool. Either way:
+
+- at most `_REPORT_SLOTS` (2) reports run at once per process; a report that cannot get a slot
+  within `_REPORT_WAIT_S` (1 s) is refused before checkout;
+- each report transaction sets `statement_timeout` (`_REPORT_STATEMENT_TIMEOUT_MS`, 15 s) on
+  PostgreSQL, so no report can hold a connection for longer;
+- both refusals answer `503 {"report_busy": "busy" | "timeout"}` with `Retry-After: 2` through
+  `bootstrap_handlers._report_busy`. They are not `treg_saturated` and record no `db_pool` fault.
+
+Authorization finishes on `get_session` first; `require_member` commits, so that session holds no
+connection while the report runs. On the API pool the gate caps reports at two of the process's
+API slots; `/call/` keeps the rest. Reports on the replica see replication lag.
+`tests/test_report_session.py` pins which routes take the report session.
+
 ### Optional read replica
 
 `TREG_READ_DATABASE_URL` adds a datasource exposed as `read_session_maker`. Its supported drivers
@@ -218,7 +237,8 @@ primary pool and releases its connection before the report begins. With no read 
 API-pool fallback. Configured reader failures never retry on the primary.
 Before enabling a hosted cutover, verify the running process has the intended read URL, the target
 is a readable replica with the required table grants, and replication lag is acceptable. Configuring
-a URL does not migrate any other report. Removing it returns this report to the admin primary pool.
+a URL also moves the dashboard reports above and no other report. Removing it returns `/admin/errors`
+to the admin primary pool and the dashboard reports to the gated API pool.
 
 `pool_snapshot()` includes a separate `read` entry for a configured PostgreSQL datasource; SQLite
 engines are omitted as for the primary. `connection_budget()` describes only the primary pools;
@@ -227,7 +247,7 @@ If both URLs target the same server, add both budgets against that server's limi
 `dispose_engine()` also disposes the read engine. Schema upgrades, startup verification and test
 schema resets continue to target the primary.
 
-This datasource is opt-in infrastructure; `/admin/errors` is its first report consumer.
+This datasource is opt-in infrastructure; `/admin/errors` and the dashboard reports above use it.
 Further callers must tolerate replica lag and keep writes, cursor advancement and concurrency
 control on the primary. Operators must provision and synchronize a compatible schema and data;
 setting a URL does not establish replication, translate dialect-specific queries, or migrate any

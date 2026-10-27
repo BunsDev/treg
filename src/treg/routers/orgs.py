@@ -49,7 +49,7 @@ from ..domain.identity.access import (
 )
 from ..domain.identity import api_keys as managed_keys
 from ..domain.identity import session as identity_session
-from ..infra.db import get_session
+from ..infra.db import get_report_session, get_session
 from ..models import (
     ROLE_RANK,
     ApiKey,
@@ -1220,7 +1220,7 @@ async def agent_checkin(
 
 @app.get("/orgs/{org_id}/agents/observed")
 async def list_observed_agents(
-    org_id: int, caller: Caller = Depends(require_member), db: AsyncSession = Depends(get_session)
+    org_id: int, caller: Caller = Depends(require_member), db: AsyncSession = Depends(get_report_session)
 ) -> list[dict]:
     """The agents ALREADY running under members' own tokens, discovered from traffic: one row per
     (member, runtime) seen in the last 30 days, e.g. "sam@… / claude-code". The zero-setup half
@@ -1296,7 +1296,7 @@ org_usage_router = app
 @app.get("/orgs/{org_id}/usage")
 async def org_usage(
     org_id: int, days: int = 30,
-    caller: Caller = Depends(require_member), db: AsyncSession = Depends(get_session),
+    caller: Caller = Depends(require_member), db: AsyncSession = Depends(get_report_session),
 ) -> dict:
     """Usage rollups for an org over the last `days` (admin/owner): by user (with a call/local/server
     split), by tool, by day, and totals — counts only, no request/response bodies. Powers the dashboard
@@ -1374,7 +1374,7 @@ async def list_tag_keys(
 @app.get("/orgs/{org_id}/usage/by-tag")
 async def usage_by_tag(
     org_id: int, key: str | None = None, days: int = 30,
-    caller: Caller = Depends(require_member), db: AsyncSession = Depends(get_session),
+    caller: Caller = Depends(require_member), db: AsyncSession = Depends(get_report_session),
 ) -> dict:
     """What each value of one tag consumed — the numbers a reselling builder invoices from.
 
