@@ -100,8 +100,8 @@ def _expect_failure(endpoint_id: str, doc: object) -> str | None:
         return None
     path = str(rule["json_path"])
     actual = _dotted(doc, path)
-    # `misses` lists the values that mean "looked, found nothing" (MoltSets `status: not_found`):
-    # an answer for the adapter to judge, not a failure that leaves the hit verdict undecided.
+    # `misses` lists the values that mean "looked, found nothing": an answer for the adapter to
+    # judge, not a failure that leaves the hit verdict undecided.
     if actual == rule.get("equals") or actual in (rule.get("misses") or ()):
         return None
     return f"{path}={json.dumps(actual, ensure_ascii=True, default=str)[:80]}"
