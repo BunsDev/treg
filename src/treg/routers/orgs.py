@@ -1164,9 +1164,11 @@ async def list_agents(
     agent_emails = [u.email for u in users.values() if _is_agent_email(u.email)]
     # The roster shows lifetime identity history. The setup card polls the separate connection
     # endpoint for its newly issued key, so a rotation cannot inherit an old key's check-in.
+    # One EXISTS per agent: a DISTINCT over (org_id, user_email) reads every call each agent ever
+    # made, because Postgres before 18 cannot skip-scan to the next email.
     seen = set((await db.execute(
-        select(CallRecord.user_email).where(
-            CallRecord.org_id == org_id, CallRecord.user_email.in_(agent_emails)).distinct()
+        select(User.email).where(User.email.in_(agent_emails), select(CallRecord.id).where(
+            CallRecord.org_id == org_id, CallRecord.user_email == User.email).exists())
     )).scalars().all()) if agent_emails else set()
     out: list[dict] = []
     for m in memberships:

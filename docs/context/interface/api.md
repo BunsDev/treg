@@ -428,7 +428,8 @@ shared HTTP client. `/auth/logout` remains an HTTP-only cookie action.
   [multi-tenancy](../architecture/multi-tenancy.md).
 - **Agents (machine identities):** `create_agent` (`POST /orgs/{id}/agents`, admin+) mints/rotates a
   member token for a machine caller - its own `daily_call_cap`, `tool_access` and audit trail, with no
-  new table; `list_agents` (`GET`, never returns a token) and `revoke_agent` (`DELETE …/{user_id}`,
+  new table; `list_agents` (`GET`, never returns a token; each agent's `connected` is one indexed
+  existence check for any call in the org, never a scan of its history) and `revoke_agent` (`DELETE …/{user_id}`,
   which also sweeps the deny rules and idempotent replay cache owned by that agent before deleting its
   membership; the schema cascades that cache as a backstop). An agent token is refused by
   `require_identity` and can never be an owner. **Re-POSTing the same name ROTATES, and a field the
