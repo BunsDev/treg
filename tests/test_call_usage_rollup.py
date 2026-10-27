@@ -9,6 +9,7 @@ history is being prepared until the first backfill catches up, and name where it
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 
 from sqlalchemy import func, select
@@ -153,3 +154,24 @@ async def test_reports_wait_for_the_first_backfill_and_name_where_history_begins
     usage = (await clients.get(f"/orgs/{org_id}/usage?days=90")).json()
     assert usage["ready"] is True and usage["history_from"] == day and usage["days"] == 90
     assert usage["totals"]["call"] >= 1
+
+
+async def test_a_new_cursor_starts_a_new_history_instead_of_adding_to_the_old_one(clients):
+    org_id, other_id = await _team(clients)
+    await _seed(org_id, other_id)
+    await rollup.refresh()
+    async with session_maker() as db:    # the documented fallback to the live aggregate
+        await db.delete(await db.get(CallUsageCursor, rollup.CURSOR_ID))
+        await db.commit()
+    await rollup.refresh()
+    assert await _folded() == await _in_history()
+
+
+async def test_overlapping_runs_never_fold_the_same_rows_twice(clients):
+    org_id, _ = await _team(clients)
+    await rollup.refresh()                 # the cursor exists; the race is over the next rows
+    at = utcnow_naive() - timedelta(minutes=5)
+    await _add(*(_call(org_id, "a@example.dev", "t", at) for _ in range(100)))
+    later = utcnow_naive() + timedelta(minutes=2)   # past the lag for every row, the fixture's too
+    await asyncio.gather(rollup.refresh(batch_rows=10, now=later), rollup.refresh(batch_rows=10, now=later))
+    assert await _folded() == await _in_history()

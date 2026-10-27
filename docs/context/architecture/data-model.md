@@ -405,7 +405,9 @@ uses this metadata, never the encrypted token's shape.
   `CallRecord.id`; `history_from`; `caught_up_at`). `application/call_usage_rollup.py`, run as
   `treg-worker usage rollup`, is the only writer of both: it walks `callrecord` by primary key with
   the commit lag of `catalog_stats`, starting at the first row of a 31-day history, and moves the
-  counts and the cursor in one transaction. There is no recount: audit is lossy by design, and the
+  counts and the cursor in one transaction. The cursor lock is a no-op UPDATE, which also locks on
+  SQLite, where SELECT FOR UPDATE is ignored. A new cursor deletes the old day rows in the
+  transaction that creates it, so a rebuild never adds to a previous history. There is no recount: audit is lossy by design, and the
   only race left undercounts by a row the queue could have shed anyway. A report
   (`application/call_usage.py`) reads the folded rows and the team's rows after `cursor_id` in ONE
   statement, so both halves share a snapshot and no row is counted twice or missed; the tail is

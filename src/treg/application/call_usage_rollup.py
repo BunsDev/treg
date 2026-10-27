@@ -17,7 +17,12 @@ first run starts at the first row of `HISTORY_DAYS`, found by bisection on the p
 Each batch is its own short transaction: lock the cursor row, read the next rows by id, add them
 to their day rows in the database (`calls = calls + ...`), move the cursor, commit. The cursor and
 the counts move together, which is what lets a reader add the rows after `cursor_id` without
-counting any row twice.
+counting any row twice. The lock is a no-op UPDATE, as in `identity.lock_user`: SQLite ignores
+SELECT FOR UPDATE, and two overlapping runs there would fold the same rows twice.
+
+A new cursor starts a new history: the day rows of an earlier one are deleted in the same
+transaction. So deleting the cursor (the fallback to the live aggregate) and running the cron
+again rebuilds the rollup instead of adding a second copy of it.
 
 This module is the only writer of `callusageday` and `callusagecursor` (team deletion clears a
 team's rows with the team).
@@ -27,7 +32,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..infra.db import session_maker
@@ -76,6 +81,13 @@ async def _upsert(db: AsyncSession, buckets: dict[Bucket, list], at: datetime) -
                   "updated_at": stmt.excluded.updated_at}))
 
 
+async def _lock_cursor(db: AsyncSession) -> CallUsageCursor | None:
+    return (await db.execute(
+        update(CallUsageCursor).where(CallUsageCursor.id == CURSOR_ID)
+        .values(id=CallUsageCursor.id).returning(CallUsageCursor)
+        .execution_options(synchronize_session=False))).scalar_one_or_none()
+
+
 async def refresh(session_factory=session_maker, *, max_rows: int = 500_000,
                   batch_rows: int = BATCH_ROWS, now: datetime | None = None) -> dict:
     """One scheduled pass: fold up to `max_rows` new audit rows. Returns
@@ -88,10 +100,9 @@ async def refresh(session_factory=session_maker, *, max_rows: int = 500_000,
     cursor_id = 0
     while consumed < max_rows and not caught_up:
         async with session_factory() as db:
-            state = (await db.execute(
-                select(CallUsageCursor).where(CallUsageCursor.id == CURSOR_ID).with_for_update()
-            )).scalar_one_or_none()
+            state = await _lock_cursor(db)
             if state is None:
+                await db.execute(delete(CallUsageDay))
                 start = _midnight(at) - timedelta(days=HISTORY_DAYS - 1)
                 state = CallUsageCursor(id=CURSOR_ID, cursor_id=await _first_id_at(db, start) - 1,
                                         history_from=_day(start))

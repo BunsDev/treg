@@ -661,7 +661,9 @@ without importing the heavy database stack into the light `treg` CLI.
   `--max-rows` needs. Until it has caught up once the Usage page says counts are being prepared and
   the observed-agents roster is empty. If it stops, the reports keep answering, reading the rows
   after its cursor live, and slow down as that tail grows. Deleting the cursor row
-  (`callusagecursor`) returns the reports to the live audit-table aggregate.
+  (`callusagecursor`) returns the reports to the live audit-table aggregate; suspend the cron
+  first to stay there, because its next run starts a new cursor, clears the old rollup rows in the
+  same transaction and backfills again.
 - `treg-worker jev xboost` runs the `/jev` launch-radar demo once a day: it calls treg's own `/call/` API
   with `TREG_JEV_TREG_TOKEN` (a member token of the demo team, so the spend is an ordinary bill) and jev
   through the Vercel AI Gateway (`TREG_AI_GATEWAY_API_KEY`), and stores the run under Ephemeral for the page.
