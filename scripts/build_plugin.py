@@ -6,8 +6,8 @@ Five shop windows, four bootstraps, one source:
 - **codex**  -> `plugin/skills/treg/SKILL.md` — ships an MCP connector, so its bootstrap points at
   the MCP tools and tells the reader NOT to reach for a terminal.
 - **skills** -> `skills/treg/SKILL.md` — the bare skill that `npx skills add` and ClawHub publish:
-  no tools come with it, so its bootstrap installs the CLI. It also gets a `version:` stamped into
-  its frontmatter, which ClawHub requires.
+  the served page unchanged, since its first section already covers an agent with neither the tools
+  nor the CLI. It gets a `version:` stamped into its frontmatter, which ClawHub requires.
 - **plugin** -> `plugins/treg/skills/treg/SKILL.md` — the one plugin folder Claude Code and Cursor
   both install. It declares the remote MCP server (OAuth), so its bootstrap checks for the tools
   first and sends the human to sign in.
@@ -34,12 +34,10 @@ Three transformations, each for a reason the served file does not have:
    substitutes it inside an installed plugin, so a raw copy would ship the literal string `{BASE}`
    and every URL in it would be broken. It is baked to the public deployment here.
 
-2. A short section is prepended, and it is the ONLY thing that differs between the variants —
-   because they land in different worlds. A plugin that declares the MCP server arrives with tools
-   that wait for sign-in, so its bootstrap checks for them first. The bare skill arrives with
-   neither the CLI nor the tools, so its bootstrap walks the setup that produces both:
-   `install.sh` -> `treg login` -> `treg mcp install`, in that order (step 3 exits without writing
-   if it runs before there is a token).
+2. A short section may be prepended, and it is the ONLY thing that differs between the variants.
+   The served page's first section branches on what the agent has (MCP tools, the CLI, neither), so
+   a bootstrap says only what that host adds: a plugin's tools waiting for sign-in, dsh's
+   token-gated row, MiniMax's missing `treg mcp install` target.
 
 3. The bare skill and the plugin get `version:` stamped into their frontmatter. ClawHub requires it
    and the plugin hosts ignore it.
@@ -126,68 +124,14 @@ ask the human for - treg adds the provider credential on its server.
   data, credentials and raw responses.
 """
 
-# The plugin folder (Claude Code, Cursor, Grok Bot) ships MCP alongside the skill, so its bootstrap
-# is closer to Codex: check for the tools first, and fall back to CLI only if they are not there.
-# The MCP config declares the URL only and the host runs OAuth itself. A `${env:TREG_TOKEN}` header
-# made Grok Bot demand the variable before sign-in could start, which no phone user can supply.
+# The plugin folder (Claude Code, Cursor, Grok Bot) declares the MCP server URL-only and the host
+# runs OAuth itself. A `${env:TREG_TOKEN}` header made Grok Bot demand the variable before sign-in
+# could start, which no phone user can supply. The served page already branches on whether the tools
+# are there; the plugin only adds that they come with it, waiting for sign-in.
 PLUGIN_BOOTSTRAP = """
-## First, check which treg you have
-
-This plugin ships MCP tools alongside the skill. **Look at your tools before you do anything else.**
-
-**If you can see `catalog_search`, `catalog_get`, `call`, `balance` and `my_tools`** — treg is
-connected. Use those; there is nothing to install. The rest of this page is written around the `treg`
-command line, so read `treg catalog search` as `catalog_search`, `treg call` as `call`, and so on.
-
-**If the tools error or you cannot see them**, the connector is not signed in yet. The human connects
-it in the app's MCP or connector settings (in Claude Code: `/mcp`, pick treg, Authenticate); the app
-opens treg's sign-in page (GitHub / Google / email code) and the tools appear after it.
-
-A new team starts with **$1.00 of free balance**, so there is nothing to pay before the first call.
-If sign-in is needed, say so plainly and stop — never ask the human for a provider's API key, which
-is the thing treg exists to avoid.
-
----
-
-## When the tools ARE there
-
-| tool | use it for |
-|---|---|
-| `catalog_search` | find an endpoint by WHAT YOU WANT TO DO — "work email", "backlinks", "tiktok comments" |
-| `catalog_get` | one endpoint's parameters and its exact price, **before** you spend |
-| `call` | make the call; treg injects the credential and relays the answer |
-| `balance` | the team's prepaid balance |
-| `my_tools` | what this team registered and you can call without holding the key |
-
-Either way, the rest of this page is the part that matters — **when** treg is the right move, and
-**how to choose** between providers.
-
----
-"""
-
-# The bare skill arrives with no tools. The order of the three steps is load-bearing:
-# `cmd_mcp_install` reads the token from config and sys.exits before writing anything when there is
-# none, so running it ahead of `treg login` is a silent no-op an agent would move straight past.
-CLI_BOOTSTRAP = """
-## First run: finish the setup
-
-You have this page, but not yet the `treg` command, and not yet its tools. Set both up **once**, in
-this order:
-
-```bash
-curl -fsSL {BASE}/install.sh | sh   # 1. the CLI (skip if `treg --version` already works)
-treg login                                   # 2. sign in — opens a browser
-treg mcp install                             # 3. register treg's tools into this agent
-```
-
-Step 3 writes the token from step 2, so the order matters — run out of order it exits without
-writing anything. The tools (`catalog_search`, `catalog_get`, `call`, `balance`, `my_tools`) appear
-after the agent restarts; until then everything on this page works through the CLI.
-
-Step 1 also installs this same skill into the agent's own skills directory, which may duplicate
-this copy — worth mentioning to the human, who can remove one.
-
----
+This plugin ships treg's MCP tools. If you cannot see them yet, they are waiting for sign-in: the
+human connects treg in the app's MCP settings (in Claude Code: `/mcp`, pick treg, Authenticate). Do
+not install the CLI for this.
 """
 
 DSH_BOOTSTRAP = """
@@ -232,31 +176,11 @@ a directory dsh also scans. Harmless, but redundant with this bundle.
 """
 
 # MiniMax forbids any credential in the package and gates authenticated MCP behind its own
-# App/Connector program, so this plugin is skills-only — and unlike Claude Code / Cursor there is no
-# step 3: `treg mcp install` writes configs for Claude Code, Cursor and opencode, none of which is a
-# MiniMax profile, so telling the agent to run it would be a silent no-op. CLI only.
+# App/Connector program, so this plugin is skills-only. `treg mcp install` writes configs for Claude
+# Code, Cursor and opencode, none of which is a MiniMax profile, so running it is a silent no-op.
 MINIMAX_BOOTSTRAP = """
-## First run: install the CLI
-
-This plugin ships the skill, so you have this page — but not yet the `treg` command. Set it up
-**once**:
-
-```bash
-curl -fsSL {BASE}/install.sh | sh   # 1. the CLI (skip if `treg --version` already works)
-treg login                                   # 2. sign in — opens a browser
-```
-
-A new team starts with **$1.00 of free balance**, so there is nothing to pay before the first call.
-If sign-in is needed, say so plainly and stop — never ask the human for a provider's API key, which
-is the thing treg exists to avoid.
-
-Do **not** run `treg mcp install` here: it writes configs for other agents, not for MiniMax.
-Everything on this page works through the CLI.
-
-Step 1 also installs this same skill into the agent's own skills directory, which duplicates what
-the plugin already gives you — worth mentioning to the human, who can remove it.
-
----
+This plugin ships the skill only. Do **not** run `treg mcp install` here: it writes configs for
+other agents, not for MiniMax. Everything on this page works through the CLI.
 """
 
 # variant -> (target, bootstrap, stamp_version). One source, five shop windows.
@@ -267,7 +191,7 @@ the plugin already gives you — worth mentioning to the human, who can remove i
 # for a dsh profile.
 VARIANTS = {
     "codex": (CODEX_TARGET, None, False),
-    "skills": (SKILLS_TARGET, CLI_BOOTSTRAP, True),
+    "skills": (SKILLS_TARGET, "", True),
     "plugin": (PLUGIN_TARGET, PLUGIN_BOOTSTRAP, True),
     "dsh": (DSH_TARGET, DSH_BOOTSTRAP, False),
     "minimax": (MINIMAX_TARGET, MINIMAX_BOOTSTRAP, True),

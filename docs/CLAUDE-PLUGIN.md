@@ -15,9 +15,9 @@ Then `/mcp`, pick `plugin:treg:treg`, and Authenticate. The server is declared U
 configuration**. Until sign-in the server is listed as "needs authentication" and contributes no
 tools, so nothing 401s in the meantime.
 
-The skill's opening section checks for the tools first and sends the human to `/mcp` when they are
-missing. The CLI (`curl … install.sh | sh`, `treg login`) stays optional: the plugin path never asks
-an agent to run a downloaded script, which Claude Code's auto mode blocks by default.
+The skill checks for the tools first and sends the human to `/mcp` when they are missing. The CLI
+(`curl … install.sh | sh`, `treg login`) stays optional: the plugin path never asks an agent to run
+a downloaded script, which Claude Code's auto mode blocks by default.
 
 ## What is where
 
@@ -39,10 +39,10 @@ The MCP server is inline in the Claude manifest rather than pointing at `mcp.jso
 Code rejects a server with a `url` and no `type` (it logs "Invalid MCP server config" and registers
 nothing), while `mcp.json` stays URL-only for the hosts that read it.
 
-The bare skill at the repo root has no plugin around it, so its opening section walks the CLI setup:
-`install.sh` -> `treg login` -> `treg mcp install`, in that order. `cmd_mcp_install`
-(`src/treg/cli.py`) reads the token from config and exits before writing anything when there is
-none, so step 3 before step 2 is a silent no-op.
+The served page's first section branches on what the agent has: treg's MCP tools, the `treg` CLI,
+or neither. Only the last installs anything, and only when the human asked for setup. So the bare
+skill at the repo root is the served page unchanged, and the plugin's prepended note says only that
+its tools are waiting for `/mcp` sign-in.
 
 **Never edit `skills/treg/SKILL.md`.** Change `src/treg/web/skill.md` and regenerate:
 
