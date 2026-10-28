@@ -11,7 +11,7 @@ The transport is exercised as a real MCP client would: JSON-RPC over the mounted
 
 from __future__ import annotations
 
-from conftest import verified_signup, funded_user
+from conftest import verified_signup, funded_user, mcp_text_result
 
 import json
 from contextlib import asynccontextmanager
@@ -53,6 +53,7 @@ async def _modern_rpc(client: AsyncClient, method: str, params=None, token: str 
         "Authorization": f"Bearer {token}",
         "MCP-Protocol-Version": "2026-07-28",
         "MCP-Method": method,
+        **({"MCP-Name": body_params["name"]} if "name" in body_params else {}),
     })
 
 
@@ -61,14 +62,8 @@ async def _call_tool(client: AsyncClient, name: str, args: dict, token: str | No
         "protocolVersion": "2025-06-18", "capabilities": {},
         "clientInfo": {"name": "test", "version": "1"}}, token)
     r = await _rpc(client, "tools/call", {"name": name, "arguments": args}, token)
-    payload = r.json()
-    content = (payload.get("result") or {}).get("content") or []
-    if content and content[0].get("type") == "text":
-        try:
-            return json.loads(content[0]["text"])
-        except ValueError:
-            return {"_text": content[0]["text"]}
-    return payload
+    return mcp_text_result(name, r.json())
+
 
 
 @asynccontextmanager
@@ -1667,3 +1662,66 @@ async def test_catalog_get_gives_the_caller_its_own_team_values(clients, monkeyp
     async with mcp_session(clients) as c:
         out = await _call_tool(c, "catalog_get", {"endpoint_id": "crawl4ai.watch.list"}, token=token)
     assert out["endpoint"]["your_values"] == {"queryParams.agent": call_resolution.team_label(org_id)}
+
+
+async def test_catalog_get_stays_within_an_mcp_client_output_limit(clients):
+    """Hosts cap a tool result (Claude Code at about 25k tokens) and read `structuredContent`; a job
+    with dozens of providers returned 150k+ characters, and a routed row lost its plan to the schema."""
+    token = (await clients.post("/users", json={"email": "size@superdesign.dev"})).json()["token"]
+    results = {}
+    async with mcp_session(clients) as c:
+        await _rpc(c, "initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                                     "clientInfo": {"name": "test", "version": "1"}}, token)
+        for endpoint_id in ("treg.people.search", "aiark.people.search"):
+            r = await _rpc(c, "tools/call", {"name": "catalog_get", "arguments": {"endpoint_id": endpoint_id}}, token)
+            results[endpoint_id] = r.json()["result"]
+    routed = results["treg.people.search"]["structuredContent"]
+    crowded = results["aiark.people.search"]["structuredContent"]
+    assert routed["routing"]["plan"] and routed["related_capabilities"] and not routed["siblings"]
+    assert len(crowded["siblings"]) > 20
+    for result in results.values():
+        assert len(json.dumps(result)) < 100_000
+
+
+async def test_tool_called_names_the_mcp_host(clients, monkeypatch, posthog_events):
+    """An MCP call's `tool_called` names its host: the inbound User-Agent always, and `clientInfo.name`
+    when the request carries it (2026-07-28+; an older client reports it at `initialize` alone, which
+    the stateless transport does not keep)."""
+    from treg.application.call import service as call_service
+    from treg.application.call.types import UpstreamResponse
+    from treg.config import get_settings
+
+    monkeypatch.setenv("TREG_PLATFORM_KEY_HARVESTAPI", "PLATFORM-HARVESTAPI")
+    monkeypatch.setenv("TREG_PLATFORM_PROVIDERS", "harvestapi")
+    get_settings.cache_clear()
+    monkeypatch.setattr(get_settings(), "posthog_key", "phc_test_suite", raising=False)
+
+    async def relay(*args, **kwargs):
+        async def stream():
+            yield b'{"elements":[]}'
+
+        async def close():
+            return None
+
+        return UpstreamResponse(200, ((b"content-type", b"application/json"),), stream(), close)
+
+    monkeypatch.setattr(call_service, "relay", relay)
+    token = clients.headers["X-Treg-Token"]
+    args = {"name": "call", "arguments": {
+        "endpoint_id": "harvestapi.linkedin.post.search", "params": {"search": "film"}}}
+    try:
+        async with mcp_session(clients) as c:
+            c.headers["User-Agent"] = "claude-code/2.1.0 (cli)"
+            await _rpc(c, "initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                                         "clientInfo": {"name": "claude-code", "version": "2.1.0"}}, token)
+            legacy = await _rpc(c, "tools/call", args, token)
+            modern = await _modern_rpc(c, "tools/call", args, token)
+        events = await posthog_events()
+    finally:
+        get_settings.cache_clear()
+    assert legacy.json()["result"]["isError"] is False, legacy.json()
+    assert modern.json()["result"]["isError"] is False, modern.json()
+    old, new = [e["properties"] for e in events]
+    assert old["client"] == "mcp" and old["user_agent"].startswith("python-httpx/")
+    assert old["mcp_user_agent"] == "claude-code/2.1.0 (cli)" and old["mcp_client"] is None
+    assert new["mcp_user_agent"] == "claude-code/2.1.0 (cli)" and new["mcp_client"] == "test"

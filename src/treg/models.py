@@ -2117,8 +2117,8 @@ class ArenaEvaluation(SQLModel, table=True):
 
 
 class ArchiveEndpointStat(SQLModel, table=True):
-    """The archive report's running totals, one row per endpoint — maintained by the recorder in
-    the SAME transaction as each snapshot, so the panel reads 50 tiny rows instead of walking
+    """The archive report's running totals, one row per endpoint — maintained by the recorder
+    through batched per-endpoint deltas (archive.flush_stats), so the panel reads 50 tiny rows instead of walking
     434k keys + 505k snapshots (measured 9.9s + 8.0s + 14.8s per report on prod, 2026-09-03).
     Counters move only via atomic column arithmetic (col = col + n): the credit-block drift
     taught us what read-modify-write does under parallel settles."""
@@ -2201,6 +2201,20 @@ class EndpointDayStat(SQLModel, table=True):
         default=False, sa_column=Column(Boolean, nullable=False, server_default=text("false")))
 
 
+class RankingsSnapshot(SQLModel, table=True):
+    """The public /rankings boards, built from `EndpointDayStat` by `application.rankings.refresh`
+    (the `treg-worker rankings refresh` cron), which is this table's only writer. One row
+    (`id = "current"`), replaced whole on each run; the page and `/rankings/data/*` read only it, so
+    no web process adds up the day buckets. It holds counts, rates and durations per tool and
+    endpoint, never a team, a key or money.
+    """
+
+    id: str = Field(primary_key=True)
+    through: str = Field(default="")   # YYYY-MM-DD, the newest complete UTC day the boards cover
+    body: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    built_at: NaiveUTC = Field(default_factory=_now)
+
+
 class EndpointStatDirty(SQLModel, table=True):
     """An audit-corrected endpoint/day whose reliability bucket needs a recount.
 
@@ -2279,6 +2293,45 @@ class ApiKeySpendCursor(SQLModel, table=True):
     recount_after_org: int = Field(default=0)
     recount_owner: str | None = Field(default=None)
     recount_lease_until: NaiveUTC | None = Field(default=None)
+    updated_at: NaiveUTC = Field(default_factory=_now)
+
+
+class CallUsageDay(SQLModel, table=True):
+    """How many audit rows one team wrote for one member, kind, tool and client on one UTC day, and
+    when the last of them was: the read model behind the Usage page's counts and the observed-agents
+    roster. Folded from `callrecord` by `application.call_usage_rollup` (the `treg-worker usage
+    rollup` cron), which is this table's only writer; team deletion clears it with the team. The
+    reports read a few hundred of these rows instead of every audit row of the window.
+
+    `kind` is the audit row's own value; readers map an unexpected one to "call", as they always
+    did. Counts inherit the audit table's loss: a row `audit.py` shed is not counted here either.
+    """
+
+    org_id: int = Field(foreign_key="org.id", primary_key=True)
+    day: str = Field(primary_key=True)  # YYYY-MM-DD, UTC, from CallRecord.created_at
+    user_email: str = Field(primary_key=True)
+    kind: str = Field(primary_key=True)
+    tool_name: str = Field(primary_key=True)
+    client: str = Field(primary_key=True)
+    calls: int = Field(default=0)
+    last_at: NaiveUTC
+    updated_at: NaiveUTC = Field(default_factory=_now)
+
+
+class CallUsageCursor(SQLModel, table=True):
+    """Where `application.call_usage_rollup` has got to in `callrecord`. One row
+    (`id = "callrecord"`). `cursor_id` is the last folded `CallRecord.id`; reports add the rows
+    after it live. `history_from` is the first UTC day the rollup holds; nothing reads before it.
+    `caught_up_at` is NULL until a run drains the first backfill, and the reports say usage is
+    being prepared until then. With no row at all (the worker never ran) the reports aggregate
+    `callrecord` directly, as a small self-hosted registry without the cron always has.
+    """
+
+    id: str = Field(primary_key=True)
+    cursor_id: int = Field(default=0)
+    watermark: NaiveUTC | None = Field(default=None)  # created_at of the last folded row
+    history_from: str  # YYYY-MM-DD
+    caught_up_at: NaiveUTC | None = Field(default=None)
     updated_at: NaiveUTC = Field(default_factory=_now)
 
 

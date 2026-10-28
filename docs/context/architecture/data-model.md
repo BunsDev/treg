@@ -64,6 +64,11 @@ sources:
   - src/treg/alembic/versions/0083_enterprise_sso_safety.py
   - src/treg/alembic/versions/0084_enterprise_workos_cleanup.py
   - src/treg/alembic/versions/0085_enterprise_sso_blocks.py
+  - src/treg/alembic/versions/0087_rankings_snapshot.py
+  - src/treg/alembic/versions/0088_call_usage_rollup.py
+  - src/treg/application/call_usage_rollup.py
+  - src/treg/application/call_usage.py
+  - tests/test_call_usage_rollup.py
   - src/treg/timeutil.py
   - src/treg/infra/db.py
   - src/treg/infra/money_timing.py
@@ -390,6 +395,29 @@ uses this metadata, never the encrypted token's shape.
   only writer of both, and the Team and Usage pages read only them; see [money](money.md) § Spend
   per API key. Team deletion clears a team's rows.
 
+  **Call counts per member are folded too.** The Usage page's counts and the observed-agents
+  roster grouped a team's whole 30-day window of `callrecord` per page open; the
+  `(org_id, created_at)` index finds the window, but every row is a heap fetch of a wide audit
+  row, and a busy team's report outlasted the report session's statement timeout. A covering
+  index was rejected: it would copy four string columns of every audit row and slow every audit
+  insert. Revision 0088 adds `CallUsageDay` (team + UTC day + member + kind + tool + client ->
+  `calls`, `last_at`) and the single-row `CallUsageCursor` (`cursor_id`, the last folded
+  `CallRecord.id`; `history_from`; `caught_up_at`). `application/call_usage_rollup.py`, run as
+  `treg-worker usage rollup`, is the only writer of both: it walks `callrecord` by primary key with
+  the commit lag of `catalog_stats`, starting at the first row of a 31-day history, and moves the
+  counts and the cursor in one transaction. The cursor lock is a no-op UPDATE, which also locks on
+  SQLite, where SELECT FOR UPDATE is ignored. A new cursor deletes the old day rows in the
+  transaction that creates it, so a rebuild never adds to a previous history. There is no recount: audit is lossy by design, and the
+  only race left undercounts by a row the queue could have shed anyway. A report
+  (`application/call_usage.py`) reads the folded rows and the team's rows after `cursor_id` in ONE
+  statement, so both halves share a snapshot and no row is counted twice or missed; the tail is
+  found over `(org_id, id)` and is a few minutes of calls while the cron runs. With no cursor row
+  (the worker never ran, e.g. a small self-hosted registry) the reports still aggregate
+  `callrecord` live; with a cursor that has not caught up they say usage is being prepared, and a
+  window older than `history_from` starts there and says so. The members and agents lists' `used_today`
+  reads today's rows the same way once the rollup has caught up, and `callrecord` live before that;
+  it never waits. `RunRecord` is still read live: it no longer grows. Team deletion clears a team's rows.
+
   **`ix_callrecord_call_ref`, and why a database could lack it.** The model and revision 0001
   declare it, so every database Alembic created has it. A database that predates Alembic got
   `call_ref` from the old `init_db` `ALTER TABLE ... ADD COLUMN`, which adds no index, and was
@@ -468,7 +496,10 @@ uses this metadata, never the encrypted token's shape.
   `_store_idempotent` keeps a terminal 410 `idempotency_response_too_large` (`call_id`, charge,
   `size_bytes`) instead. The caller already received the full answer; a retry never runs again.
   The per-call expired-label sweep reads `(membership_id, expires_at)` (Alembic `0053`), so its
-  cost is the expired rows, not every label the caller holds.
+  cost is the expired rows, not every label the caller holds. It deletes at most
+  `IDEMPOTENCY_SWEEP_BATCH` rows it can lock (`FOR UPDATE SKIP LOCKED`), so a member's concurrent
+  batch never queues on one another's expired rows; a skipped row goes with a later call. The label
+  being reused is freed by the replay lookup's own delete, not by the sweep.
 - **`ToolRequest`** - a "the catalog doesn't have X" report (`POST /tool-requests`, open + per-IP
   rate-limited): `capability` (the headline, ≤200 chars), `query` (the search that came up empty -
   auto-filled by agents, the dedup/priority signal), `note`, `contact`, `source` (`web` | `cli` |
@@ -1019,6 +1050,14 @@ length-capped click fields, and `created_at`/`updated_at` use naive UTC. Authent
 submit observations of proven emails; cookie-less signup uses observations from the last 90 days.
 Signup deletes the row once its team holds the click, and `treg-worker admin purge-ad-clicks`
 deletes rows past 90 days. No analytics or audit emission is involved. See [ads conversions](ads-conversions.md).
+
+## Rankings
+
+Additive revision `0087`: `rankingssnapshot`, one row (`id = "current"`) holding every /rankings
+board as JSON, the newest complete UTC day it covers (`through`) and when it was built. Written only
+by `application.rankings.refresh` (the `treg-worker rankings refresh` cron), which replaces the row
+whole; the page reads it. It holds counts, rates and durations per tool and endpoint, never a team,
+a key or money, so team deletion has nothing to remove. See [catalog](catalog.md).
 
 ## Showcase leaderboard and pictures
 

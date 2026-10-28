@@ -3529,6 +3529,11 @@ adapters:
     out: {ads: results, page_id: "results[0].page_id", page_name: "results[0].page_name", count: "len(results)",
           next_cursor: continuation_token}
     miss: "coalesce(results, []) == []"
+  adyntel.google.ads.transparency:
+    accepts: [[company_domain]]
+    in: {company_domain: body.company_domain}
+    out: {ads: ads, count: "len(ads)", next_cursor: continuation_token}
+    miss: "coalesce(ads, []) == []"
   scrapecreators.x.v1-facebook-adlibrary-company-ads:
     accepts: [[page_id], [company_name]]
     in: {page_id: queryParams.pageId, company_name: queryParams.companyName}

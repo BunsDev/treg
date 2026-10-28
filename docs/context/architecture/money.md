@@ -996,6 +996,12 @@ export really does cost 5,000 keywords. Before this the 20-row default billed a 
 saw the wrong price before the call too. On these providers nothing reports a cost after the fact,
 so the reserve IS the charge: a wrong entity count is a wrong bill, not a hold the settle trues up.
 
+Fiber natural-language search (`fiber-ai.people.search.natural_language`) adds a fee the page size
+does not name. `_marketplace_pricing` adds two credits, converted with `_usd_to_micro` at the
+`fx.yaml` fiber-ai rate, when the JSON body has no non-empty `pageToken` (absent, null, or blank).
+A later page that sends `pageToken` reserves only the requested page. Settlement is unchanged: it
+still reads `chargeInfo.creditsCharged`.
+
 The estimate is never a substitute for an available response-derived charge.
 
 `_platform_settle` uses its own short session and never turns a served response into a 500.
@@ -1117,7 +1123,7 @@ still pay the provider twice.
   `X-Treg-Original-Cost-Micro`; MCP returns `replayed: true`. An async submission replay echoes its
   original reservation there.
 - Refusal and cancellation cleanup return an acquired label. Expired entries are swept lazily,
-  scoped to the caller, at claim time.
+  scoped to the caller, at claim time, skipping rows a concurrent request has locked.
 
 A reserve admission 429 never reaches `_store_idempotent`; the HTTP exception handler's
 `_stamp_call_exit` releases its pending claim, including calls from either MCP surface. The same
@@ -1396,6 +1402,8 @@ delayed account balance, so neither field is interpreted as per-call cost.
 
 HTTP 200 alone does not prove a billable success. `settle.py` checks the catalog's `expect` rule
 (`{json_path, equals}`) first, then the routing adapter, and otherwise falls back to the estimate.
+A value in the rule's optional `misses` list settles at zero like any other non-`equals` value;
+it only stops the hit verdict from calling a free miss a provider failure.
 `store.py` inherits provider-file `expect` rules onto endpoints so new routes retain the provider's
 success convention. An undecidable rule does not imply a free call.
 

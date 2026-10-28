@@ -22,8 +22,8 @@ hook, an optional voiced demo clip, and `bill.md` with what each step cost.
   curl -fsSL {BASE}/install.sh | sh
   treg login
   ```
-  `treg balance` before starting. A full run of 4 hook clips lands in the low single-digit dollars
-  at 720p; say the estimate before each paid step.
+  `treg balance` before starting. A full run of 4 hook clips of 12-18 s costs about $13-20 at
+  720p ($0.27 a second); say the estimate before each paid step.
 - **Two sibling skills** this one delegates to. Read each before its step, do not paraphrase them:
   - `portrait-clone` (the character): https://raw.githubusercontent.com/agentara/skills/refs/heads/main/skills/aigc/portrait-clone/SKILL.md
   - `ugc-talking-head-video` (the clips and captions): https://raw.githubusercontent.com/superdesigndev/treg/main/.agents/skills/ugc-talking-head-video/SKILL.md

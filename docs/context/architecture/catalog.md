@@ -2,6 +2,9 @@
 title: Endpoint catalog — what you can DO with a connected key, and which provider should do it
 status: shipped
 sources:
+  - src/treg/domain/catalog/rankings.py
+  - src/treg/application/rankings.py
+  - tests/test_rankings.py
   - scripts/catalog_added.py
   - scripts/catalog_backfill_added.py
   - .github/workflows/catalog-added.yml
@@ -635,6 +638,7 @@ endpoints:
     expect:                          # optional; default is "HTTP 2xx"
       json_path: code                # dotted path into the response JSON
       equals: 200                    #   (for providers that answer HTTP 200 even on failure)
+      misses: [404]                  # optional; values meaning "found nothing": an answer, not a failure
     cost:
       type: per_success              # per_call | per_result | per_success | free | quota_rows
       value: 0.0015
@@ -1781,6 +1785,8 @@ transaction under the cursor row's lock and re-reads every bucket it touches ins
 nothing about a bucket is carried between batches, so two overlapping runs (a slow backfill
 still going when the next schedule fires) serialize cleanly instead of one erasing the other's
 fold with the cursor already past the rows.
+The public `/rankings` page (`routers/rankings.py`) is the buckets' second reader, through a worker: `treg-worker rankings refresh` (`application/rankings.refresh`) builds every board and saves it as the one `rankingssnapshot` row, and the page and `/rankings/data/{board}` read only that row (kept five minutes per process), so no web process adds up the buckets. The refresh reads the counts of the last thirty complete days without the latency reservoirs (most of the table), then only the first 50 values of each reservoir of the last seven days (cut in Postgres with `jsonb_path_query_array`; a reservoir's prefix is still a uniform pick), closes the session, and `domain/catalog/rankings.py` builds the boards in memory: most used tools and endpoints by successful calls (7 and 30 days, the 7-day change against the week before), trending, each category's providers by share, most reliable tools (all of a tool's endpoints together: a 5xx is mostly the provider's own systems), fastest endpoints (speed depends on the job, so it stays per endpoint), top AI models (the generation platforms and decision models, filed as Image, Video, Audio or Decision: per model, keyed by the capability's model segment or else the model's name without its vendor, so one model at several vendors adds up, by type), and head to head: per job (one capability), the providers past the reliability floor side by side on success rate and median time, for the busiest jobs with at least two such providers. The last complete day is the day before both today and the cursor's `watermark`, so a stopped worker never shows a partial day. The usage boards (most used, most called, the chart, top by category) have no floor on purpose: they list every tool with calls, so a tool only one team uses shows that team's volume, never the team. The boards that rate or compare have floors (trending 1,000 successful calls this week, reliability 100 decided calls, speed 20 timed calls) so a small base cannot make a large percentage; `async` endpoints are left out of reliability and speed. It never reads `CallRecord`.
+
 Late terminal evidence uses a persistent correction queue, `EndpointStatDirty`, keyed by endpoint
 and original UTC submission day. `audit._write_batch` updates the actual matching `CallRecord`
 rows with `RETURNING`, then calls `catalog_stat_dirty.mark_dirty` in the same transaction. Repeated
@@ -2196,7 +2202,8 @@ to choose (`docs/CAPABILITY-ROUTING-PLAN.md`). Everything else in the catalog st
   `/ N`, `==`/`!=` against literals, and named transforms (`split_first`, `split_last`, `join`,
   `has_type`, `len`, `list`, `obj`, `fmt`, `csv`, `lower`/`upper`, `at_least`, `at_most`, `null_if`, `choose`, `linkedin_handle`/
   `linkedin_url`, `email_domain`, `host`, `dfs_location`, `seranking_source`, `tca_filter`,
-  `e164_digits`, `starts_with`, `with_country_code`, `count_with`).
+  `e164_digits`, `starts_with`, `with_country_code`, `count_with`, `role_seniority`, `role_department`,
+  `scalar`).
   `values` reads rows from object-keyed or list responses; `get` applies dotted/indexed lookup
   to another expression result (for example, the first company in a domain-keyed response).
   These are generic helpers, not provider-specific rewrites.

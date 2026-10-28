@@ -855,6 +855,44 @@ def test_hunter_domain_search_estimate_uses_credit_rounding():
     assert est_100 == 10 * credit_micro, f"limit=100 should reserve 10 credits: {est_100}"
 
 
+@pytest.mark.parametrize(("body", "credits"), [
+    ({"query": "fintech companies in San Francisco", "pageSize": 5}, 7),
+    ({"query": "fintech companies in San Francisco", "pageSize": 5, "pageToken": None}, 7),
+    ({"query": "fintech companies in San Francisco", "pageSize": 5, "pageToken": ""}, 7),
+    ({"query": "fintech companies in San Francisco", "pageSize": 5, "pageToken": "   "}, 7),
+    ({"pageSize": 5, "pageToken": 0}, 7),
+    ({"pageToken": "tok", "pageSize": 5}, 5),
+    ({"pageToken": " tok ", "pageSize": 5}, 5),
+])
+def test_fiber_ai_natural_language_first_page_reserves_interpretation(body, credits):
+    """A first page holds pageSize credits plus the 2-credit NL fee; a pageToken page does not.
+
+    pageToken counts only as a non-empty string. Raw micro-USD, before margin: one fiber-ai
+    credit is $0.02, so pageSize 5 is 100_000 and a first page is 140_000.
+    """
+    cat = catalog_store.load()
+    endpoint_id = "fiber-ai.people.search.natural_language"
+    cost = cat.cost_view(cat.by_id[endpoint_id]["cost"], "fiber-ai")
+    credit = call_resolution._usd_to_micro(cat.credit_rates["fiber-ai"])
+    assert credit == 20_000
+    estimate, unit = call_resolution._marketplace_pricing(
+        "fiber-ai", endpoint_id, cost, {}, json.dumps(body).encode(),
+    )
+    assert (estimate, unit) == (credits * credit, credit), body
+
+
+def test_fiber_ai_people_search_does_not_add_the_interpretation_fee():
+    """The +2 is only the natural-language run. A filtered people search stays pageSize credits."""
+    cat = catalog_store.load()
+    endpoint_id = "fiber-ai.people.search"
+    cost = cat.cost_view(cat.by_id[endpoint_id]["cost"], "fiber-ai")
+    credit = call_resolution._usd_to_micro(cat.credit_rates["fiber-ai"])
+    estimate, unit = call_resolution._marketplace_pricing(
+        "fiber-ai", endpoint_id, cost, {}, json.dumps({"pageSize": 5}).encode(),
+    )
+    assert (estimate, unit) == (5 * credit, credit)
+
+
 async def test_unmetered_call_keeps_the_callers_encoding(clients: AsyncClient):
     """Tier 2 (org's own key) still streams and must keep the relay contract: the caller's own
     compression choice travels upstream untouched."""
@@ -1882,6 +1920,50 @@ async def test_the_sweep_clears_labels_NOBODY_COMES_BACK_FOR(clients: AsyncClien
         gone = (await db.execute(select(IdempotentCall).where(
             IdempotentCall.key == "abandoned-label"))).scalar_one_or_none()
     assert gone is None, "an expired row nobody returns for must still be reclaimed"
+
+
+async def test_the_sweep_never_waits_on_a_concurrent_request_of_the_same_member(
+        clients: AsyncClient, platform_on):
+    """A member's concurrent batch must not queue on each other's expired rows.
+
+    Another request holds the lock on every expired label (it is mid-sweep). A new claim skips
+    those rows instead of waiting for that transaction, and the next claim reclaims them."""
+    import asyncio
+    from datetime import timedelta
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from sqlmodel import select
+
+    from treg.application.call.idempotency import _claim_idempotent
+    from treg.models import IdempotentCall, Membership
+
+    if session_maker.kw["bind"].dialect.name != "postgresql":
+        pytest.skip("requires an isolated PostgreSQL database via TREG_TEST_DB_URL")
+    org_id = (await clients.get("/orgs")).json()[0]["org_id"]
+    expired = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
+    async with session_maker() as db:
+        m = (await db.execute(select(Membership).where(
+            Membership.org_id == org_id).order_by(Membership.id))).scalars().first()
+        for n in range(3):
+            db.add(IdempotentCall(org_id=org_id, membership_id=m.id, key=f"old-{n}",
+                                  endpoint_id=EP, status="done", expires_at=expired))
+        await db.commit()
+    caller = SimpleNamespace(org_id=org_id, membership=m)
+
+    async with session_maker() as holder:
+        await holder.execute(select(IdempotentCall.id).where(
+            IdempotentCall.membership_id == m.id).with_for_update())
+        async with session_maker() as db, asyncio.timeout(5):
+            assert await _claim_idempotent("fresh-1", "fp", EP, caller, db, call_ref=uuid4().hex)
+        await holder.rollback()
+
+    async with session_maker() as db:
+        assert await _claim_idempotent("fresh-2", "fp", EP, caller, db, call_ref=uuid4().hex)
+    async with session_maker() as db:
+        keys = set((await db.execute(select(IdempotentCall.key).where(
+            IdempotentCall.membership_id == m.id))).scalars().all())
+    assert keys == {"fresh-1", "fresh-2"}
 
 
 async def _claim_row(key: str):

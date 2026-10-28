@@ -18,7 +18,7 @@ from ...application.hub import runner as hub_runner
 from ...application.hub import limits as hub_limits
 from ... import sandbox as demo_sandbox
 from ...capacity_notice import CAPACITY_HEADER, EXHAUSTED
-from ...client_identity import _norm_client
+from ...client_identity import _norm_client, mcp_host
 from ...config import get_settings
 from ...domain.catalog import results as catalog_results
 from ...domain.catalog import store as catalog_store
@@ -300,14 +300,15 @@ def _tool_called_props(request: _ApplicationRequest, *, tool_name: str, status_c
                        hit: bool | None = None, response_bytes: int | None = None) -> dict:
     """The `tool_called` event, minus the provider block. No params, bodies or full URL: per-call
     detail stays in the DB, joined on `call_ref`. The UA is kept because relay forwards it verbatim,
-    so it is what the vendor's edge saw."""
+    so it is what the vendor's edge saw. A call made through either MCP surface also names its host."""
     user_agent = request.headers.get("user-agent", "")
-    return {"tool_name": tool_name, "status_code": status_code, "client": _client_name(request),
+    client = _client_name(request)
+    return {"tool_name": tool_name, "status_code": status_code, "client": client,
             "method": request.method, "own_tool": own_tool, "duration_ms": duration_ms,
             "call_ref": call_ref, "outcome": _outcome(status_code, refused_by, answered=answered),
             "refused_by": refused_by, "cached": cached, "smoothed": smoothed, "hit": hit,
             "response_bytes": response_bytes, "user_agent": user_agent[:100],
-            "ua_family": _norm_client(user_agent)}
+            "ua_family": _norm_client(user_agent)} | mcp_host(request.headers, client)
 
 
 class _HeaderView:

@@ -187,6 +187,34 @@ SQLite aliases all three makers to one engine. It has no pool to protect and fil
 it cannot share, so separate engines would only manufacture lock failures. Tests pin routing rather
 than SQLite isolation.
 
+### Dashboard reports
+
+Team dashboard reports that aggregate whole windows of the audit and ledger tables
+(`/orgs/{id}/usage`, `/orgs/{id}/usage/by-tag`, `/orgs/{id}/agents/observed`) take
+`get_report_session` instead of `get_session`. It opens `read_session_maker`: the replica when
+`TREG_READ_DATABASE_URL` is set, otherwise the API pool. Either way:
+
+- at most `_REPORT_SLOTS` (2) reports run at once per process; a report that cannot get a slot
+  within `_REPORT_WAIT_S` (1 s) is refused before checkout;
+- each report transaction sets `statement_timeout` (`_REPORT_STATEMENT_TIMEOUT_MS`, 15 s) on
+  PostgreSQL, and the report as a whole runs under `_REPORT_DEADLINE_S` (15 s), so a report of
+  several sub-limit statements cannot hold its connection longer either. The deadline is an
+  `asyncio.timeout` around the dependency's yield: FastAPI runs a dependency's body and the endpoint
+  in one task, and cancelling an in-flight asyncpg query cancels it on the server;
+- both refusals answer `429 {"report_busy": "busy" | "timeout"}` with `Retry-After: 2` through
+  `bootstrap_handlers._report_busy`: the service is up, the report should be retried later. They are
+  not `treg_saturated` and record no `db_pool` fault.
+
+Authorization finishes on `get_session` first; `require_member` commits, so that session holds no
+connection while the report runs. On the API pool the gate caps reports at two of the process's
+API slots; `/call/` keeps the rest. Reports on the replica see replication lag.
+`tests/test_report_session.py` pins which routes take the report session. The dashboard runs the
+per-tag reports one at a time and retries a 429 with backoff (`withReportRetry` in
+`frontend/src/api.ts`); a report that still fails shows its error instead of being hidden.
+The gate bounds a slow report but cannot make it fast: the usage counts and the observed-agents
+roster read the daily usage rollup (`treg-worker usage rollup`, below) instead of the audit
+table's 30-day window.
+
 ### Optional read replica
 
 `TREG_READ_DATABASE_URL` adds a datasource exposed as `read_session_maker`. Its supported drivers
@@ -218,7 +246,8 @@ primary pool and releases its connection before the report begins. With no read 
 API-pool fallback. Configured reader failures never retry on the primary.
 Before enabling a hosted cutover, verify the running process has the intended read URL, the target
 is a readable replica with the required table grants, and replication lag is acceptable. Configuring
-a URL does not migrate any other report. Removing it returns this report to the admin primary pool.
+a URL also moves the dashboard reports above and no other report. Removing it returns `/admin/errors`
+to the admin primary pool and the dashboard reports to the gated API pool.
 
 `pool_snapshot()` includes a separate `read` entry for a configured PostgreSQL datasource; SQLite
 engines are omitted as for the primary. `connection_budget()` describes only the primary pools;
@@ -227,7 +256,7 @@ If both URLs target the same server, add both budgets against that server's limi
 `dispose_engine()` also disposes the read engine. Schema upgrades, startup verification and test
 schema resets continue to target the primary.
 
-This datasource is opt-in infrastructure; `/admin/errors` is its first report consumer.
+This datasource is opt-in infrastructure; `/admin/errors` and the dashboard reports above use it.
 Further callers must tolerate replica lag and keep writes, cursor advancement and concurrency
 control on the primary. Operators must provision and synchronize a compatible schema and data;
 setting a URL does not establish replication, translate dialect-specific queries, or migrate any
@@ -545,6 +574,12 @@ without importing the heavy database stack into the light `treg` CLI.
   not schedule it). Each run reads only calls after each source's cursor, over `callrecord`'s
   (org_id, id) or (org_id, api_key_id, id) index in small batches, up to a cap per run; a busy
   source's first four weeks are counted over several runs.
+- `treg-worker rankings refresh` rebuilds the public /rankings boards from the per-day endpoint
+  stats (`endpointdaystat`, which `treg-worker catalog stats` writes) and replaces the one saved
+  row (schedule it hourly, as its own job: a failed run only leaves the rankings a run older, never
+  the catalog's reliability numbers). Until its first run the page says the rankings are being
+  prepared. Each run reads the counts of about thirty days and the first values of the last seven
+  days' latency samples, never `callrecord`.
 - `treg-worker media sweep` deletes public pictures no team, person or app names any more (schedule
   it daily; it reads only `img/` in the public bucket and skips files younger than a day).
 - Pictures (avatars, /showcase icons and screenshots) are off until `TREG_MEDIA_STORE_ENDPOINT`, its
@@ -619,6 +654,16 @@ without importing the heavy database stack into the light `treg` CLI.
   service runs a build with revision 0070). It reads the primary database in small batches, and
   its first run backfills 31 days over as many runs as `--max-rows` needs. The Team page's "Spent"
   column and the Usage page's spend chart say spend history is being prepared until it has caught up once.
+- `treg-worker usage rollup` folds new audit rows into per-member, per-tool, per-day call counts
+  (`--max-rows`, default 500,000, bounds one pass; schedule it every few minutes, after the web
+  service runs a build with revision 0088). It walks `callrecord` by primary key on the primary
+  database, in short batches, and its first run backfills 31 days over as many runs as
+  `--max-rows` needs. Until it has caught up once the Usage page says counts are being prepared and
+  the observed-agents roster is empty. If it stops, the reports keep answering, reading the rows
+  after its cursor live, and slow down as that tail grows. Deleting the cursor row
+  (`callusagecursor`) returns the reports to the live audit-table aggregate; suspend the cron
+  first to stay there, because its next run starts a new cursor, clears the old rollup rows in the
+  same transaction and backfills again.
 - `treg-worker jev xboost` runs the `/jev` launch-radar demo once a day: it calls treg's own `/call/` API
   with `TREG_JEV_TREG_TOKEN` (a member token of the demo team, so the spend is an ordinary bill) and jev
   through the Vercel AI Gateway (`TREG_AI_GATEWAY_API_KEY`), and stores the run under Ephemeral for the page.

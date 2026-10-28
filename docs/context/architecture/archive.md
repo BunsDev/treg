@@ -400,7 +400,8 @@ LeadMagic needs person identity fields, not an email address; SE Ranking needs b
 mixed SE Ranking batch is useful if at least one row has data and every row has a valid shape.
 Explicit empty arrays/no-data flags are empty. A 2xx body that fails the endpoint's own `expect`
 success rule (`results.fails_expect`; a DataForSEO task status other than 20000 under a 20000
-envelope) is an error with reason `expect_failed`, before any adapter reads it. HTTP errors and
+envelope) is an error with reason `expect_failed`, before any adapter reads it. A value listed in
+the rule's `misses` (a provider's 200 `not_found` status word) is not a failure: the adapter judges that body. HTTP errors and
 explicit provider error envelopes are errors; invalid JSON, predicate failures and unsupported shapes are unknown. Generic adapter
 rules retain their existing semantics, including their limitations on missing fields; verification
 against a fixture does not imply full response-schema validation.
@@ -729,14 +730,27 @@ additive fields for the panel: per-endpoint `hits` and `kept_bytes`, and totals 
 ## The running totals (2026-09-03)
 
 The panel's report reads `ArchiveEndpointStat` — one row per endpoint (keys, stable, changed,
-snapshots, bodies_kept, kept_bytes, newest_fetch), maintained by the recorder in the SAME
-transaction as each snapshot, using atomic column arithmetic only (the credit-block drift is why
+snapshots, bodies_kept, kept_bytes, newest_fetch), maintained by the recorder with atomic column
+arithmetic only (the credit-block drift is why
 read-modify-write is banned near counters). The old per-load aggregates cost 9.9s + 8.0s + 14.8s
 at 434k keys on prod; the rollup read is milliseconds at any scale. Migration 0013 backfills the
 table once from the live archive and adds a partial index over refresh-origin snapshots for the
 "refreshes today" count; a 30s in-process report cache remains as the belt against poll stacking
-(cleared per test beside the drains). A dropped recording drops its counter bumps with it — the
-rollup rides the recording's own commit, so the two cannot drift.
+(cleared per test beside the drains).
+
+The row is shared by every team, so a per-recording UPDATE queued busy endpoints on it and left a
+dead tuple per call. A recording therefore adds its counts to an in-process delta after its own
+commit (`_count_stats`, so a dropped or retried recording counts nothing), and `flush_stats` lands
+the deltas a few seconds later as one statement per endpoint, in endpoint order so two processes
+cannot deadlock. The flush takes the archive's write semaphore, so it stays inside the archive's
+background-pool budget. `drain()` waits for an interrupted flush to put its deltas back, then
+flushes them; a failed flush keeps its deltas for the next. A process that dies between flushes
+loses that window's counts: the totals are a staff report, nothing serves or bills from them.
+The pruner and team deletion still subtract directly. Column arithmetic commutes only while the
+row exists, so the first recording of an endpoint creates the row, zeroed, inside its own
+transaction (`_ensure_stat_row`); a process skips that check for an endpoint only after one of its
+recordings committed with the row, never on an uncommitted or rolled-back one. An erase before
+the first flush then subtracts from that row instead of matching nothing.
 
 ## Body compression (2026-09-03)
 

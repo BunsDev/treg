@@ -428,7 +428,8 @@ shared HTTP client. `/auth/logout` remains an HTTP-only cookie action.
   [multi-tenancy](../architecture/multi-tenancy.md).
 - **Agents (machine identities):** `create_agent` (`POST /orgs/{id}/agents`, admin+) mints/rotates a
   member token for a machine caller - its own `daily_call_cap`, `tool_access` and audit trail, with no
-  new table; `list_agents` (`GET`, never returns a token) and `revoke_agent` (`DELETE …/{user_id}`,
+  new table; `list_agents` (`GET`, never returns a token; each agent's `connected` is one indexed
+  existence check for any call in the org, never a scan of its history) and `revoke_agent` (`DELETE …/{user_id}`,
   which also sweeps the deny rules and idempotent replay cache owned by that agent before deleting its
   membership; the schema cascades that cache as a backstop). An agent token is refused by
   `require_identity` and can never be an owner. **Re-POSTing the same name ROTATES, and a field the
@@ -440,8 +441,9 @@ shared HTTP client. `/auth/logout` remains an HTTP-only cookie action.
   call, scoped to its live agent membership and org. An old key's history cannot confirm a new
   key after rotation; unknown, foreign, disabled, revoked, or removed agent keys return 404.
   `GET /orgs/{id}/agents/observed` (admin+) lists the agents **detected in member
-  traffic** - one row per (member, runtime) from `CallRecord.client`/`RunRecord.client` over 30 days,
-  excluding plain-terminal (`''`/`cli`) and machine-identity traffic; attribution, never a gate. See
+  traffic** - one row per (member, runtime) from `CallRecord.client`/`RunRecord.client` over 30 days
+  (calls from the same daily usage rollup, so the window starts at a UTC midnight; `[]` while its
+  first backfill runs), excluding plain-terminal (`''`/`cli`) and machine-identity traffic; attribution, never a gate. See
   [multi-tenancy](../architecture/multi-tenancy.md).
 - **Projects (a sub-scope inside the org):** `create_project` / `list_projects` /
   `delete_project` (`/orgs/{id}/projects`, admin+ to mutate) - deleting frees its tools to org-wide and
@@ -460,9 +462,14 @@ shared HTTP client. `/auth/logout` remains an HTTP-only cookie action.
 - **Usage metering + caps** (usage-metering v1, `docs/USAGE-METERING-PLAN.md`): `org_usage`
   (`GET /orgs/{id}/usage?days=`, admin+) rolls up `CallRecord` + `RunRecord` since the window start into
   **by-user** (with a `call`/`local_run`/`server_run` split), **by-tool**, **by-day**, and totals - pure
-  `GROUP BY`, **no request/response bodies** (they aren't stored). It reads the window's audit rows
-  twice, not once per section: one grouped pass answers member, kind and tool together, and the
-  per-day count is the second. `set_member_cap`
+  counts, **no request/response bodies** (they aren't stored). The call side reads the daily usage
+  rollup plus the rows after its cursor ([data-model](../architecture/data-model.md)); the answer
+  carries `ready` (false, with no counts, until the rollup's first backfill has caught up) and
+  `history_from`, the first day the rollup holds, which a longer window starts at. Where the
+  rollup worker has never run, the audit table is aggregated directly. This rollup, `/usage/by-tag` and `/agents/observed` run on the gated
+  report session ([deploy](../ops/deploy.md#dashboard-reports)): when its slots are full or a
+  statement passes its timeout they answer `429 {"report_busy": "busy" | "timeout"}` with
+  `Retry-After: 2`, never the call surface's `treg_saturated`. `set_member_cap`
   (`PATCH /orgs/{id}/members/{user}/cap`, admin+) sets `Membership.daily_call_cap` (`-1` = unlimited,
   rejects `< -1`). `my_usage` (`GET /usage/me`, any member) returns the caller's own `used_today` + `cap`.
   `list_members` also returns each member's `daily_call_cap` + `used_today`. **Enforcement:**
@@ -553,7 +560,7 @@ shared HTTP client. `/auth/logout` remains an HTTP-only cookie action.
   | `GET /catalog/search?q=&limit=&added_within_days=&sort=&engine=` | Ranked endpoint views, count/total and hints; default 25, maximum 100. A query naming a provider with a task leads with that provider's rows, says so in `led_by`, and shows no `score`. `engine=agent` (the CLI's search) answers with the use case behind MCP `catalog_search` in this route's row shape, plus `engine`, the answer's `verdict`, `reason` and `jobs` where v2 answered (see [search-experiment](../architecture/search-experiment.md)). Listed hub tools merge into the same ranking by score (see [hub](../architecture/hub.md)); a hub row's run hint is its own `treg call <id> --data` line, since it has no catalog row or provider key. `added_within_days` (1-365, capped above with `capped_at_days`) and `sort=newest` list recently added tools, `q` optional; absent, the answer is unchanged apart from each row's `added` (see [catalog](../architecture/catalog.md)) |
   | `GET /catalog/find?q=` | Find tools for a described job: NDJSON stream of `candidates` then `judged` (verdict + kept rows with probabilities; a bare platform or provider name gets verdict `name` and its endpoints, unjudged; under `find_engine=v2` the recall is by job and the events add `units`, `reason`, `platform`, `engine`, and rows `fit_from` / `children_hidden`, see architecture/find.md); `&platform=<slug>` scopes recall and the keyword fallback (ranked among that shelf's rows, catalog-wide idf) and a bare provider name to that shelf (unknown slug is 404); rate limited per IP, 503 without a judge key |
   | `GET /catalog/providers/{service}` | Every tool one provider serves, by platform; a tool whose capability several providers serve on its platform carries `compare` (capability, URL key, provider count); reviewed endpoints carry `reviews`; unknown provider is 404 |
-  | `GET /catalog/endpoints/{id}` | Endpoint, provider, capability siblings (each with `observed` and, where reviewed, `reviews`), call template, inline example and next-step hints; `observed_pending: true` when the observation cache had not read some of these endpoints yet (ask again shortly); `overflow_price_usd` / `overflow_price_unit` / `overflow_via` on the endpoint when the deployment can relay it |
+  | `GET /catalog/endpoints/{id}` | Endpoint, provider, capability siblings (compact comparison rows: price, parameter names, `verified`, `observed` and, where reviewed, `reviews` without quotes), call template, inline example and next-step hints; `observed_pending: true` when the observation cache had not read some of these endpoints yet (ask again shortly); `overflow_price_usd` / `overflow_price_unit` / `overflow_via` on the endpoint when the deployment can relay it |
   | `GET /catalog/examples/{id}` | Captured JSON, resolved through the catalog before constructing a file path |
   | `POST /tool-requests` | Open, rate-limited demand report with capped fields and optional caller attribution |
 
