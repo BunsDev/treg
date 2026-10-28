@@ -913,6 +913,16 @@ async def _crustdata(c, key):
     return {"value": acct.get("credits"), "unit": "credits", "note": note}
 
 
+async def _theirstack(c, key):
+    d = await _get(c, "https://api.theirstack.com/v0/billing/credit-balance",
+                   headers={"Authorization": f"Bearer {key}"})
+    total = d.get("api_credits") if isinstance(d, dict) else None
+    used = d.get("used_api_credits") if isinstance(d, dict) else None
+    if type(total) is not int or total < 0 or type(used) is not int or used < 0:
+        raise ValueError("TheirStack returned no valid API credit balance")
+    return {"value": max(total - used, 0), "unit": "API credits", "note": "Available API credits"}
+
+
 async def _enrichlayer(c, key):
     d = await _get(c, "https://enrichlayer.com/api/v2/credit-balance",
                    headers={"Authorization": f"Bearer {key}"})
@@ -994,6 +1004,7 @@ async def _piapi(c, key):
 
 
 BALANCE_ROUTES = {
+    "theirstack": _theirstack,
     "anyapi": _anyapi,
     "cloro": _cloro,
     "openrouter": _openrouter,

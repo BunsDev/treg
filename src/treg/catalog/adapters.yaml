@@ -1164,6 +1164,18 @@ adapters:
   # coresignal.companies.enrich: no example (402 at capture, empty account).
 
   # ---- companies.search (batch 5, 2026-08-28) --------------------------------------------------
+  theirstack.companies.search:
+    accepts: [[domain], [name]]
+    in: {domain: body.company_domain_or}
+    in_expr:
+      body.company_domain_or: "list(domain)"
+      body.company_name_or: "choose(domain, null, list(name))"
+      body.company_country_code_or: "list(upper(country))"
+      body.limit: limit
+    const: {body.page: 0}
+    max: {limit: 100}
+    out: {companies: data}
+    miss: "data == []"
   dropleads.companies.search:
     accepts: [[domain], [name], [industry], [technology]]
     in: {domain: body.filters.companyDomains, name: body.filters.companyNames,
@@ -1635,6 +1647,17 @@ adapters:
     out: {results: local_results}
     miss: "local_results == []"
 
+  theirstack.jobs.search:
+    accepts: [[domain], [name]]
+    in: {domain: body.company_domain_or}
+    in_expr:
+      body.company_domain_or: "list(domain)"
+      body.company_name_or: "choose(domain, null, list(name))"
+      body.limit: limit
+    const: {body.page: 0}
+    max: {limit: 100}
+    out: {jobs: data}
+    miss: "data == []"
   crustdata.companies.jobs.search:
     accepts: [[name]]
     in:  {name: body.filters.value}

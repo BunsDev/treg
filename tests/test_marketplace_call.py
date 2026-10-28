@@ -909,6 +909,57 @@ def _mk(provider: str, **kw) -> call_resolution.MarketplaceCall:
     return call_resolution.MarketplaceCall(tool=None, upstream="", consumed=set(), provider=provider, **kw)
 
 
+@pytest.mark.parametrize(("endpoint", "body", "expected"), [
+    ("theirstack.jobs.search", b'{"data":[{},{}]}', 40_000),
+    ("theirstack.companies.search", b'{"data":[{}]}', 60_000),
+    ("theirstack.companies.search", b'{"data":[]}', 0),
+    ("theirstack.companies.technologies", b'{"data":[{},{}]}', 60_000),
+    ("theirstack.companies.buying_intents", b'{"data":[]}', 0),
+    ("theirstack.jobs.search", b'{"data":{}}', None),
+])
+def test_theirstack_settles_returned_records_or_one_company_lookup(endpoint, body, expected):
+    mk = _mk("theirstack", endpoint_id=endpoint, cost_type=(
+        "per_result" if endpoint.endswith("search") else "per_success"),
+        unit_micro=20_000, estimate_micro=(200_000 if endpoint.endswith("search") else 60_000))
+    assert call_settle._observed_cost_micro(mk, body) == expected
+
+
+@pytest.mark.parametrize(("endpoint", "body", "valid"), [
+    ("theirstack.jobs.search", {"limit": 2}, True),
+    ("theirstack.jobs.search", {}, False),
+    ("theirstack.companies.search", {"limit": 101}, False),
+    ("theirstack.jobs.search", {"limit": 1, "blur_company_data": True}, False),
+    ("theirstack.companies.technologies", {"company_domain": "stripe.com"}, True),
+    ("theirstack.companies.buying_intents", {"company_name_or": ["Stripe", "Google"]}, False),
+])
+def test_theirstack_platform_requests_bound_credits(endpoint, body, valid):
+    ep = {"id": endpoint, "provider": "theirstack"}
+    if valid:
+        call_resolution._enforce_platform_request(ep, json.dumps(body).encode())
+    else:
+        with pytest.raises(call_resolution.ResolutionFailed):
+            call_resolution._enforce_platform_request(ep, json.dumps(body).encode())
+
+
+def test_theirstack_platform_holds_match_the_credit_prices():
+    from treg.domain.catalog import store as catalog_store
+
+    catalog = catalog_store.load()
+    for endpoint, body, hold in (
+        ("theirstack.jobs.search", {"limit": 2, "posted_at_max_age_days": 30}, 40_000),
+        ("theirstack.companies.search", {"limit": 2, "company_domain_or": ["stripe.com"]}, 120_000),
+        ("theirstack.companies.technologies", {"company_domain": "stripe.com"}, 60_000),
+    ):
+        ep = catalog.by_id[endpoint]
+        assert catalog.platform_eligible(ep)
+        estimate, unit = call_resolution._marketplace_pricing(
+            "theirstack", endpoint, catalog.cost_view(ep["cost"], "theirstack"), {},
+            json.dumps(body).encode())
+        assert estimate == hold and unit > 0
+    assert not catalog.platform_eligible(catalog.by_id["theirstack.account.balance"])
+    assert not catalog.platform_eligible(catalog.by_id["theirstack.account.credits_consumption"])
+
+
 def test_litescrape_ai_overview_unserved_is_free():
     mk = _mk("litescrape", endpoint_id="litescrape.google.serp.ai_overview",
              cost_type="per_success", estimate_micro=150)

@@ -40,6 +40,41 @@ async def test_anymailfinder_balance_rejects_invalid_values(credits):
             await collectors._anymailfinder(client, "test-key")
 
 
+async def test_theirstack_balance_subtracts_used_api_credits():
+    def probe(request):
+        assert request.method == "GET"
+        assert str(request.url) == "https://api.theirstack.com/v0/billing/credit-balance"
+        assert request.headers["authorization"] == "Bearer test-key"
+        return httpx.Response(200, json={"api_credits": 5200, "used_api_credits": 10})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(probe)) as client:
+        row = await collectors._theirstack(client, "test-key")
+    assert row["value"] == 5190 and row["unit"] == "API credits"
+    assert policy.default_policy("theirstack", has_key=True).rate_limit["limit"] == 4
+
+
+@pytest.mark.parametrize("field,value", [
+    ("api_credits", None), ("api_credits", True), ("api_credits", "5200"),
+    ("api_credits", -1), ("api_credits", 10.5),
+    ("used_api_credits", None), ("used_api_credits", True),
+    ("used_api_credits", "10"), ("used_api_credits", -1), ("used_api_credits", 1.5),
+])
+async def test_theirstack_balance_rejects_invalid_values(field, value):
+    body = {"api_credits": 5200, "used_api_credits": 10}
+    body[field] = value
+    async with httpx.AsyncClient(transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json=body))) as client:
+        with pytest.raises(ValueError, match="no valid API credit balance"):
+            await collectors._theirstack(client, "test-key")
+
+
+async def test_theirstack_balance_is_zero_when_usage_exceeds_allocation():
+    async with httpx.AsyncClient(transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"api_credits": 100, "used_api_credits": 101}))) as client:
+        row = await collectors._theirstack(client, "test-key")
+    assert row["value"] == 0
+
+
 async def test_blitzapi_key_info_supplies_exact_monthly_balance():
     def probe(request):
         assert request.method == "GET"

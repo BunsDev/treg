@@ -61,6 +61,12 @@ and sums every pool that can pay for a call (Fiber AI's trial and paid pools). V
 `OVERDRAFT_SERVED` keep serving past zero, so their low balance is informational and `overdrawn`;
 each needs a refusal signature.
 
+TheirStack's free balance route returns allocated `api_credits` and `used_api_credits`. The dashboard
+shows usage against the allocation, so the collector reports the nonnegative difference as remaining
+API credits. The upstream docs label `api_credits` as available, but it does not fall as usage rises.
+The shared key is paced at the paid tier's four requests per second. The funded account was not
+exhausted to capture a provider-specific 402 body.
+
 Octen's PAYG balance has no account balance or usage endpoint in its published OpenAPI, so
 `NO_BALANCE_API` reports it as dashboard-only. `_KNOWN` classifies the account as manually funded
 cash. The shared-key rate policy spaces calls at five per second, below the Base plan's displayed

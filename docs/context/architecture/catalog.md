@@ -9,6 +9,21 @@ sources:
   - scripts/catalog_backfill_added.py
   - .github/workflows/catalog-added.yml
   - src/treg/catalog/fetchinio.yaml
+  - src/treg/catalog/theirstack.yaml
+  - src/treg/web/logos/theirstack.svg
+  - src/treg/catalog/examples/theirstack.jobs.search.json
+  - src/treg/catalog/examples/theirstack.companies.search.json
+  - src/treg/catalog/examples/theirstack.companies.technologies.json
+  - src/treg/catalog/examples/theirstack.companies.buying_intents.json
+  - src/treg/catalog/examples/theirstack.catalog.keywords.json
+  - src/treg/catalog/examples/theirstack.catalog.keyword_categories.json
+  - src/treg/catalog/examples/theirstack.catalog.keyword_subcategories.json
+  - src/treg/catalog/examples/theirstack.catalog.industries.json
+  - src/treg/catalog/examples/theirstack.catalog.locations.json
+  - src/treg/catalog/examples/theirstack.catalog.job_countries.json
+  - src/treg/catalog/examples/theirstack.catalog.company_countries.json
+  - src/treg/catalog/examples/theirstack.account.balance.json
+  - src/treg/catalog/examples/theirstack.account.credits_consumption.json
   - src/treg/web/logos/fetchinio.svg
   - src/treg/catalog/examples/fetchinio.linkedin.user.profile.json
   - src/treg/catalog/examples/fetchinio.linkedin.company.profile.json
