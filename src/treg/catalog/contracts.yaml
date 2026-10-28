@@ -933,6 +933,19 @@ contracts:
     idempotent: true
     prefer: [crawl4ai]
 
+  google.ads.transparency:
+    summary: "The ads Google Ads Transparency Center shows for one company domain — provider-native ad rows in `ads`"
+    identity:
+      - {company_domain: str}
+    filters: {}
+    output:
+      ads: {type: list, required: true, note: "the provider's own ad rows (creative id, format, advertiser…) — shapes differ per provider; raw is the same body"}
+      count: {type: int}
+      next_cursor: {type: str}
+    # No ads is a miss. Every child is free on an empty answer except a per_call one, which bills it.
+    miss: "ads == []"
+    idempotent: true
+
   google.maps.reviews:
     summary: "The reviews Google Maps shows for one place, by place id — provider-native review rows in `reviews`"
     identity:
