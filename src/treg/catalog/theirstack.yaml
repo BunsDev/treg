@@ -292,7 +292,7 @@ endpoints:
     method: GET
     path: /v0/billing/credit-balance
     name: Check API credit balance
-    summary: Read your own available and used API credits.
+    summary: Read your own API credit allocation and usage.
     input: {queryParams: {}}
     test_request: {queryParams: {}}
     verified: '2026-10-27'

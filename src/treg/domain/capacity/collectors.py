@@ -916,10 +916,11 @@ async def _crustdata(c, key):
 async def _theirstack(c, key):
     d = await _get(c, "https://api.theirstack.com/v0/billing/credit-balance",
                    headers={"Authorization": f"Bearer {key}"})
-    balance = _finite(d.get("api_credits")) if isinstance(d, dict) else None
-    if balance is None or balance < 0:
+    total = d.get("api_credits") if isinstance(d, dict) else None
+    used = d.get("used_api_credits") if isinstance(d, dict) else None
+    if type(total) is not int or total < 0 or type(used) is not int or used < 0:
         raise ValueError("TheirStack returned no valid API credit balance")
-    return {"value": balance, "unit": "API credits", "note": "Available API credits"}
+    return {"value": max(total - used, 0), "unit": "API credits", "note": "Available API credits"}
 
 
 async def _enrichlayer(c, key):

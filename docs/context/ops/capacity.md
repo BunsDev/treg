@@ -61,9 +61,9 @@ and sums every pool that can pay for a call (Fiber AI's trial and paid pools). V
 `OVERDRAFT_SERVED` keep serving past zero, so their low balance is informational and `overdrawn`;
 each needs a refusal signature.
 
-TheirStack's free balance route reports available API credits separately from used API credits. Its
-request log recorded search charges during live verification while the available-credit field had
-not yet changed, so the collector reads the provider's available field and treats it as a snapshot.
+TheirStack's free balance route returns allocated `api_credits` and `used_api_credits`. The dashboard
+shows usage against the allocation, so the collector reports the nonnegative difference as remaining
+API credits. The upstream docs label `api_credits` as available, but it does not fall as usage rises.
 The shared key is paced at the paid tier's four requests per second. The funded account was not
 exhausted to capture a provider-specific 402 body.
 
