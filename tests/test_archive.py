@@ -1091,6 +1091,39 @@ async def test_the_result_never_carries_failure_evidence(clients: AsyncClient, s
     assert got.json()["note"] == "not stored: the call failed, so there is no answer on file"
 
 
+async def test_recordings_reach_the_endpoint_totals_in_one_batched_flush(
+        clients: AsyncClient, shadow, monkeypatch):
+    """The per-endpoint row is shared by every team: recordings never update it themselves, their
+    counts land together when the pending deltas are flushed (a timer, or drain())."""
+    import asyncio
+
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    from tests.test_marketplace_call import _fake_relay
+    from treg.models import ArchiveEndpointStat
+
+    statements = []
+    def seen(conn, cursor, statement, *args):
+        if "archiveendpointstat" in statement.lower() and not statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+    event.listen(Engine, "before_cursor_execute", seen)
+    monkeypatch.setattr(call_service, "relay", _fake_relay(200, b'{"n": 1}'))
+    try:
+        for n in range(3):
+            await clients.get(f"/call/{EP}?aweme_id={n}")
+        await asyncio.gather(*list(archive._pending))
+        assert statements == []
+        await archive.flush_stats()
+    finally:
+        event.remove(Engine, "before_cursor_execute", seen)
+    assert len(statements) <= 2                          # update, plus the first insert
+    async with session_maker() as s:
+        st = (await s.execute(select(ArchiveEndpointStat)
+                              .where(ArchiveEndpointStat.endpoint_id == EP))).scalars().one()
+    assert (st.keys, st.snapshots) == (3, 3)
+
+
 async def test_endpoint_stats_match_direct_aggregation(clients: AsyncClient, shadow, monkeypatch):
     """The rollup IS the report now, so it must equal what walking the tables would say — after
     new keys, dedup references, a changed answer, and a policy-forbidden recording."""

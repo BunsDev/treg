@@ -1123,7 +1123,7 @@ still pay the provider twice.
   `X-Treg-Original-Cost-Micro`; MCP returns `replayed: true`. An async submission replay echoes its
   original reservation there.
 - Refusal and cancellation cleanup return an acquired label. Expired entries are swept lazily,
-  scoped to the caller, at claim time.
+  scoped to the caller, at claim time, skipping rows a concurrent request has locked.
 
 A reserve admission 429 never reaches `_store_idempotent`; the HTTP exception handler's
 `_stamp_call_exit` releases its pending claim, including calls from either MCP surface. The same

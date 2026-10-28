@@ -527,41 +527,99 @@ async def drain() -> None:
             if isinstance(r, asyncio.TimeoutError | TimeoutError):
                 _log.error("archive recording dropped: database did not answer in %ss",
                            _STORE_TIMEOUT_S)
+    global _stat_flush_task
+    if _stat_flush_task is not None and not _stat_flush_task.done():
+        try:
+            _stat_flush_task.cancel()
+        except RuntimeError:  # its event loop already closed (a test's loop)
+            pass
+    _stat_flush_task = None
+    try:
+        await flush_stats()
+    except Exception:  # noqa: BLE001 - already logged; shutdown must go on
+        pass
 
 
-async def _bump_stats(s, *, endpoint_id: str, provider: str, pol: str, new_key: bool,
-                      stable_d: int, changed_d: int, kept: bool, size: int, now) -> None:
-    """Move the endpoint's running totals (ArchiveEndpointStat) inside the caller's transaction.
-    Atomic column arithmetic only (col = col + n) — never read-modify-write: the credit-block
-    drift showed what parallel writers do to in-memory subtraction. A missing row is inserted
-    and the racing loser retries as an update."""
+# The running totals (ArchiveEndpointStat) are one row per endpoint shared by every team, so a
+# per-recording UPDATE queues busy endpoints on that row. Recordings add to an in-process delta
+# instead, and one statement per endpoint lands it a few seconds later (and on drain()). A crash
+# loses at most that window of a staff report's counts; nothing serves or bills from them.
+_STATS_FLUSH_S = 5.0
+_stat_deltas: dict[str, dict] = {}
+_stat_flush_task: asyncio.Task | None = None
+
+
+def _count_stats(*, endpoint_id: str, provider: str, pol: str, new_key: bool,
+                 stable_d: int, changed_d: int, kept: bool, size: int, now) -> None:
+    """Add one committed recording to its endpoint's pending delta and make sure a flush is due."""
+    global _stat_flush_task
+    d = _stat_deltas.setdefault(endpoint_id, {
+        "keys": 0, "stable": 0, "changed": 0, "snapshots": 0, "bodies_kept": 0, "kept_bytes": 0})
+    d["provider"], d["policy"] = provider, pol
+    d["newest_fetch"] = max(now, d.get("newest_fetch") or now)
+    d["keys"] += 1 if new_key else 0
+    d["stable"] += stable_d
+    d["changed"] += changed_d
+    d["snapshots"] += 1
+    d["bodies_kept"] += 1 if kept else 0
+    d["kept_bytes"] += size if kept else 0
+    if _stat_flush_task is None or _stat_flush_task.done():
+        _stat_flush_task = asyncio.create_task(_flush_stats_soon())
+
+
+async def _flush_stats_soon() -> None:
+    while _stat_deltas:
+        await asyncio.sleep(_STATS_FLUSH_S)
+        try:
+            await flush_stats()
+        except Exception:  # noqa: BLE001 - logged in flush_stats; the deltas wait for the next pass
+            pass
+
+
+async def flush_stats() -> None:
+    """Land every pending delta: one atomic `col = col + n` per endpoint, in endpoint order so two
+    processes flushing the same endpoints cannot deadlock. A missing row is inserted and the racing
+    loser retries as an update. A failed flush puts its deltas back for the next one."""
     from sqlalchemy import update as sa_update
     from sqlalchemy.exc import IntegrityError
 
+    from .infra.db import background_session_maker
     from .models import ArchiveEndpointStat
 
-    values = {
-        "provider": provider, "policy": pol, "newest_fetch": now,
-        "keys": ArchiveEndpointStat.keys + (1 if new_key else 0),
-        "stable": ArchiveEndpointStat.stable + stable_d,
-        "changed": ArchiveEndpointStat.changed + changed_d,
-        "snapshots": ArchiveEndpointStat.snapshots + 1,
-        "bodies_kept": ArchiveEndpointStat.bodies_kept + (1 if kept else 0),
-        "kept_bytes": ArchiveEndpointStat.kept_bytes + (size if kept else 0),
-    }
-    res = await s.execute(sa_update(ArchiveEndpointStat)
-                          .where(ArchiveEndpointStat.endpoint_id == endpoint_id).values(**values))
-    if res.rowcount == 0:
-        try:
-            async with s.begin_nested():
-                s.add(ArchiveEndpointStat(
-                    endpoint_id=endpoint_id, provider=provider, policy=pol,
-                    keys=1 if new_key else 0, stable=stable_d, changed=changed_d,
-                    snapshots=1, bodies_kept=1 if kept else 0,
-                    kept_bytes=size if kept else 0, newest_fetch=now))
-        except IntegrityError:  # a concurrent recording inserted the row first — count on it
-            await s.execute(sa_update(ArchiveEndpointStat)
-                            .where(ArchiveEndpointStat.endpoint_id == endpoint_id).values(**values))
+    global _stat_deltas
+    if not _stat_deltas:
+        return
+    taken, _stat_deltas = _stat_deltas, {}
+    try:
+        async with background_session_maker() as s:
+            for endpoint_id in sorted(taken):
+                d = taken[endpoint_id]
+                counts = ("keys", "stable", "changed", "snapshots", "bodies_kept", "kept_bytes")
+                values = {"provider": d["provider"], "policy": d["policy"],
+                          "newest_fetch": d["newest_fetch"],
+                          **{c: getattr(ArchiveEndpointStat, c) + d[c] for c in counts}}
+                where = ArchiveEndpointStat.endpoint_id == endpoint_id
+                res = await s.execute(sa_update(ArchiveEndpointStat).where(where).values(**values))
+                if res.rowcount == 0:
+                    try:
+                        async with s.begin_nested():
+                            s.add(ArchiveEndpointStat(
+                                endpoint_id=endpoint_id, provider=d["provider"], policy=d["policy"],
+                                newest_fetch=d["newest_fetch"], **{c: d[c] for c in counts}))
+                    except IntegrityError:  # a concurrent flush inserted the row first
+                        await s.execute(sa_update(ArchiveEndpointStat).where(where).values(**values))
+            await s.commit()
+    except BaseException:
+        for endpoint_id, d in taken.items():
+            cur = _stat_deltas.get(endpoint_id)
+            if cur is None:
+                _stat_deltas[endpoint_id] = d
+                continue
+            for c in ("keys", "stable", "changed", "snapshots", "bodies_kept", "kept_bytes"):
+                cur[c] += d[c]
+            cur["newest_fetch"] = max(cur["newest_fetch"], d["newest_fetch"])
+        _log.warning("archive running totals flush failed; kept for the next one", exc_info=True)
+        raise
 
 
 async def _store(
@@ -1069,11 +1127,11 @@ async def _store_locked(
             key.result_state = result.state
             key.result_snapshot_id = snap.id
             s.add(key)
-        await _bump_stats(
-            s, endpoint_id=endpoint_id, provider=provider, pol=pol, new_key=new_key,
-            stable_d=key.stable_seen - seen_before[0], changed_d=key.change_seen - seen_before[1],
-            kept=plan.storage is not None, size=len(body), now=now)
+        stable_d, changed_d = key.stable_seen - seen_before[0], key.change_seen - seen_before[1]
         await s.commit()
+        _count_stats(endpoint_id=endpoint_id, provider=provider, pol=pol, new_key=new_key,
+                     stable_d=stable_d, changed_d=changed_d, kept=plan.storage is not None,
+                     size=len(body), now=now)
         return ((comparison_baseline.id, masked_by_ignore)
                 if comparison_baseline is not None and comparison_baseline.content_hash != ch
                 and plan.storage is not None and _has_change_body(comparison_baseline)

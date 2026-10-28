@@ -495,7 +495,10 @@ uses this metadata, never the encrypted token's shape.
   `_store_idempotent` keeps a terminal 410 `idempotency_response_too_large` (`call_id`, charge,
   `size_bytes`) instead. The caller already received the full answer; a retry never runs again.
   The per-call expired-label sweep reads `(membership_id, expires_at)` (Alembic `0053`), so its
-  cost is the expired rows, not every label the caller holds.
+  cost is the expired rows, not every label the caller holds. It deletes at most
+  `IDEMPOTENCY_SWEEP_BATCH` rows it can lock (`FOR UPDATE SKIP LOCKED`), so a member's concurrent
+  batch never queues on one another's expired rows; a skipped row goes with a later call. The label
+  being reused is freed by the replay lookup's own delete, not by the sweep.
 - **`ToolRequest`** - a "the catalog doesn't have X" report (`POST /tool-requests`, open + per-IP
   rate-limited): `capability` (the headline, ≤200 chars), `query` (the search that came up empty -
   auto-filled by agents, the dedup/priority signal), `note`, `contact`, `source` (`web` | `cli` |
