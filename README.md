@@ -95,9 +95,8 @@ Discover what your team has shared: `treg tool ls` · check credential health: `
 /plugin install treg@treg
 ```
 
-Installs with no token and no configuration. The skill loads as `treg:treg` and, on its first run,
-walks your agent through the rest — the CLI, sign-in, then `treg mcp install` — so you end up with
-the command line **and** treg's tools. Other agents: `npx skills add superdesigndev/treg -s treg`
+Installs the treg skill and treg's tools with no token and no configuration. Run `/mcp`, pick
+treg and sign in; the tools appear after it. Other agents: `npx skills add superdesigndev/treg -s treg`
 (or see [Workflow skills](#workflow-skills) for the rest).
 See [docs/CLAUDE-PLUGIN.md](docs/CLAUDE-PLUGIN.md). MiniMax Code / MiniMax Agent users: the same
 skill ships via the MiniMax Plugin Marketplace ([docs/MINIMAX-PLUGIN.md](docs/MINIMAX-PLUGIN.md)).
@@ -115,8 +114,9 @@ Ready-made recipes your agent runs end to end, every call through treg:
 | [`make-ugc`](skills/make-ugc/SKILL.md) | Make AI UGC videos: trending hooks, a presenter, talking-head clips, captions ([treg.to/ugc](https://treg.to/ugc)) |
 | [`jev-memory`](skills/jev-memory/SKILL.md) | Give Claude Code a memory: a Claude Code mod where Jev judges each prompt after the turn and keeps your lasting preferences, installed ready-made or built from one prompt ([the mod](examples/claude-code-mods/jev-memory)) |
 
-`install.sh` installs all of them for you except `jev-memory`, which is opt-in. To add them to an existing agent instead
-([skills.sh](https://skills.sh) CLI):
+`install.sh` installs all of them for you except `jev-memory`, which is opt-in. In Claude Code each one is
+also its own plugin in treg's marketplace: `/plugin install recruit@treg`, or pick them from `/plugin`. To add
+them to an existing agent instead ([skills.sh](https://skills.sh) CLI):
 
 ```bash
 npx skills add superdesigndev/treg                        # every public skill

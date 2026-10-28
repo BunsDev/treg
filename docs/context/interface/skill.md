@@ -13,8 +13,9 @@ sources:
   - src/treg/routers/web.py
   - src/treg/mcp_install.py
   - scripts/build_plugin.py
-  - .claude-plugin/plugin.json
   - .claude-plugin/marketplace.json
+  - plugins/treg/.claude-plugin/plugin.json
+  - .agents/plugins/marketplace.json
   - plugin/.codex-plugin/plugin.json
   - plugins/treg/.cursor-plugin/plugin.json
   - package.json
@@ -92,11 +93,12 @@ served**, because a second copy of the product's most-read page is a copy that r
 | door | artifact | who reaches it |
 |---|---|---|
 | the installer | `install.sh` → `treg skill bootstrap` → every detected agent's skills dir, the treg skill plus every workflow skill in `/.well-known/skills/index.json` | people who ran the curl one-liner |
-| Claude Code plugin | `.claude-plugin/` + generated `skills/treg/SKILL.md` (repo root) | `/plugin marketplace add superdesigndev/treg` |
-| Codex/ChatGPT plugin | `plugin/.codex-plugin/` + generated `plugin/skills/treg/SKILL.md` | the directory ChatGPT and Codex share. Submission runbook: [private submission runbook](https://github.com/superdesigndev/treg-internal/blob/main/docs/distribution/PLUGIN-SUBMISSION.md), test cases: [skill-openai-test-cases.md](skill-openai-test-cases.md), per-tool justifications: [skill-openai-tool-justifications.md](skill-openai-tool-justifications.md) |
+| Claude Code plugin | `.claude-plugin/marketplace.json` → `plugins/treg/` (the Cursor folder) with its own `.claude-plugin/plugin.json`, which declares the MCP server inline with `type: "http"` (Claude Code rejects a `url` with no `type`) | `/plugin marketplace add superdesigndev/treg`, then `/mcp` to sign in; each workflow skill is its own optional plugin there (`plugins/workflows/<name>/`, generated) |
+| bare skill | generated `skills/treg/SKILL.md` (repo root), the served page unchanged: its first section branches on MCP tools, the CLI, or neither | `npx skills add superdesigndev/treg -s treg`, ClawHub |
+| Codex/ChatGPT plugin | `plugin/.codex-plugin/` + generated `plugin/skills/treg/SKILL.md` | the directory ChatGPT and Codex share, and `codex plugin marketplace add superdesigndev/treg` through `.agents/plugins/marketplace.json`. Submission runbook: [private submission runbook](https://github.com/superdesigndev/treg-internal/blob/main/docs/distribution/PLUGIN-SUBMISSION.md), test cases: [skill-openai-test-cases.md](skill-openai-test-cases.md), per-tool justifications: [skill-openai-tool-justifications.md](skill-openai-tool-justifications.md) |
 | Cursor plugin | `.cursor-plugin/marketplace.json` + generated `plugins/treg/skills/treg/SKILL.md` + `plugins/treg/mcp.json` (URL only; the host runs OAuth, because a `${env:TREG_TOKEN}` header made hosts demand the variable before sign-in) | the Cursor marketplace, and other hosts that install it, such as Grok Bot (plugin root is never the repo root) |
 | DeepSeek Harness bundle | root `package.json` (`dsh.bundle`) + `dsh/cordis.patch.yml` + generated `dsh/skills/treg/SKILL.md` | `dsh plugin --profile <name> add github:superdesigndev/treg` |
-| MiniMax plugin | `plugins/minimax/.minimax-plugin/plugin.json` + generated `plugins/minimax/skills/treg/SKILL.md`; `scripts/minimax_plugin.py` pre-runs their validator and builds the ZIP | the MiniMax Plugin Marketplace (MiniMax Code + MiniMax Agent), submitted by form as GitHub subdir `plugins/minimax`; skills-only because the package may hold no credential and the bootstrap omits `treg mcp install`, which cannot write a MiniMax config. See [docs/MINIMAX-PLUGIN.md](../../MINIMAX-PLUGIN.md) |
+| MiniMax plugin | `plugins/minimax/.minimax-plugin/plugin.json` + generated `plugins/minimax/skills/treg/SKILL.md`; `scripts/minimax_plugin.py` pre-runs their validator and builds the ZIP | the MiniMax Plugin Marketplace (MiniMax Code + MiniMax Agent), submitted by form as GitHub subdir `plugins/minimax`; skills-only because MiniMax admits an authenticated MCP only through its App/Connector program; the skill is the served page unchanged. See [docs/MINIMAX-PLUGIN.md](../../MINIMAX-PLUGIN.md) |
 | the domain itself | `GET /.well-known/skills/index.json` + `/.well-known/skills/treg/SKILL.md` | anything speaking the agentskills.io convention (Hermes reads this directly) |
 | a workflow skill | `GET /skills/ugc/SKILL.md` (also `/.well-known/skills/make-ugc/SKILL.md`, second entry in the index): `make-ugc`, the `/ugc` workflow as a file to follow. Source `src/treg/web/skills/make-ugc/SKILL.md`; `.agents/skills/make-ugc` is a symlink to it so the repo's own agents and the served copy never drift. It delegates to `portrait-clone` and `ugc-talking-head-video` by URL rather than repeating them | anyone the /ugc page or the onboarding "Make UGC videos" card sends here |
 | a workflow skill | `GET /skills/lead-signals/SKILL.md` (also `/.well-known/skills/lead-signals/SKILL.md`, third entry in the index): `lead-signals`, the `/leads-signals` workflow as a file to follow: detect, qualify, contact, keep watching. It names signal families and the words to search the catalog with, never endpoint ids, because the catalog changes weekly; the schedule and the diff against the last list are the agent's, not treg's. Source `src/treg/web/skills/lead-signals/SKILL.md`; `.agents/skills/lead-signals` is a symlink to it. | anyone pointed at the URL |
@@ -111,21 +113,21 @@ skips symlinks; repo-tooling skills under `.agents/skills` (`.claude/skills` is 
 sees the same set) carry
 `metadata.internal: true` so that command offers only what a user should install. The Codex plugin is the exception: it ships an MCP connector, and OpenAI's plugin review refuses a skill
 that downloads or runs code outside the package, so it carries a short connector-only skill (`CODEX_SKILL`)
-instead of the served page, with no CLI and no `install.sh`. The other variants differ **only** in their prepended bootstrap; the Claude plugin declares **no connector in its
-manifest** — so it installs with no token and nothing waits on a directory review — and its bootstrap
-does the opposite, walking the agent through `install.sh` → `treg login` → `treg mcp install` so the
-first run ends with the CLI *and* the tools. Skills-only is a property of the manifest, not of the
-end state; the order in that bootstrap is load-bearing, because `treg mcp install` exits without
-writing when it runs before there is a token. The Claude copy also gets a `version:` stamped into its
-frontmatter, which ClawHub requires and Claude Code ignores; that stamp is what lets one file satisfy
-both registries.
+instead of the served page, with no CLI and no `install.sh`. The other variants are the served page plus, at most, a short prepended bootstrap. The served
+page's first section branches on what the agent already has (treg's MCP tools, the CLI, or
+neither), and installs only in the last case and only when the human asked. So the bare skill at
+the repo root is the page unchanged, and a bootstrap says only what its host adds. The Claude Code
+and Cursor plugins install one folder, `plugins/treg/`, that declares the MCP server URL-only (with
+`type: "http"` in the Claude manifest, which Claude Code requires); the host runs OAuth and the
+server waits as "needs authentication", so nothing 401s before sign-in. The bare skill and the
+plugin get a `version:` stamped into their frontmatter, which ClawHub requires and the hosts ignore.
 
 **DeepSeek Harness** is the odd one out, and the only door that ships the connector *and* the CLI
 path in one zero-config install. dsh reads no manifest: it installs an npm package whose
 `package.json` declares `dsh.bundle`, pointing at a config layer that composes into the user's
 profile. That layer carries a treg MCP row whose `disabled` expression is evaluated at boot, so it
-stays off until `TREG_TOKEN` is in the environment — the same "no always-on tools that 401" stance as
-the Claude manifest, but expressible as a row rather than an omission. Its bootstrap is its own for
+stays off until `TREG_TOKEN` is in the environment, because dsh's MCP client sends a static header
+and runs no OAuth. Its bootstrap is its own for
 two reasons the others do not have: the tools are namespaced (`mcp__treg__call`, not `call`), and
 `treg mcp install` cannot help here (it writes Claude Code / Cursor / opencode / Codex configs, never a dsh
 profile), so `mcp_install.py` reports dsh as a MANUAL agent pointing at the bundle. See

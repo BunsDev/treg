@@ -8,8 +8,10 @@ description: Use when the user wants candidates for a role; they paste a LinkedI
 A job post in, a ranked shortlist out: people who fit, one line on why, and a way to reach them.
 Every stage is counted and every contact lookup leaves a vendor trail, written to a run file.
 
-Runs on treg. If it isn't set up (`treg --version` fails), read https://treg.to/llms.txt and follow it to
-install and sign in, then come back here.
+Runs on treg, through its MCP tools or the `treg` CLI; either is enough. Over MCP, each command
+below maps onto a tool: `treg catalog search` is `catalog_search`, `treg catalog get` is
+`catalog_get`, `treg call` is `call`. With neither, treg is not set up: https://treg.to/llms.txt says how.
+Install only if the human asked you to; otherwise tell them how and stop.
 
 ## The run
 

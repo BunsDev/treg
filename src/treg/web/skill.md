@@ -19,19 +19,35 @@ hold it:
 
 ## First: check where you stand
 
-Run `treg`. It prints the account, the active team and your role, the balance, the team's own tools
-and the next commands to run; a blocker (not signed in, no team, an empty balance) comes first in
-its `help` lines. Not set up yet:
+How treg reached you decides the first step. Take the first case that holds; either the MCP tools
+or the CLI is enough, and having both is fine.
 
-```bash
-curl -fsSL {BASE}/install.sh | sh
-treg login                            # browser sign-in: GitHub, Google or an emailed code
-treg login --email you@company.com    # an emailed 6-digit code
-treg login --token <team-token>       # non-interactive, for agents and CI
-```
+1. **You can see treg's MCP tools** (`catalog_search`, `catalog_get`, `call`, `balance`,
+   `my_tools`): treg is connected. Use them and install nothing; every `treg` command on this page
+   maps onto a tool (see "Over MCP" below). A tool that answers "not authenticated" means the human
+   signs in through the app's MCP or connector settings (in Claude Code: `/mcp`, pick treg,
+   Authenticate).
+2. **`treg` runs in your terminal**: run `treg`. It prints the account, the active team and your
+   role, the balance, the team's own tools and the next commands to run; a blocker (not signed in,
+   no team, an empty balance) comes first in its `help` lines. Not signed in:
 
-The installer puts in the CLI and this skill for every agent it detects; `treg mcp install` adds
-treg's MCP server to them once you are signed in. Given a token, the installer does both.
+   ```bash
+   treg login                            # browser sign-in: GitHub, Google or an emailed code
+   treg login --email you@company.com    # an emailed 6-digit code
+   treg login --token <team-token>       # non-interactive, for agents and CI
+   ```
+
+3. **Neither**: treg is not set up here. Run the installer only when the human asked you to set treg
+   up; otherwise give them these two ways and wait:
+
+   ```bash
+   curl -fsSL {BASE}/install.sh | sh    # the CLI, plus this skill for every agent it detects
+   treg login
+   ```
+
+   or, in an app that takes MCP servers, add `{BASE}/mcp/` and sign in when it asks. Given a team
+   token, `curl -fsSL {BASE}/install.sh | sh -s -- --token <token>` does the install and sign-in at
+   once.
 
 Everything runs in the **active team**. Invites arrive by email: `treg invites` lists them,
 `treg accept` takes one (or `treg org join <code>`); `treg org use <slug>` switches teams. A new

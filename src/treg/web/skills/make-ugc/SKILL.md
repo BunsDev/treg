@@ -15,7 +15,9 @@ hook, an optional voiced demo clip, and `bill.md` with what each step cost.
 ## Prerequisites
 
 - **treg.** Every catalog call, upload and poll goes through treg; the vendor keys stay server-side
-  and the charge lands on the team's prepaid balance. If `treg --version` fails:
+  and the charge lands on the team's prepaid balance. This skill needs the `treg` CLI even when
+  treg's MCP tools are connected, because `treg host` uploads the local reference frames. If
+  `treg --version` fails, give the human these commands and run them only if they asked you to:
   ```bash
   curl -fsSL {BASE}/install.sh | sh
   treg login

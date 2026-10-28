@@ -98,6 +98,5 @@ if [ -n "$TOKEN" ]; then
 else
   printf '\n\033[32m✓\033[0m Installed \033[1mtreg\033[0m. Next:\n'
   printf '    \033[38;5;173mtreg login\033[0m      # sign in (GitHub or email) - first login registers you\n'
-  printf '    \033[38;5;173mtreg mcp install\033[0m  # optional: add treg as an MCP server in your agents\n'
   printf '\nDocs & interactive tutorial:  %s/tutorial\n\n' "$BASE"
 fi
