@@ -2117,8 +2117,8 @@ class ArenaEvaluation(SQLModel, table=True):
 
 
 class ArchiveEndpointStat(SQLModel, table=True):
-    """The archive report's running totals, one row per endpoint — maintained by the recorder in
-    the SAME transaction as each snapshot, so the panel reads 50 tiny rows instead of walking
+    """The archive report's running totals, one row per endpoint — maintained by the recorder
+    through batched per-endpoint deltas (archive.flush_stats), so the panel reads 50 tiny rows instead of walking
     434k keys + 505k snapshots (measured 9.9s + 8.0s + 14.8s per report on prod, 2026-09-03).
     Counters move only via atomic column arithmetic (col = col + n): the credit-block drift
     taught us what read-modify-write does under parallel settles."""
