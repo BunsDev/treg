@@ -1173,6 +1173,7 @@ adapters:
       body.company_country_code_or: "list(upper(country))"
       body.limit: limit
     const: {body.page: 0}
+    max: {limit: 100}
     out: {companies: data}
     miss: "data == []"
   dropleads.companies.search:
@@ -1654,6 +1655,7 @@ adapters:
       body.company_name_or: "choose(domain, null, list(name))"
       body.limit: limit
     const: {body.page: 0}
+    max: {limit: 100}
     out: {jobs: data}
     miss: "data == []"
   crustdata.companies.jobs.search:
