@@ -59,7 +59,7 @@ hold it:
 ## First: check where you stand
 
 How treg reached you decides the first step. Take the first case that holds; either the MCP tools
-or the CLI is enough, never both.
+or the CLI is enough, and having both is fine.
 
 1. **You can see treg's MCP tools** (`catalog_search`, `catalog_get`, `call`, `balance`,
    `my_tools`): treg is connected. Use them and install nothing; every `treg` command on this page
