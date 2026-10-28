@@ -910,17 +910,17 @@ def _mk(provider: str, **kw) -> call_resolution.MarketplaceCall:
 
 
 @pytest.mark.parametrize(("endpoint", "body", "expected"), [
-    ("theirstack.jobs.search", b'{"data":[{},{}]}', 65_340),
-    ("theirstack.companies.search", b'{"data":[{}]}', 98_010),
+    ("theirstack.jobs.search", b'{"data":[{},{}]}', 40_000),
+    ("theirstack.companies.search", b'{"data":[{}]}', 60_000),
     ("theirstack.companies.search", b'{"data":[]}', 0),
-    ("theirstack.companies.technologies", b'{"data":[{},{}]}', 98_010),
+    ("theirstack.companies.technologies", b'{"data":[{},{}]}', 60_000),
     ("theirstack.companies.buying_intents", b'{"data":[]}', 0),
     ("theirstack.jobs.search", b'{"data":{}}', None),
 ])
 def test_theirstack_settles_returned_records_or_one_company_lookup(endpoint, body, expected):
     mk = _mk("theirstack", endpoint_id=endpoint, cost_type=(
         "per_result" if endpoint.endswith("search") else "per_success"),
-        unit_micro=32_670, estimate_micro=(326_700 if endpoint.endswith("search") else 98_010))
+        unit_micro=20_000, estimate_micro=(200_000 if endpoint.endswith("search") else 60_000))
     assert call_settle._observed_cost_micro(mk, body) == expected
 
 
@@ -946,9 +946,9 @@ def test_theirstack_platform_holds_match_the_credit_prices():
 
     catalog = catalog_store.load()
     for endpoint, body, hold in (
-        ("theirstack.jobs.search", {"limit": 2, "posted_at_max_age_days": 30}, 65_340),
-        ("theirstack.companies.search", {"limit": 2, "company_domain_or": ["stripe.com"]}, 196_020),
-        ("theirstack.companies.technologies", {"company_domain": "stripe.com"}, 98_010),
+        ("theirstack.jobs.search", {"limit": 2, "posted_at_max_age_days": 30}, 40_000),
+        ("theirstack.companies.search", {"limit": 2, "company_domain_or": ["stripe.com"]}, 120_000),
+        ("theirstack.companies.technologies", {"company_domain": "stripe.com"}, 60_000),
     ):
         ep = catalog.by_id[endpoint]
         assert catalog.platform_eligible(ep)

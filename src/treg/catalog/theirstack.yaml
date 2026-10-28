@@ -31,6 +31,7 @@ endpoints:
       bodyType: json
       body:
         company_domain_or: {type: 'array[string]', required: false, example: [stripe.com]}
+        company_name_or: {type: 'array[string]', required: false, example: [Stripe]}
         posted_at_max_age_days: {type: integer, required: false, example: 30}
         job_title_or: {type: 'array[string]', required: false, example: [Software Engineer]}
         job_country_code_or: {type: 'array[string]', required: false, example: [US]}
