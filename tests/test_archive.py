@@ -1151,6 +1151,39 @@ async def test_a_subtraction_before_the_first_flush_is_not_lost(clients: AsyncCl
     assert (st.keys, st.snapshots) == (0, 0)
 
 
+async def test_an_uncommitted_stat_row_is_not_trusted_by_the_next_recording(
+        clients: AsyncClient, shadow, monkeypatch):
+    """A recording whose transaction rolls back after creating the row must not mark the endpoint
+    as having one: the next recording creates it again, so an erase still has a row to hit."""
+    import asyncio
+
+    from sqlalchemy import update
+
+    from tests.test_marketplace_call import _fake_relay
+    from treg.infra.db import background_session_maker
+    from treg.models import ArchiveEndpointStat
+
+    async with background_session_maker() as s:
+        await archive._ensure_stat_row(s, endpoint_id=EP, provider="tikhub", pol="forbidden")
+        await s.rollback()
+    assert EP not in archive._stat_rows
+
+    monkeypatch.setattr(call_service, "relay", _fake_relay(200, b'{"n": 1}'))
+    await clients.get(f"/call/{EP}?aweme_id=7")
+    await asyncio.gather(*list(archive._pending))
+    assert EP in archive._stat_rows
+    async with session_maker() as s:
+        await s.execute(update(ArchiveEndpointStat).where(ArchiveEndpointStat.endpoint_id == EP)
+                        .values(keys=ArchiveEndpointStat.keys - 1,
+                                snapshots=ArchiveEndpointStat.snapshots - 1))
+        await s.commit()
+    await archive.flush_stats()
+    async with session_maker() as s:
+        st = (await s.execute(select(ArchiveEndpointStat)
+                              .where(ArchiveEndpointStat.endpoint_id == EP))).scalars().one()
+    assert (st.keys, st.snapshots) == (0, 0)
+
+
 async def test_drain_lands_the_deltas_of_a_flush_it_interrupts(clients: AsyncClient, monkeypatch):
     """The flush takes one of the archive's two write slots, and drain() waits for an interrupted
     flush to put its deltas back before landing them itself."""

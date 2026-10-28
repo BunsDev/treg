@@ -748,8 +748,9 @@ flushes them; a failed flush keeps its deltas for the next. A process that dies 
 loses that window's counts: the totals are a staff report, nothing serves or bills from them.
 The pruner and team deletion still subtract directly. Column arithmetic commutes only while the
 row exists, so the first recording of an endpoint creates the row, zeroed, inside its own
-transaction (`_ensure_stat_row`, once per endpoint per process); an erase before the first flush
-then subtracts from that row instead of matching nothing.
+transaction (`_ensure_stat_row`); a process skips that check for an endpoint only after one of its
+recordings committed with the row, never on an uncommitted or rolled-back one. An erase before
+the first flush then subtracts from that row instead of matching nothing.
 
 ## Body compression (2026-09-03)
 

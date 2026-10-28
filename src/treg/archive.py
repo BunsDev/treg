@@ -551,10 +551,12 @@ _stat_rows: set[str] = set()  # endpoints whose row this process has seen exist
 
 
 async def _ensure_stat_row(s, *, endpoint_id: str, provider: str, pol: str) -> None:
-    """Create the endpoint's row, zeroed, in the recording's own transaction, once per endpoint.
+    """Create the endpoint's row, zeroed, in the recording's own transaction.
 
     Team deletion and the pruner subtract from the row directly; a row that only appeared at the
-    first flush would drop a subtraction made before it and later count rows already erased."""
+    first flush would drop a subtraction made before it and later count rows already erased. The
+    caller marks the endpoint in `_stat_rows` only after its commit: an uncommitted or rolled-back
+    row must not let another recording skip this."""
     from sqlalchemy import select
     from sqlalchemy.exc import IntegrityError
 
@@ -570,7 +572,6 @@ async def _ensure_stat_row(s, *, endpoint_id: str, provider: str, pol: str) -> N
                 s.add(ArchiveEndpointStat(endpoint_id=endpoint_id, provider=provider, policy=pol))
         except IntegrityError:  # a concurrent recording created it first
             pass
-    _stat_rows.add(endpoint_id)
 
 
 def _count_stats(*, endpoint_id: str, provider: str, pol: str, new_key: bool,
@@ -1155,6 +1156,7 @@ async def _store_locked(
         stable_d, changed_d = key.stable_seen - seen_before[0], key.change_seen - seen_before[1]
         await _ensure_stat_row(s, endpoint_id=endpoint_id, provider=provider, pol=pol)
         await s.commit()
+        _stat_rows.add(endpoint_id)
         _count_stats(endpoint_id=endpoint_id, provider=provider, pol=pol, new_key=new_key,
                      stable_d=stable_d, changed_d=changed_d, kept=plan.storage is not None,
                      size=len(body), now=now)
