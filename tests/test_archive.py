@@ -1093,8 +1093,9 @@ async def test_the_result_never_carries_failure_evidence(clients: AsyncClient, s
 
 async def test_recordings_reach_the_endpoint_totals_in_one_batched_flush(
         clients: AsyncClient, shadow, monkeypatch):
-    """The per-endpoint row is shared by every team: recordings never update it themselves, their
-    counts land together when the pending deltas are flushed (a timer, or drain())."""
+    """The per-endpoint row is shared by every team: recordings never update it themselves. The
+    first creates it zeroed, and their counts land together when the pending deltas are flushed
+    (a timer, or drain())."""
     import asyncio
 
     from sqlalchemy import event
@@ -1106,22 +1107,75 @@ async def test_recordings_reach_the_endpoint_totals_in_one_batched_flush(
     statements = []
     def seen(conn, cursor, statement, *args):
         if "archiveendpointstat" in statement.lower() and not statement.lstrip().upper().startswith("SELECT"):
-            statements.append(statement)
+            statements.append(statement.lstrip().split()[0].upper())
     event.listen(Engine, "before_cursor_execute", seen)
     monkeypatch.setattr(call_service, "relay", _fake_relay(200, b'{"n": 1}'))
     try:
         for n in range(3):
             await clients.get(f"/call/{EP}?aweme_id={n}")
         await asyncio.gather(*list(archive._pending))
-        assert statements == []
+        assert "UPDATE" not in statements and statements.count("INSERT") <= 1
+        statements.clear()
         await archive.flush_stats()
     finally:
         event.remove(Engine, "before_cursor_execute", seen)
-    assert len(statements) <= 2                          # update, plus the first insert
+    assert statements == ["UPDATE"]
     async with session_maker() as s:
         st = (await s.execute(select(ArchiveEndpointStat)
                               .where(ArchiveEndpointStat.endpoint_id == EP))).scalars().one()
     assert (st.keys, st.snapshots) == (3, 3)
+
+
+async def test_a_subtraction_before_the_first_flush_is_not_lost(clients: AsyncClient, shadow, monkeypatch):
+    """Team deletion subtracts from the row directly. The first recording creates the row in its
+    own transaction, so an erase that lands before the flush still has a row to subtract from."""
+    import asyncio
+
+    from sqlalchemy import update
+
+    from tests.test_marketplace_call import _fake_relay
+    from treg.models import ArchiveEndpointStat
+
+    monkeypatch.setattr(call_service, "relay", _fake_relay(200, b'{"n": 1}'))
+    await clients.get(f"/call/{EP}?aweme_id=7")
+    await asyncio.gather(*list(archive._pending))
+    async with session_maker() as s:
+        await s.execute(update(ArchiveEndpointStat).where(ArchiveEndpointStat.endpoint_id == EP)
+                        .values(keys=ArchiveEndpointStat.keys - 1,
+                                snapshots=ArchiveEndpointStat.snapshots - 1))
+        await s.commit()
+    await archive.flush_stats()
+    async with session_maker() as s:
+        st = (await s.execute(select(ArchiveEndpointStat)
+                              .where(ArchiveEndpointStat.endpoint_id == EP))).scalars().one()
+    assert (st.keys, st.snapshots) == (0, 0)
+
+
+async def test_drain_lands_the_deltas_of_a_flush_it_interrupts(clients: AsyncClient, monkeypatch):
+    """The flush takes one of the archive's two write slots, and drain() waits for an interrupted
+    flush to put its deltas back before landing them itself."""
+    import asyncio
+    from datetime import datetime
+
+    from treg.models import ArchiveEndpointStat
+
+    monkeypatch.setattr(archive, "_STATS_FLUSH_S", 0)
+    sem = archive._get_sem()
+    for _ in range(archive._MAX_CONCURRENT_WRITES):
+        await sem.acquire()
+    archive._count_stats(endpoint_id=EP, provider="tikhub", pol="forbidden", new_key=True,
+                         stable_d=0, changed_d=0, kept=True, size=123, now=datetime(2026, 1, 1))
+    await asyncio.sleep(0.05)
+    assert archive._stat_deltas == {}                    # taken by a flush waiting for a slot
+    draining = asyncio.create_task(archive.drain())
+    await asyncio.sleep(0.05)
+    for _ in range(archive._MAX_CONCURRENT_WRITES):
+        sem.release()
+    await draining
+    async with session_maker() as s:
+        st = (await s.execute(select(ArchiveEndpointStat)
+                              .where(ArchiveEndpointStat.endpoint_id == EP))).scalars().one()
+    assert (st.snapshots, st.kept_bytes) == (1, 123)
 
 
 async def test_endpoint_stats_match_direct_aggregation(clients: AsyncClient, shadow, monkeypatch):

@@ -528,12 +528,12 @@ async def drain() -> None:
                 _log.error("archive recording dropped: database did not answer in %ss",
                            _STORE_TIMEOUT_S)
     global _stat_flush_task
-    if _stat_flush_task is not None and not _stat_flush_task.done():
-        try:
-            _stat_flush_task.cancel()
-        except RuntimeError:  # its event loop already closed (a test's loop)
-            pass
-    _stat_flush_task = None
+    task, _stat_flush_task = _stat_flush_task, None
+    if task is not None and not task.done() and task.get_loop() is asyncio.get_running_loop():
+        # A flush in flight holds its deltas locally until it commits or puts them back.
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+    _stat_rows.clear()
     try:
         await flush_stats()
     except Exception:  # noqa: BLE001 - already logged; shutdown must go on
@@ -547,6 +547,30 @@ async def drain() -> None:
 _STATS_FLUSH_S = 5.0
 _stat_deltas: dict[str, dict] = {}
 _stat_flush_task: asyncio.Task | None = None
+_stat_rows: set[str] = set()  # endpoints whose row this process has seen exist
+
+
+async def _ensure_stat_row(s, *, endpoint_id: str, provider: str, pol: str) -> None:
+    """Create the endpoint's row, zeroed, in the recording's own transaction, once per endpoint.
+
+    Team deletion and the pruner subtract from the row directly; a row that only appeared at the
+    first flush would drop a subtraction made before it and later count rows already erased."""
+    from sqlalchemy import select
+    from sqlalchemy.exc import IntegrityError
+
+    from .models import ArchiveEndpointStat
+
+    if endpoint_id in _stat_rows:
+        return
+    exists = (await s.execute(select(ArchiveEndpointStat.endpoint_id).where(
+        ArchiveEndpointStat.endpoint_id == endpoint_id))).first() is not None
+    if not exists:
+        try:
+            async with s.begin_nested():
+                s.add(ArchiveEndpointStat(endpoint_id=endpoint_id, provider=provider, policy=pol))
+        except IntegrityError:  # a concurrent recording created it first
+            pass
+    _stat_rows.add(endpoint_id)
 
 
 def _count_stats(*, endpoint_id: str, provider: str, pol: str, new_key: bool,
@@ -591,7 +615,8 @@ async def flush_stats() -> None:
         return
     taken, _stat_deltas = _stat_deltas, {}
     try:
-        async with background_session_maker() as s:
+        # The archive's write semaphore: the flush is one of its budgeted background sessions.
+        async with _get_sem(), background_session_maker() as s:
             for endpoint_id in sorted(taken):
                 d = taken[endpoint_id]
                 counts = ("keys", "stable", "changed", "snapshots", "bodies_kept", "kept_bytes")
@@ -1128,6 +1153,7 @@ async def _store_locked(
             key.result_snapshot_id = snap.id
             s.add(key)
         stable_d, changed_d = key.stable_seen - seen_before[0], key.change_seen - seen_before[1]
+        await _ensure_stat_row(s, endpoint_id=endpoint_id, provider=provider, pol=pol)
         await s.commit()
         _count_stats(endpoint_id=endpoint_id, provider=provider, pol=pol, new_key=new_key,
                      stable_d=stable_d, changed_d=changed_d, kept=plan.storage is not None,

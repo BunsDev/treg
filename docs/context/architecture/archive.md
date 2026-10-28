@@ -742,10 +742,14 @@ The row is shared by every team, so a per-recording UPDATE queued busy endpoints
 dead tuple per call. A recording therefore adds its counts to an in-process delta after its own
 commit (`_count_stats`, so a dropped or retried recording counts nothing), and `flush_stats` lands
 the deltas a few seconds later as one statement per endpoint, in endpoint order so two processes
-cannot deadlock; `drain()` flushes on shutdown, and a failed flush keeps its deltas for the next.
-A process that dies between flushes loses that window's counts: the totals are a staff report,
-nothing serves or bills from them. The pruner and team deletion still subtract directly; column
-arithmetic commutes, so the order against a pending delta does not matter.
+cannot deadlock. The flush takes the archive's write semaphore, so it stays inside the archive's
+background-pool budget. `drain()` waits for an interrupted flush to put its deltas back, then
+flushes them; a failed flush keeps its deltas for the next. A process that dies between flushes
+loses that window's counts: the totals are a staff report, nothing serves or bills from them.
+The pruner and team deletion still subtract directly. Column arithmetic commutes only while the
+row exists, so the first recording of an endpoint creates the row, zeroed, inside its own
+transaction (`_ensure_stat_row`, once per endpoint per process); an erase before the first flush
+then subtracts from that row instead of matching nothing.
 
 ## Body compression (2026-09-03)
 
