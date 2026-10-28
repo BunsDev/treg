@@ -17,6 +17,12 @@
 
 adapters:
   # ---- people.email.find --------------------------------------------------------------------
+  anymailfinder.people.email.find:
+    accepts: [[full_name, domain], [first_name, last_name, domain], [linkedin_url]]
+    in: {full_name: body.full_name, first_name: body.first_name, last_name: body.last_name,
+         domain: body.domain, linkedin_url: body.linkedin_url}
+    out: {email: valid_email, verified: "email_status == 'valid'"}
+    miss: "valid_email == null"
   contactout.people.contact.work:
     accepts: [[linkedin_url]]
     in: {linkedin_url: queryParams.profile}
@@ -462,6 +468,11 @@ adapters:
                no_coverage: unknown, inconclusive: unknown, not_applicable: unknown}
 
   # ---- people.email.verify ------------------------------------------------------------------
+  anymailfinder.people.email.verify:
+    accepts: [[email]]
+    in: {email: body.email}
+    out: {valid: "email_status == 'valid'", status: email_status}
+    miss: "email_status == null"
   dropleads.people.email.verify:
     accepts: [[email]]
     in: {email: body.email}

@@ -18,6 +18,30 @@ from httpx import AsyncClient
 from treg import oauth_providers as P
 
 
+async def test_anymailfinder_key_uses_free_account_probe(clients, monkeypatch):
+    def valid(request):
+        assert request.method == "GET"
+        assert request.url.path == "/v5.1/account"
+        assert request.headers["authorization"] == "own-key"
+        return httpx.Response(200, json={"credits_left": 0, "email": "account@example.com"})
+
+    async with AsyncClient(transport=httpx.MockTransport(valid)) as upstream:
+        monkeypatch.setattr(app.state, "http", upstream)
+        response = await clients.post(
+            "/connections/token", json={"provider": "anymailfinder", "token": "own-key"},
+        )
+    assert response.status_code == 200, response.text
+
+    async with AsyncClient(transport=httpx.MockTransport(
+            lambda request: httpx.Response(401, json={
+                "error": "unauthorized", "message": "Missing or invalid API key."}))) as upstream:
+        monkeypatch.setattr(app.state, "http", upstream)
+        rejected = await clients.post(
+            "/connections/token", json={"provider": "anymailfinder", "token": "bad-key"},
+        )
+    assert rejected.status_code == 422 and "rejected" in rejected.text
+
+
 # ---- registry shape ----------------------------------------------------------------------
 def test_key_providers_are_offerable_without_deployment_credentials():
     """The user brings the key, so treg holds no app of its own — a key provider must be offerable,

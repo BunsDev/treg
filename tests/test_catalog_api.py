@@ -994,6 +994,23 @@ def test_trial_pools_flow_from_fx_to_eligibility_and_display():
     assert not c.platform_eligible(c.by_id["eodhd.eod"])
 
 
+def test_anymailfinder_platform_prices_all_shared_key_tools():
+    from treg.domain.catalog import store as cs
+
+    c = cs.load()
+    rows = [ep for ep in c.endpoints if ep["id"].startswith("anymailfinder.")]
+    assert len(rows) == 7
+    eligible = {ep["id"] for ep in rows if c.platform_eligible(ep)}
+    assert eligible == {
+        "anymailfinder.people.email.find",
+        "anymailfinder.people.decision_makers",
+        "anymailfinder.companies.emails.list",
+        "anymailfinder.people.email.verify",
+        "anymailfinder.companies.emails.count",
+    }
+    assert c.cost_view(c.by_id["anymailfinder.people.email.verify"]["cost"], "anymailfinder")["usd"] == 0.004
+
+
 # ---- an id that misses -------------------------------------------------------------------------
 async def test_an_unknown_id_names_the_ids_it_nearly_matched(clients: AsyncClient):
     """An id is not free text. An agent holding one that misses by a segment has hit a dead end

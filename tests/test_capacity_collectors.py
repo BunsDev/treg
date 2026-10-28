@@ -17,6 +17,29 @@ from treg.domain.capacity import collectors, policy, signatures, sweep
 from treg.timeutil import utcnow_naive
 
 
+async def test_anymailfinder_balance_uses_free_account_route():
+    def probe(request):
+        assert request.method == "GET"
+        assert str(request.url) == "https://api.anymailfinder.com/v5.1/account"
+        assert request.headers["authorization"] == "test-key"
+        return httpx.Response(200, json={"credits_left": 100, "email": "account@example.com"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(probe)) as client:
+        row = await collectors._anymailfinder(client, "test-key")
+    assert row == {"value": 100, "unit": "credits", "note": ""}
+    assert policy.default_policy("anymailfinder", has_key=True).capacity_type == "credits"
+    assert signatures.classify("anymailfinder", 402, {},
+                               b'{"error":"upgrade_needed","message":"You do not have enough credits."}').kind == "balance"
+
+
+@pytest.mark.parametrize("credits", [None, True, -1, "12"])
+async def test_anymailfinder_balance_rejects_invalid_values(credits):
+    async with httpx.AsyncClient(transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"credits_left": credits}))) as client:
+        with pytest.raises(ValueError, match="invalid credit balance"):
+            await collectors._anymailfinder(client, "test-key")
+
+
 async def test_blitzapi_key_info_supplies_exact_monthly_balance():
     def probe(request):
         assert request.method == "GET"

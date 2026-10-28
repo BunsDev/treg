@@ -771,6 +771,15 @@ async def _findymail(c, key):
             "note": f"verifier {d.get('verifier_credits')} left (separate pool)"}
 
 
+async def _anymailfinder(c, key):
+    d = await _get(c, "https://api.anymailfinder.com/v5.1/account",
+                   headers={"Authorization": key})
+    credits = d.get("credits_left")
+    if isinstance(credits, bool) or not isinstance(credits, int) or credits < 0:
+        raise ValueError("Anymail Finder account returned an invalid credit balance")
+    return {"value": credits, "unit": "credits", "note": ""}
+
+
 async def _branddev(c, key):
     # No free account route exists — but a deliberate no-param call is a FREE validation error
     # (400, credits_consumed 0) whose body still carries key_metadata.credits_remaining.
@@ -1007,6 +1016,7 @@ BALANCE_ROUTES = {
     "branddev": _branddev,
     "companyenrich": _companyenrich,
     "findymail": _findymail,
+    "anymailfinder": _anymailfinder,
     "leadsforge": _leadsforge,
     "oceanio": _oceanio,
     "predictleads": _predictleads,
