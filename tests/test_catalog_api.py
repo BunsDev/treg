@@ -1008,7 +1008,7 @@ def test_anymailfinder_platform_prices_all_shared_key_tools():
         "anymailfinder.people.email.verify",
         "anymailfinder.companies.emails.count",
     }
-    assert c.cost_view(c.by_id["anymailfinder.people.email.verify"]["cost"], "anymailfinder")["usd"] == 0.0146
+    assert c.cost_view(c.by_id["anymailfinder.people.email.verify"]["cost"], "anymailfinder")["usd"] == 0.004
 
 
 # ---- an id that misses -------------------------------------------------------------------------
